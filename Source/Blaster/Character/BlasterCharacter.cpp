@@ -9,6 +9,9 @@
 #include "Net/UnrealNetwork.h"
 #include "Blaster/Weapon/Weapon.h"
 #include "Blaster/BlasterComponents/CombatComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "BlasterAnimInstance.h"
 
 
 ABlasterCharacter::ABlasterCharacter()
@@ -34,6 +37,13 @@ ABlasterCharacter::ABlasterCharacter()
 	Combat->SetIsReplicated(true); // Ensure Combat component is replicated to clients
 
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true; // Enable crouching for the character
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera collisions
+	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f); // Set rotation rate for the character movement
+
+	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	NetUpdateFrequency = 66.f; // Set network update frequency for smoother movement
+	MinNetUpdateFrequency = 33.f; // Minimum network update frequency for smoother movement
 }
 void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -51,12 +61,14 @@ void ABlasterCharacter::BeginPlay()
 void ABlasterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	AimOffset(DeltaTime); // Call the AimOffset function to update aiming offset
 }
 
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ABlasterCharacter::Jump);
 	
 	PlayerInputComponent->BindAxis("MoveForward", this, &ABlasterCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ABlasterCharacter::MoveRight);
@@ -67,6 +79,8 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ABlasterCharacter::CrouchButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &ABlasterCharacter::AimButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &ABlasterCharacter::AimButtonReleased);
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ABlasterCharacter::FireButtonPressed);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ABlasterCharacter::FireButtonReleased);
 }
 
 void ABlasterCharacter::PostInitializeComponents()
@@ -76,6 +90,20 @@ void ABlasterCharacter::PostInitializeComponents()
 	{
 		Combat->Character = this;
 	}
+}
+void ABlasterCharacter::PlayFireMontage(bool bAiming)
+{
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before playing montage
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && FireWeaponMontage)
+	{
+		AnimInstance->Montage_Play(FireWeaponMontage); // Play the fire montage
+		FName SectionName;
+		SectionName = bAiming ? FName("RifleAim") : FName("RifleHip"); // Determine the section based on aiming state
+		AnimInstance->Montage_JumpToSection(SectionName);
+	}
+
 }
 void ABlasterCharacter::MoveForward(float Value)
 {
@@ -113,16 +141,23 @@ void ABlasterCharacter::LookUp(float Value)
 
 void ABlasterCharacter::EquipButtonPressed()
 {
+	
 	if(Combat) // Only allow equipping on the server
 	{
 		if (HasAuthority())
 		{
+			UE_LOG(LogTemp, Warning, TEXT("EquipButtonPressed on server."));
 			Combat->EquipWeapon(OverlappingWeapon);
 		}
 		else
 		{
+			UE_LOG(LogTemp, Warning, TEXT("EquipButtonPressed on client."));
 			ServerEquipButtonPressed(); // Call the server function to handle equipping
 		}		
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Combat component is null."));
 	}
 }
 
@@ -163,6 +198,70 @@ void ABlasterCharacter::AimButtonReleased()
 	}
 }
 
+void ABlasterCharacter::AimOffset(float DeltaTime)
+{
+
+	// Locally calculate the aim offset based on the character's rotation and velocity
+	if(Combat && Combat->EquippedWeapon == nullptr)
+	{
+		return; // If no weapon is equipped, do not calculate aim offset
+	}
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0;
+	float Speed = Velocity.Size();
+	bool bIsInAir = GetCharacterMovement()->IsFalling();
+
+	if (Speed == 0.f && !bIsInAir)// If the character is not moving and not in the air
+	{
+		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		FRotator DeltaRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+		AO_Yaw = DeltaRotation.Yaw; // Calculate the yaw offset
+		if (TurningInPlace == ETurningInPlace::ETIP_NotTurning) {
+			InterpAO_Yaw = AO_Yaw;
+		}
+		bUseControllerRotationYaw = true; // Disable controller yaw rotation
+		TurnInPlace(DeltaTime);
+	}
+	if(Speed > 0.f || bIsInAir)// running or in the air
+	{
+		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f); // Use the controller's yaw rotation
+		AO_Yaw = 0.f; // Reset the yaw offset
+		bUseControllerRotationYaw = true; // Enable controller yaw rotation
+		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	}
+	AO_Pitch = GetBaseAimRotation().Pitch; // Use the base aim rotation pitch
+	if (AO_Pitch > 90.f && !IsLocallyControlled())
+	{
+		// map the pitch to a range of -90 to 90 degrees
+		FVector2D InRange(270.f, 360.f);
+		FVector2D OutRange(-90.f, 0.f);
+		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
+	}
+}
+
+void ABlasterCharacter::TurnInPlace(float DeltaTime)
+{
+	if (AO_Yaw > 90.f)
+	{
+		TurningInPlace = ETurningInPlace::ETIP_Right;
+	}
+	else if (AO_Yaw < -90.f)
+	{
+		TurningInPlace = ETurningInPlace::ETIP_Left;
+	}
+
+	if (TurningInPlace != ETurningInPlace::ETIP_NotTurning)
+	{
+		InterpAO_Yaw = FMath::FInterpTo(InterpAO_Yaw, 0.f, DeltaTime, 4.f);
+		AO_Yaw = InterpAO_Yaw;
+		if (FMath::Abs(AO_Yaw) < 15.f)
+		{
+			TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+			StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		}
+	}
+}
+
 void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 {
 	if (OverlappingWeapon)
@@ -190,6 +289,33 @@ void ABlasterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 	}
 }
 
+void ABlasterCharacter::Jump() {
+	if (bIsCrouched) // If the character is crouched, uncrouch before jumping
+	{
+		UnCrouch();
+	}
+	else 
+	{
+		Super::Jump();
+	}	
+}
+
+void ABlasterCharacter::FireButtonPressed()
+{
+	if(Combat)
+	{
+		Combat->FireButtonPressed(true);
+	}
+}
+
+void ABlasterCharacter::FireButtonReleased()
+{
+	if(Combat)
+	{
+		Combat->FireButtonPressed(false); // Call the Combat component's FireButtonReleased function
+	}
+}
+
 
 bool ABlasterCharacter::IsWeaponEquipped()
 {
@@ -199,5 +325,11 @@ bool ABlasterCharacter::IsWeaponEquipped()
 bool ABlasterCharacter::IsAiming()
 {
 	return (Combat && Combat->bAiming);
+}
+
+AWeapon* ABlasterCharacter::GetEquippedWeapon()
+{
+	if (Combat == nullptr) return nullptr;
+	return Combat->EquippedWeapon; // Return the currently equipped weapon
 }
 

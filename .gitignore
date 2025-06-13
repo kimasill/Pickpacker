@@ -72,3 +72,36 @@ Plugins/*/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# Visual Studio / Rider IDE files
+.idea/
+.vscode/
+*.sln.DotSettings.user
+*.csproj.user
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Packaged game files
+Packaged/
+WindowsNoEditor/
+LinuxNoEditor/
+MacNoEditor/
+
+# Content backup files
+*.bak
+*.backup
+*_backup.*
+
+# UAsset backup files
+*.uasset.bak
+
+# Log files
+*.log
