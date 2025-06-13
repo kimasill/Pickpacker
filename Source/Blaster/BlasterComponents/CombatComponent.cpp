@@ -5,6 +5,10 @@
 #include "Components/SphereComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
+
+#define TRACE_LENGTH 80000.0f
 
 // Sets default values for this component's properties
 UCombatComponent::UCombatComponent()
@@ -88,6 +92,53 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 	
 }
 
+void UCombatComponent::TraceUnderCrosshair(FHitResult& TraceHitResult) const
+{
+	FVector2D ViewportSize;
+	if(GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+	}
+
+	FVector2D CrosshairLocation(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
+	FVector CrosshairWorldPosition, CrosshairWorldDirection;
+	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
+		UGameplayStatics::GetPlayerController(this, 0),
+		CrosshairLocation,
+		CrosshairWorldPosition,
+		CrosshairWorldDirection
+	);
+
+	if (bScreenToWorld)
+	{
+		FVector Start = CrosshairWorldPosition;
+		FVector End = Start + (CrosshairWorldDirection * TRACE_LENGTH); // Trace distance
+
+
+		GetWorld()->LineTraceSingleByChannel(
+			TraceHitResult,
+			Start,
+			End,
+			ECC_Visibility
+		);
+
+		if (!TraceHitResult.bBlockingHit)
+		{
+			TraceHitResult.ImpactPoint = End; // If no hit, set impact point to end of trace
+		}
+		else
+		{
+			DrawDebugSphere(
+				GetWorld(), 
+				TraceHitResult.ImpactPoint, 
+				12.f, 
+				12,
+				FColor::Red
+			);
+		}
+	}
+}
+
 void UCombatComponent::ServerFire_Implementation()
 {
 	MulticastFire();
@@ -106,6 +157,9 @@ void UCombatComponent::MulticastFire_Implementation()
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	FHitResult TraceHitResult;
+	TraceUnderCrosshair(TraceHitResult);
 }
 
 
