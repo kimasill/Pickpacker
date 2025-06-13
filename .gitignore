@@ -105,3 +105,6 @@ MacNoEditor/
 
 # Log files
 *.log
+
+# Marketplace assets
+Content/References/*
