@@ -14,17 +14,33 @@ class BLASTER_API AProjectile : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AProjectile();
-
+	virtual void Tick(float DeltaTime) override;
+	virtual void Destroyed() override;
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	UFUNCTION()	
+	virtual void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
 private:
 	UPROPERTY(EditAnywhere)
 	class UBoxComponent* CollisionBox; // Collision box for the projectile
 
+	UPROPERTY(VisibleAnywhere)
+	class UProjectileMovementComponent* ProjectileMovementComponent; // Movement component for the projectile
+
+	UPROPERTY(EditAnywhere)
+	class UNiagaraSystem* Tracer;
+
+	class UNiagaraComponent* TracerComponent; // Component for the tracer particle system
+
+	UPROPERTY(EditAnywhere)
+	UParticleSystem* ImpactParticles; // Particle system for the impact effect
+
+	UPROPERTY(EditAnywhere)
+	class USoundCue* ImpactSound; // Sound effect for the impact
 public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	
 
 };
