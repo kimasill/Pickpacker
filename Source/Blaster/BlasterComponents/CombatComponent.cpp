@@ -8,7 +8,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
-#include "Blaster/HUD/BlasterHUD.h"
+// #include "Blaster/HUD/BlasterHUD.h"
 #include "Camera/CameraComponent.h"
 
 #define TRACE_LENGTH 80000.0f
@@ -73,7 +73,7 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 		HUD = HUD == nullptr ? Cast<ABlasterHUD>(Controller->GetHUD()) : HUD;
 		if (HUD)
 		{
-			FHUDPackage HUDPackage;
+			
 			if (EquippedWeapon) {
 				
 				HUDPackage.CrosshairCenter = EquippedWeapon->CrosshairCenter;
@@ -111,7 +111,24 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 				CrosshairInAirFactor = FMath::FInterpTo(CrosshairInAirFactor, 0.f, DeltaTime, 30.f);
 			}
 
-			HUDPackage.CrosshairSpreadMultiplier = CrosshairVelocityFactor + CrosshairInAirFactor;
+			if(bAiming)
+			{
+				CrosshairAimFactor = FMath::FInterpTo(CrosshairAimFactor, 0.5f, DeltaTime, 30.f);
+			}
+			else
+			{
+				CrosshairAimFactor = FMath::FInterpTo(CrosshairAimFactor, 0.f, DeltaTime, 30.f);
+			}
+
+			CrosshairShootingFactor = FMath::FInterpTo(CrosshairShootingFactor, 0.f, DeltaTime, 40.f);
+
+			HUDPackage.CrosshairSpreadMultiplier =
+				0.5f + // Base spread multiplier
+				CrosshairVelocityFactor +
+				CrosshairInAirFactor -
+				CrosshairAimFactor +
+				CrosshairShootingFactor;
+
 			
 			HUD->SetHUDPackage(HUDPackage);
 		}
@@ -188,7 +205,11 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 		TraceUnderCrosshair(HitResult);
 		ServerFire(HitResult.ImpactPoint);
 	}
-	
+
+	if (EquippedWeapon)
+	{
+		CrosshairShootingFactor = 0.45f;
+	}	
 }
 
 void UCombatComponent::TraceUnderCrosshair(FHitResult& TraceHitResult)
@@ -211,7 +232,12 @@ void UCombatComponent::TraceUnderCrosshair(FHitResult& TraceHitResult)
 	if (bScreenToWorld)
 	{
 		FVector Start = CrosshairWorldPosition;
-		FVector End = Start + (CrosshairWorldDirection * TRACE_LENGTH); // Trace distance
+		if (Character)
+		{
+			float DistanceToCharacter = (Character->GetActorLocation() - Start).Size();
+			Start += CrosshairWorldDirection * (DistanceToCharacter + 10.f); // Offset to avoid hitting the character itself			
+		}
+			FVector End = Start + (CrosshairWorldDirection * TRACE_LENGTH); // Trace distance
 
 
 		GetWorld()->LineTraceSingleByChannel(
@@ -223,6 +249,15 @@ void UCombatComponent::TraceUnderCrosshair(FHitResult& TraceHitResult)
 
 		if (!TraceHitResult.bBlockingHit) {
 			TraceHitResult.ImpactPoint = End;
+		}
+
+		if (TraceHitResult.GetActor() && TraceHitResult.GetActor()->Implements<UInteractWithCrosshairInterface>())
+		{
+			HUDPackage.CrosshairColor = FLinearColor::Red;
+		}
+		else
+		{
+			HUDPackage.CrosshairColor = FLinearColor::White;
 		}
 	}
 	
