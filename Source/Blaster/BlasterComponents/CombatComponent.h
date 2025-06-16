@@ -38,8 +38,12 @@ protected:
 
 	void TraceUnderCrosshair(FHitResult& OutHitResult);
 
+	void SetHUDCrosshairs(float DeltaTime);
+
 private:
 	class ABlasterCharacter* Character;
+	class ABlasterPlayerController* Controller;
+	class ABlasterHUD* HUD;
 
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)	
 	AWeapon* EquippedWeapon;		
@@ -54,5 +58,30 @@ private:
 	float AimingWalkSpeed;
 
 	bool bFireButtonPressed;
+
+	/**
+	* HUD and crosshairs
+	*/
+	
+	float CrosshairVelocityFactor;
+	float CrosshairInAirFactor;
+	
+	FVector HitTarget;
+
+	/**
+	* Aiming and FOV
+	*/
+
+	//field of View when not aiming; set to the camera's base FOV in BeginPlay
+	float DefaultFOV;
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	float ZoomedFOV = 30.f;
+
+	float CurrentFOV;
+	UPROPERTY(EditAnywhere, Category = Combat)
+	float ZoomInterpSpeed = 20.f; // Speed at which the camera zooms in and out
+
+	void InterpFOV(float DeltaTime);
 public:
 };

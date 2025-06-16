@@ -333,3 +333,9 @@ AWeapon* ABlasterCharacter::GetEquippedWeapon()
 	return Combat->EquippedWeapon; // Return the currently equipped weapon
 }
 
+FVector ABlasterCharacter::GetHitTarget() const
+{
+	if (Combat == nullptr) return FVector(); // Ensure Combat component is valid before accessing HitTarget
+	return Combat->HitTarget; // Return the hit target vector
+}
+
