@@ -13,6 +13,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "BlasterAnimInstance.h"
 #include "Blaster/Blaster.h"
+#include "Blaster/PlayerController/BlasterPlayerController.h"
 
 
 ABlasterCharacter::ABlasterCharacter()
@@ -53,20 +54,42 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 		Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	// Replicate the OverHeadWidget to all clients
 		DOREPLIFETIME_CONDITION(ABlasterCharacter, OverlappingWeapon, COND_OwnerOnly);
+		DOREPLIFETIME(ABlasterCharacter, Health);
 }
 void ABlasterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
-}
 
+	UpdateHUDHealth();
+	if (HasAuthority())
+	{
+		OnTakeAnyDamage.AddDynamic(this, &ABlasterCharacter::ReceiveDamage);
+	}
+}
 
 void ABlasterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	AimOffset(DeltaTime); // Call the AimOffset function to update aiming offset
+	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
+	{
+		AimOffset(DeltaTime); // Call the AimOffset function to update aiming offset
+	}
+	else
+	{
+		TimeSinceLastMovementReplication += DeltaTime; // Increment the timer for last movement replication
+		if(TimeSinceLastMovementReplication > 0.15f) // If enough time has passed since the last movement replication
+		{
+			OnRep_ReplicatedMovement();
+		}
+		CalculateAO_Pitch();
+	}
 	HideCameraIfCharacterClose(); // Call the function to hide camera if character is close
+}
+
+void ABlasterCharacter::OnRep_ReplicatedMovement() {
+	Super::OnRep_ReplicatedMovement();	
+	SimProxiesTurn();
+	TimeSinceLastMovementReplication = 0.f; // Reset the timer for last movement replication
 }
 
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -121,6 +144,13 @@ void ABlasterCharacter::PlayHitReactMontage()
 		AnimInstance->Montage_JumpToSection(SectionName);
 	}
 }
+void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
+{
+	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
+	UpdateHUDHealth();
+	PlayHitReactMontage();
+}
+
 void ABlasterCharacter::MoveForward(float Value)
 {
 	if(Controller != nullptr && Value != 0.0f)
@@ -218,17 +248,13 @@ void ABlasterCharacter::AimOffset(float DeltaTime)
 {
 
 	// Locally calculate the aim offset based on the character's rotation and velocity
-	if(Combat && Combat->EquippedWeapon == nullptr)
-	{
-		return; // If no weapon is equipped, do not calculate aim offset
-	}
-	FVector Velocity = GetVelocity();
-	Velocity.Z = 0;
-	float Speed = Velocity.Size();
+	if (Combat && Combat->EquippedWeapon == nullptr) return;
+	float Speed = CalculateSpeed();
 	bool bIsInAir = GetCharacterMovement()->IsFalling();
 
 	if (Speed == 0.f && !bIsInAir)// If the character is not moving and not in the air
 	{
+		bRotateRootBone = true;
 		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		FRotator DeltaRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
 		AO_Yaw = DeltaRotation.Yaw; // Calculate the yaw offset
@@ -240,11 +266,17 @@ void ABlasterCharacter::AimOffset(float DeltaTime)
 	}
 	if(Speed > 0.f || bIsInAir)// running or in the air
 	{
+		bRotateRootBone = false;
 		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f); // Use the controller's yaw rotation
 		AO_Yaw = 0.f; // Reset the yaw offset
 		bUseControllerRotationYaw = true; // Enable controller yaw rotation
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	}
+	CalculateAO_Pitch();
+}
+
+void ABlasterCharacter::CalculateAO_Pitch()
+{
 	AO_Pitch = GetBaseAimRotation().Pitch; // Use the base aim rotation pitch
 	if (AO_Pitch > 90.f && !IsLocallyControlled())
 	{
@@ -253,6 +285,40 @@ void ABlasterCharacter::AimOffset(float DeltaTime)
 		FVector2D OutRange(-90.f, 0.f);
 		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
 	}
+}
+
+void ABlasterCharacter::SimProxiesTurn()
+{
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before simulating turn
+
+	bRotateRootBone = false;
+	float Speed = CalculateSpeed();
+	if(Speed > 0.f) // If the character is moving, no need to turn in place
+	{
+		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+		return;
+	}
+
+	ProxyRotationLastFrame = ProxyRotation;// Store the last frame's proxy rotation
+	ProxyRotation = GetActorRotation(); // Get the current actor rotation
+	ProxyYaw = UKismetMathLibrary::NormalizedDeltaRotator(ProxyRotation, ProxyRotationLastFrame).Yaw; // Normalize the delta rotation	
+	if (FMath::Abs(ProxyYaw) > TurnThreshold)
+	{
+		if (ProxyYaw > TurnThreshold)
+		{
+			TurningInPlace = ETurningInPlace::ETIP_Right;
+		}
+		else if (ProxyYaw < -TurnThreshold)
+		{
+			TurningInPlace = ETurningInPlace::ETIP_Left;
+		}
+		else
+		{
+			TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+		}
+		return;
+	}
+	TurningInPlace = ETurningInPlace::ETIP_NotTurning; // If the proxy yaw is within the threshold, set not turning
 }
 
 void ABlasterCharacter::TurnInPlace(float DeltaTime)
@@ -278,18 +344,13 @@ void ABlasterCharacter::TurnInPlace(float DeltaTime)
 	}
 }
 
-void ABlasterCharacter::MulticastHit_Implementation()
-{
-	PlayHitReactMontage(); // Play the hit react montage on all clients
-}
-
 void ABlasterCharacter::HideCameraIfCharacterClose()
 {
 	if (!IsLocallyControlled()) return;
 	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold) {
 		GetMesh()->SetVisibility(false);
 		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
-		{
+		{         
 			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = true;
 		}
 	}
@@ -302,6 +363,28 @@ void ABlasterCharacter::HideCameraIfCharacterClose()
 		}
 	}
 	
+}
+
+float ABlasterCharacter::CalculateSpeed()
+{
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0;
+	return Velocity.Size();
+}
+
+void ABlasterCharacter::OnRep_Health()
+{
+	UpdateHUDHealth();
+	PlayHitReactMontage();
+}
+
+void ABlasterCharacter::UpdateHUDHealth()
+{
+	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
+	if (BlasterPlayerController)
+	{
+		BlasterPlayerController->SetHUDHealth(Health, MaxHealth); // Set the HUD health on the player controller
+	}
 }
 
 void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
@@ -345,7 +428,7 @@ void ABlasterCharacter::Jump() {
 void ABlasterCharacter::FireButtonPressed()
 {
 	if(Combat)
-	{
+	{		
 		Combat->FireButtonPressed(true);
 	}
 }

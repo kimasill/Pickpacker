@@ -54,6 +54,15 @@ public:
 	UPROPERTY(EditAnywhere)
 	float ZoomInterpSpeed = 20.f; // Speed at which the camera zooms in and out
 
+	/**
+	* Automatic fire settings
+	*/
+	UPROPERTY(EditAnywhere, Category = Combat)
+	float FireDelay = .15f; // Delay between automatic fire shots
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	bool bAutomatic = true;
+
 protected:
 	virtual void BeginPlay() override;
 

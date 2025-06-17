@@ -31,6 +31,8 @@ protected:
 
 	void FireButtonPressed(bool bPressed);
 
+	void Fire();
+
 	UFUNCTION(Server, Reliable)
 	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
 
@@ -42,8 +44,11 @@ protected:
 	void SetHUDCrosshairs(float DeltaTime);
 
 private:
+	UPROPERTY()
 	class ABlasterCharacter* Character;
+	UPROPERTY()
 	class ABlasterPlayerController* Controller;
+	UPROPERTY()
 	class ABlasterHUD* HUD;
 
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)	
@@ -88,5 +93,15 @@ private:
 	float ZoomInterpSpeed = 20.f; // Speed at which the camera zooms in and out
 
 	void InterpFOV(float DeltaTime);
+
+	/** 
+	*  Automatic Fire
+	*/
+	FTimerHandle FireTimer;
+	
+	bool bCanFire = true;
+	void StartFireTimer();
+	void FireTimerFinished();
+
 public:
 };

@@ -23,6 +23,8 @@ protected:
 	UFUNCTION()	
 	virtual void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
+	UPROPERTY(EditAnywhere)
+	float Damage = 20.f;
 private:
 	UPROPERTY(EditAnywhere)
 	class UBoxComponent* CollisionBox; // Collision box for the projectile
@@ -36,11 +38,11 @@ private:
 	class UNiagaraComponent* TracerComponent; // Component for the tracer particle system
 
 	UPROPERTY(EditAnywhere)
-	UParticleSystem* ImpactParticles; // Particle system for the impact effect
-
+	class UNiagaraSystem* ImpactParticles;
+																																																																																											
 	UPROPERTY(EditAnywhere)
 	class USoundCue* ImpactSound; // Sound effect for the impact
+
 public:	
-	
 
 };
