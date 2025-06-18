@@ -14,6 +14,8 @@
 #include "BlasterAnimInstance.h"
 #include "Blaster/Blaster.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "Blaster/GameMode/BlasterGameMode.h"
+#include "TimerManager.h"
 
 
 ABlasterCharacter::ABlasterCharacter()
@@ -92,6 +94,33 @@ void ABlasterCharacter::OnRep_ReplicatedMovement() {
 	TimeSinceLastMovementReplication = 0.f; // Reset the timer for last movement replication
 }
 
+void ABlasterCharacter::Elim()
+{
+	MulticastElim(); // Call the multicast function to handle elimination
+	GetWorldTimerManager().SetTimer(
+		ElimTimer, 
+		this, 
+		&ABlasterCharacter::ElimTimerFinished, 
+		ElimDelay
+	); // Set a timer for the elimination delay
+	
+}
+
+void ABlasterCharacter::MulticastElim_Implementation()
+{
+	bElimmed = true;
+	PlayElimMontage();
+}
+
+
+void ABlasterCharacter::ElimTimerFinished()
+{
+	ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>(); // Get the game mode
+	if (BlasterGameMode)
+	{
+		BlasterGameMode->RequestRespawn(this, Controller);
+	}
+}
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -132,6 +161,14 @@ void ABlasterCharacter::PlayFireMontage(bool bAiming)
 	}
 
 }
+void ABlasterCharacter::PlayElimMontage()
+{	
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && ElimMontage)
+	{
+		AnimInstance->Montage_Play(ElimMontage);
+	}
+}
 void ABlasterCharacter::PlayHitReactMontage()
 {
 	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before playing montage
@@ -149,6 +186,17 @@ void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const 
 	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
 	UpdateHUDHealth();
 	PlayHitReactMontage();
+
+	if (Health == 0.f){
+		ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>(); // Get the game mode
+		if (BlasterGameMode) {
+			BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
+			ABlasterPlayerController* AttackerController = Cast<ABlasterPlayerController>(InstigatorController);
+			BlasterGameMode->PlayerEliminated(this, BlasterPlayerController, AttackerController); // Call the PlayerEliminated function on the game mode
+		}
+	}
+	
+
 }
 
 void ABlasterCharacter::MoveForward(float Value)
