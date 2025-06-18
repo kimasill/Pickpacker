@@ -107,7 +107,7 @@ MacNoEditor/
 *.log
 
 # Marketplace assets
-Content/References/
+**/Content/References/
 Content/FPS_Weapon_Bundle/
 Content/LearningKit_Games/
 Content/LevelPrototyping/
