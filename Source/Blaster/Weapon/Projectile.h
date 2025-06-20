@@ -35,6 +35,7 @@ private:
 	UPROPERTY(EditAnywhere)
 	class UNiagaraSystem* Tracer;
 
+	UPROPERTY()
 	class UNiagaraComponent* TracerComponent; // Component for the tracer particle system
 
 	UPROPERTY(EditAnywhere)
