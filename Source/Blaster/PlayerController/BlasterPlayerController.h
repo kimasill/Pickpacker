@@ -19,10 +19,68 @@ public:
 	void SetHUDDefeats(int32 Defeats);
 	void SetHUDWeaponAmmo(int32 ammo);
 	void SetHUDCarriedAmmo(int32 ammo);
+	void SetHUDMatchCountdown(float CountdownTime);
+	void SetHUDAnnouncementCountdown(float CountdownTime);
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void Tick(float DeltaTime) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	virtual float GetServerTime();
+	virtual void ReceivedPlayer() override; // Syncs with server clock as soon as possible
+	void OnMatchStateSet(FName State);
+	void HandleMatchHasStarted();
+	void HandleCooldown();
 protected:
 	virtual void BeginPlay() override;
+	void SetHUDTime();
+	void PollInit(); // Polls for the BlasterHUD and CharacterOverlay widgets
+
+	/**
+	* Sync time between server and client
+	*/
+
+	// Requests the current server time, passing in the client's request time
+	UFUNCTION(Server, Reliable)
+	void ServerRequestServerTime(float TimeOfClientRequest);
+
+	// Reports the current server time to the client in response to the request
+	UFUNCTION(Client, Reliable)
+	void ClientReportServerTime(float TimeOfClientRequest, float TimeServerRecievedClientRequest);
+
+	float ClientServerDelta = 0.f; // Difference between client and server time
+
+	UPROPERTY(EditAnywhere, Category = "Time")
+	float TimeSyncFrequency = 5.f; // How often to sync time with the server
+
+	float TimeSyncRunningTime = 0.f; // How long the time sync has been running
+	void CheckTimeSync(float DeltaTime);
+
+	UFUNCTION(Server, Reliable)
+	void ServerCheckMatchState(); // Server checks match state
+
+	UFUNCTION(Client, Reliable)
+	void ClientJoinMidGame(FName StateOfMatch, float Warmup, float Match, float StartingTime); // Client joins mid-game and initializes HUD
 private:
 	UPROPERTY()
 	class ABlasterHUD* BlasterHUD;
+
+	float LevelStartingTime = 0.f;
+	float MatchTime = 0.f;
+	float WarmupTime = 0.f;
+	uint32 CountdownInt = 0;
+
+	UPROPERTY(ReplicatedUsing = "OnRep_MatchState")
+	FName MatchState;
+
+	UFUNCTION()
+	void OnRep_MatchState(); // Called when MatchState changes on the client
+
+	UPROPERTY()
+	class UCharacterOverlay* CharacterOverlay;	
+	bool bInitializeCharacterOverlay = false; // Flag to check if CharacterOverlay is initialized
+
+	float HUDHealth = 0.f;
+	float HUDMaxHealth = 0.f;
+	float HUDScore = 0.f;
+	int32 HUDDefeats = 0;
 };
