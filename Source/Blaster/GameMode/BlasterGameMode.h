@@ -41,4 +41,9 @@ protected:
 
 private:
 	float CountdownTime = 0.f;
+public:
+	FORCEINLINE float GetCountdownTime() const { return CountdownTime; }
+	FORCEINLINE float GetWarmupTime() const { return WarmupTime; }
+	FORCEINLINE float GetMatchTime() const { return MatchTime; }
+	FORCEINLINE float GetCooldownTime() const { return CooldownTime; }
 };
