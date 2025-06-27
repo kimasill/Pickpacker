@@ -70,6 +70,9 @@ Saved/*
 Intermediate/*
 Plugins/*/Intermediate/*
 
+# Engine files
+**/EngineData/
+
 # Cache files for the editor to use
 DerivedDataCache/*
 
@@ -105,12 +108,3 @@ MacNoEditor/
 
 # Log files
 *.log
-
-# Marketplace assets
-**/Content/References/
-**/Content/Assets/**
-**/Content/Characters/
-**/LearningKit_Games/
-Content/FPS_Weapon_Bundle/
-Content/LevelPrototyping/
-Content/StarterContent/

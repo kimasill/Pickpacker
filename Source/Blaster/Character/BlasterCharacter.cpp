@@ -157,13 +157,17 @@ void ABlasterCharacter::MulticastElim_Implementation()
 	GetCharacterMovement()->StopMovementImmediately();
 
 	bDisableGameplay = true;
-	
+	GetCharacterMovement()->DisableMovement();
+	if(Combat)
+	{
+		Combat->FireButtonPressed(false); // Ensure firing is disabled
+	}
 	//Disable collision
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	//Spawn elim bot
-	if (ElimBotEffect)
+	if (ElimBotEffect) 
 	{
 		FVector ElimBotSpawnPoint(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z + 200.f);
 		ElimBotComponent = UGameplayStatics::SpawnEmitterAtLocation(
@@ -200,7 +204,9 @@ void ABlasterCharacter::Destroyed() {
 	{
 		ElimBotComponent->DestroyComponent(); // Destroy the elimination bot component
 	}
-	if(Combat && Combat->EquippedWeapon)
+	ABlasterGameMode* BlasterGameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this)); // Get the game mode
+	bool bMatchNotInProgress = BlasterGameMode && BlasterGameMode->GetMatchState() != MatchState::InProgress; // Check if the match is not in progress
+	if(Combat && Combat->EquippedWeapon && bMatchNotInProgress)
 	{
 		Combat->EquippedWeapon->Destroy(); // Drop the equipped weapon
 	}
@@ -258,6 +264,15 @@ void ABlasterCharacter::PlayReloadMontage()
 		switch (Combat->EquippedWeapon->GetWeaponType())
 		{
 		case EWeaponType::EWT_AssaultRifle:
+			SectionName = FName("Rifle");
+			break;
+		case EWeaponType::EWE_RocketLauncher:
+			SectionName = FName("Rifle");
+			break;
+		case EWeaponType::EWT_Pistol:
+			SectionName = FName("Rifle");
+			break;
+		case EWeaponType::EWT_SubmachineGun:
 			SectionName = FName("Rifle");
 			break;
 		}

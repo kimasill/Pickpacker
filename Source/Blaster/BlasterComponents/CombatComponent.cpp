@@ -241,8 +241,6 @@ void UCombatComponent::Reload()
 void UCombatComponent::ServerReload_Implementation()
 {
 	if (Character == nullptr || EquippedWeapon == nullptr) return;
-
-	UpdateAmmoValues();
 	HandleReload();
 }
 
@@ -251,8 +249,8 @@ void UCombatComponent::FinishReloading()
 	if (Character == nullptr) return;
 	if (Character->HasAuthority())
 	{
-		CombatState = ECombatState::ECS_Unoccupied;
 		UpdateAmmoValues();
+		CombatState = ECombatState::ECS_Unoccupied;
 	}
 	if (bFireButtonPressed)
 	{
@@ -459,6 +457,9 @@ void UCombatComponent::OnRep_CarriedAmmo()
 void UCombatComponent::InitializeCarriedAmmo()
 {
 	CarriedAmmoMap.Emplace(EWeaponType::EWT_AssaultRifle, StartingARAmmo);
+	CarriedAmmoMap.Emplace(EWeaponType::EWE_RocketLauncher, StartingRocketAmmo);
+	CarriedAmmoMap.Emplace(EWeaponType::EWT_Pistol, StartingPistolAmmo);
+	CarriedAmmoMap.Emplace(EWeaponType::EWT_SubmachineGun, StartingSMGAmmo);
 }
 
 

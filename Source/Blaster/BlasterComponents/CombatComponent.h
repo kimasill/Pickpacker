@@ -127,7 +127,17 @@ private:
 	TMap<EWeaponType, int32> CarriedAmmoMap;
 
 	UPROPERTY(EditAnyWhere)
-	int32 StartingARAmmo = 30;
+	int32 StartingARAmmo = 0;
+
+	UPROPERTY(EditAnyWhere)
+	int32 StartingRocketAmmo = 0;
+
+	UPROPERTY(EditAnyWhere)
+	int32 StartingPistolAmmo = 0;
+
+	UPROPERTY(EditAnyWhere)
+	int32 StartingSMGAmmo = 0;
+
 	void InitializeCarriedAmmo();
 
 	UPROPERTY(ReplicatedUsing = OnRep_CombatState)
