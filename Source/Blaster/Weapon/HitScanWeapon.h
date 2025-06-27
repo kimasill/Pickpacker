@@ -21,13 +21,19 @@ public:
 
 protected:
 	FVector TraceEndWithScatter(const FVector& TractStart, const FVector& HitTarget) const;
-private:
-	UPROPERTY(EditAnywhere)
-	float Damage = 20.f; // Amount of damage this weapon does
+	void WeaponTraceHit(const FVector& TraceStart, const FVector& HitTarget, FHitResult& OutHit);
 
 	UPROPERTY(EditAnywhere)
 	class UParticleSystem* ImpactParticles; // Effect to play on hit
 
+	UPROPERTY(EditAnywhere)
+	USoundCue* ImpactSound; // Sound to play on impact
+
+	UPROPERTY(EditAnywhere)
+	float Damage = 20.f; // Amount of damage this weapon does
+
+private:
+	
 	UPROPERTY(EditAnywhere)
 	UParticleSystem* BeamParticles; // Effect to play on beam trace
 
@@ -37,8 +43,6 @@ private:
 	UPROPERTY(EditAnywhere)
 	USoundCue* FireSound; // Sound to play when firing
 
-	UPROPERTY(EditAnywhere)
-	USoundCue* ImpactSound; // Sound to play on impact
 
 	/**
 	* Trace end with scatter
@@ -50,5 +54,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
 	float SphereRadius = 75.f; // Radius of the sphere for scatter effect
 
+	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
 	bool bUseScatter = false; // Whether to use scatter effect or not
 };
