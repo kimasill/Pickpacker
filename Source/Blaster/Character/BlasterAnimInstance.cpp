@@ -77,7 +77,7 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	}
 
 	// Update animation flags based on character state
-	bUseFABRIK = BlasterCharacter->GetCombatState() != ECombatState::ECS_Reloading; // Check if FABRIK is used for animation
-	bUseAimOffsets = BlasterCharacter->GetCombatState() != ECombatState::ECS_Reloading && !BlasterCharacter->GetDisableGameplay(); // Check if aim offsets are used for animation
-	bTransformRightHand = BlasterCharacter->GetCombatState() != ECombatState::ECS_Reloading && !BlasterCharacter->GetDisableGameplay();; // Check if the right hand transform is used for animation
+	bUseFABRIK = BlasterCharacter->GetCombatState() == ECombatState::ECS_Unoccupied; // Check if FABRIK is used for animation
+	bUseAimOffsets = BlasterCharacter->GetCombatState() == ECombatState::ECS_Unoccupied && !BlasterCharacter->GetDisableGameplay(); // Check if aim offsets are used for animation
+	bTransformRightHand = BlasterCharacter->GetCombatState() == ECombatState::ECS_Unoccupied && !BlasterCharacter->GetDisableGameplay();; // Check if the right hand transform is used for animation
 }

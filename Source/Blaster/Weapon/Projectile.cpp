@@ -11,6 +11,8 @@
 #include "NiagaraComponent.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Blaster.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 
 AProjectile::AProjectile()
@@ -77,10 +79,67 @@ void AProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimi
 	Destroy(); // Destroy the projectile after impact
 }
 
+void AProjectile::SpawnTrailSystem()
+{
+	if (TrailSystem)
+	{
+		TrailSystemComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+			TrailSystem, // Niagara system to spawn
+			GetRootComponent(), // Attach to the root component
+			FName(), // Attach point name
+			GetActorLocation(), // Location
+			GetActorRotation(), // Rotation
+			EAttachLocation::KeepWorldPosition, // Attach location
+			false // Auto destroy
+		);
+	}
+}
+
 
 void AProjectile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
+
+
+void AProjectile::StartDestroyTimer()
+{
+	GetWorldTimerManager().SetTimer(
+		DestroyTimer,
+		this,
+		&AProjectile::DestroyTimerFinished,
+		DestroyTime
+	);
+}
+
+void AProjectile::DestroyTimerFinished()
+{
+	Destroy();
+}
+
+void AProjectile::ExplodeDamage()
+{
+	APawn* FiringPawn = GetInstigator();
+	if (FiringPawn && HasAuthority())
+	{
+		AController* FiringController = FiringPawn->GetController();
+		if (FiringController)
+		{
+			UGameplayStatics::ApplyRadialDamageWithFalloff(
+				this, // World context object
+				Damage, // Base damage
+				10.f, // Minimum damage
+				GetActorLocation(), // Origin of the damage
+				DamageInnerRadius, // Inner radius
+				DamageOuterRadius, // Outer radius
+				1.f, // Damage falloff
+				UDamageType::StaticClass(), // Damage type class
+				TArray<AActor*>(), // Ignore actors
+				this, // Damage causer
+				FiringController // Instigated by controller
+			);
+		}
+	}
 }
 
 void AProjectile::Destroyed()
