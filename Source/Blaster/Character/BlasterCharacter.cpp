@@ -338,6 +338,7 @@ void ABlasterCharacter::PlayHitReactMontage()
 }
 void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
 {
+	if (bElimmed) return;
 	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
 	UpdateHUDHealth();
 	PlayHitReactMontage();

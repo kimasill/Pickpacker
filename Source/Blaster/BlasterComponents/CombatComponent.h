@@ -37,6 +37,11 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void LaunchGrenade();
+
+	UFUNCTION(Server, Reliable)
+	void ServerLaunchGrenade(const FVector_NetQuantize& Target);
+
+	void PickupAmmo(EWeaponType WeaponType, int32 AmmoAmount);
 protected:
 	virtual void BeginPlay() override;
 	void SetAiming(bool bIsAiming);
@@ -152,6 +157,9 @@ private:
 
 	TMap<EWeaponType, int32> CarriedAmmoMap;
 
+	UPROPERTY(EditAnywhere)
+	int32 MaxCarriedAmmo = 1000;
+
 	UPROPERTY(EditAnyWhere)
 	int32 StartingARAmmo = 0;
 
@@ -183,5 +191,17 @@ private:
 
 	void UpdateAmmoValues();
 	void UpdateShotgunAmmoValues();
+
+	UPROPERTY(ReplicatedUsing = OnRep_Grenades)
+	int32 Grenades = 4;
+
+	UFUNCTION()
+	void OnRep_Grenades();
+
+	UPROPERTY(EditAnywhere)
+	int32 MaxGrenades = 4;
+
+	void UpdateHUDGrenades();
 public:
+	FORCEINLINE int32 GetGrenades() const { return Grenades; }
 };
