@@ -9,6 +9,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Blaster/Weapon/Weapon.h"
 #include "Blaster/BlasterComponents/CombatComponent.h"
+#include "Blaster/BlasterComponents/BuffComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "BlasterAnimInstance.h"
@@ -43,8 +44,12 @@ ABlasterCharacter::ABlasterCharacter()
 	OverHeadWidget->SetupAttachment(RootComponent);
 
 	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
-	Combat->SetIsReplicated(true); // Ensure Combat component is replicated to clients
+	Combat->SetIsReplicated(true);
 
+	Buff = CreateDefaultSubobject<UBuffComponent>(TEXT("BuffComponent"));
+	Buff->SetIsReplicated(true);
+	
+	   
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true; // Enable crouching for the character
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera collisions
 	GetMesh()->SetCollisionObjectType(ECC_SkeletalMesh); // Ignore camera collisions on the mesh
@@ -255,6 +260,10 @@ void ABlasterCharacter::PostInitializeComponents()
 	if (Combat)
 	{
 		Combat->Character = this;
+	}
+	if(Buff)
+	{
+		Buff->Character = this;
 	}
 }
 void ABlasterCharacter::PlayFireMontage(bool bAiming)
