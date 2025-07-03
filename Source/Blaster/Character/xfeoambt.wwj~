@@ -80,8 +80,7 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void ABlasterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	SpawnDefaultWeapon();
-	UpdateHUDAmmo();
+
 	UpdateHUDHealth();
 	UpdateHUDShield(); 
 	if (HasAuthority())
@@ -138,14 +137,7 @@ void ABlasterCharacter::Elim()
 {
 	if(Combat && Combat->EquippedWeapon)
 	{
-		if (Combat->EquippedWeapon->bDestroyWeapon)
-		{
-			Combat->EquippedWeapon->Destroy();
-		}
-		else
-		{
-			Combat->EquippedWeapon->Dropped();
-		}
+		Combat->EquippedWeapon->Dropped();
 	}
 	MulticastElim(); // Call the multicast function to handle elimination
 	GetWorldTimerManager().SetTimer(
@@ -362,21 +354,7 @@ void ABlasterCharacter::PlayHitReactMontage()
 void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
 {
 	if (bElimmed) return;
-	float DamageToHealth = Damage;
-	if (Shield > 0.f)
-	{
-		if (Shield >= Damage)
-		{
-			Shield = FMath::Clamp(Shield - Damage, 0.f, MaxShield);
-			DamageToHealth = 0.f;
-		}
-		else
-		{
-			DamageToHealth = FMath::Clamp(DamageToHealth - Shield, 0.f, MaxHealth);
-			Shield = 0.f;
-		}
-	}
-	Health = FMath::Clamp(Health - DamageToHealth, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
+	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
 	UpdateHUDHealth();
 	UpdateHUDShield();
 	PlayHitReactMontage();
@@ -434,7 +412,16 @@ void ABlasterCharacter::EquipButtonPressed()
 	if (bDisableGameplay) return;
 	if(Combat) // Only allow equipping on the server
 	{
-		ServerEquipButtonPressed();
+		if (HasAuthority())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("EquipButtonPressed on server."));
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("EquipButtonPressed on client."));
+			ServerEquipButtonPressed(); // Call the server function to handle equipping
+		}		
 	}
 	else
 	{
@@ -660,30 +647,6 @@ void ABlasterCharacter::UpdateHUDShield()
 	if (BlasterPlayerController)
 	{
 		BlasterPlayerController->SetHUDShield(Shield, MaxShield); // Set the HUD shield on the player controller
-	}
-}
-
-void ABlasterCharacter::UpdateHUDAmmo()
-{
-	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
-	if (BlasterPlayerController && Combat && Combat->EquippedWeapon)
-	{
-		BlasterPlayerController->SetHUDCarriedAmmo(Combat->CarriedAmmo);
-		BlasterPlayerController->SetHUDWeaponAmmo(Combat->EquippedWeapon->GetAmmo()); // Set the HUD weapon ammo on the player controller
-	}
-}
-
-void ABlasterCharacter::SpawnDefaultWeapon()
-{
-	ABlasterGameMode* BlasterGameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this));
-	UWorld* World = GetWorld();
-	if (BlasterGameMode && World && !bElimmed && DefaultWeaponClass) {
-		AWeapon* StartingWeapon = World->SpawnActor<AWeapon>(DefaultWeaponClass);
-		StartingWeapon->bDestroyWeapon = true;
-		if (Combat)
-		{
-			Combat->EquipWeapon(StartingWeapon);
-		}
 	}
 }
 

@@ -76,7 +76,7 @@ public:
 
 
 	void EnableCustomDepth(bool bEnable);
-
+	bool bDestroyWeapon = false; // Flag to determine if the weapon should be destroyed after use
 protected:
 	virtual void BeginPlay() override;
 

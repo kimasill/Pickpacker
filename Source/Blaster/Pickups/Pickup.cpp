@@ -6,6 +6,8 @@
 #include "Sound/SoundCue.h"
 #include "Components/SphereComponent.h"
 #include "Blaster/Weapon/Weapon.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
 
 APickup::APickup()
 { 	
@@ -28,15 +30,24 @@ APickup::APickup()
 	PickupMesh->SetRelativeScale3D(FVector(2.5f, 2.5f, 2.5f));
 	PickupMesh->SetRenderCustomDepth(true);
 	PickupMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_PURPLE);
+
+
+	PickupEffectComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("PickupEffectComponent"));
+	PickupEffectComponent->SetupAttachment(RootComponent);
 }
 
 void APickup::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	if(HasAuthority())
+
+	if (HasAuthority())
 	{
-		OverlapSphere->OnComponentBeginOverlap.AddDynamic(this, &APickup::OnSphereOverlap);
+		GetWorldTimerManager().SetTimer(
+			BindOverlapTimer,
+			this,
+			&APickup::BindOverlapTimerFinished,
+			BindOverlapTime
+		);
 	}
 }
 void APickup::OnSphereOverlap(
@@ -45,21 +56,10 @@ void APickup::OnSphereOverlap(
 	int32 OtherBodyIndex,
 	bool bFromSweep,
 	const FHitResult& SweepResult
-)
-{
-
-}
-void APickup::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-	/**
-	*  Rotate the pickup mesh around the Z-axis at a constant rate.
-	**/
-	/*if (PickupMesh)
-	{
-		PickupMesh->AddWorldRotation(FRotator(0.f, BaseTurnRate * DeltaTime, 0.f));
-	}*/
+){}
+void APickup::BindOverlapTimerFinished()
+{	
+	OverlapSphere->OnComponentBeginOverlap.AddDynamic(this, &APickup::OnSphereOverlap);	
 }
 
 void APickup::Destroyed()
@@ -73,4 +73,17 @@ void APickup::Destroyed()
 			GetActorLocation()
 		);
 	}
+	if (PickupEffect)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			this,
+			PickupEffect,
+			GetActorLocation(),
+			GetActorRotation()
+		);
+	}
+}
+void APickup::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
 }

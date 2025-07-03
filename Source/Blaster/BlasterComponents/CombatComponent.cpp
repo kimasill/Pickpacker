@@ -27,6 +27,7 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UCombatComponent, EquippedWeapon);
+	DOREPLIFETIME(UCombatComponent, SecondaryWeapon);
 	DOREPLIFETIME(UCombatComponent, bAiming);
 	DOREPLIFETIME_CONDITION(UCombatComponent, CarriedAmmo, COND_OwnerOnly);
 	DOREPLIFETIME(UCombatComponent, CombatState);
@@ -223,6 +224,16 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	if (Character == nullptr || WeaponToEquip == nullptr) return;
 	if (CombatState != ECombatState::ECS_Unoccupied) return; // Prevent equipping if not unoccupied
 	
+	EquipPrimaryWeapon(WeaponToEquip);
+	
+	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+	Character->bUseControllerRotationYaw = true;
+}
+
+
+void UCombatComponent::EquipPrimaryWeapon(AWeapon* WeaponToEquip)
+{
+
 	DropEquippedWeapon(); // Drop current weapon if any
 	EquippedWeapon = WeaponToEquip;
 	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
@@ -233,12 +244,11 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	UpdateCarriedAmmo(); // Update carried ammo for the equipped weapon
 	PlayEquipWeaponSound();
 	ReloadEmptyWeapon();
-	
-	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
-	Character->bUseControllerRotationYaw = true;
 }
 
-
+void UCombatComponent::EquipSecondaryWeapon(AWeapon* WeaponEquip)
+{
+}
 void UCombatComponent::DropEquippedWeapon()
 {
 	if (EquippedWeapon)
@@ -314,6 +324,7 @@ void UCombatComponent::ShowAttachedGrenade(bool bShowGrenade)
 		Character->GetAttachedGrenade()->SetVisibility(bShowGrenade);
 	}
 }
+
 
 void UCombatComponent::Reload()
 {
@@ -519,6 +530,10 @@ void UCombatComponent::OnRep_EquippedWeapon()
 		Character->bUseControllerRotationYaw = true;
 		PlayEquipWeaponSound();
 	}
+}
+
+void UCombatComponent::OnRep_SecondaryWeapon()
+{
 }
 
 void UCombatComponent::SetHUDCrosshairs(float DeltaTime)

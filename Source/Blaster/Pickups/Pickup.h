@@ -40,4 +40,15 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	UStaticMeshComponent* PickupMesh;
+
+	UPROPERTY(VisibleAnywhere)
+	class UNiagaraComponent* PickupEffectComponent;
+
+	UPROPERTY(EditAnywhere)
+	class UNiagaraSystem* PickupEffect; // Niagara effect for pickup
+
+	FTimerHandle BindOverlapTimer;
+	float BindOverlapTime = 0.25f;
+	void BindOverlapTimerFinished();
+
 };

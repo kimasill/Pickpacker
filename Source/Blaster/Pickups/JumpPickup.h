@@ -4,17 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Pickup.h"
-#include "HealthPickup.generated.h"
+#include "JumpPickup.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API AHealthPickup : public APickup
+class BLASTER_API AJumpPickup : public APickup
 {
 	GENERATED_BODY()
-public:
-	AHealthPickup();
 protected:
 	virtual void OnSphereOverlap(
 		UPrimitiveComponent* OverlappedComponent,
@@ -23,11 +21,10 @@ protected:
 		bool bFromSweep,
 		const FHitResult& SweepResult
 	);
-
 private:
-		UPROPERTY(EditAnywhere)
-		float HealAmount = 50.f; // Amount of health to restore when picked up
+	UPROPERTY(EditAnywhere)
+	float JumpZVelocity = 4000.f; // The Z velocity to apply when the player picks up this item
 
-		UPROPERTY(EditAnywhere)
-		float HealingTime = 5.f;
+	UPROPERTY(EditAnywhere)
+	float JumpBuffTime = 15.f; // The duration of the jump buff in seconds
 };
