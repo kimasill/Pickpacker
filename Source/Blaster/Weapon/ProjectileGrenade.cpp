@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "ProjectileGraenade.h"
+#include "ProjectileGrenade.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
 
-AProjectileGraenade::AProjectileGraenade()
+AProjectileGrenade::AProjectileGrenade()
 {
 	ProjectileMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GrenadeMesh"));
 	ProjectileMesh->SetupAttachment(RootComponent);
@@ -18,17 +18,17 @@ AProjectileGraenade::AProjectileGraenade()
 	ProjectileMovementComponent->bShouldBounce = true;
 }
 
-void AProjectileGraenade::BeginPlay() 
+void AProjectileGrenade::BeginPlay() 
 {
 	AActor::BeginPlay();
 
 	SpawnTrailSystem();
 	StartDestroyTimer();
 
-	ProjectileMovementComponent->OnProjectileBounce.AddDynamic(this, &AProjectileGraenade::OnBounce);
+	ProjectileMovementComponent->OnProjectileBounce.AddDynamic(this, &AProjectileGrenade::OnBounce);
 }
 
-void AProjectileGraenade::OnBounce(const FHitResult& ImpactResult, const FVector& ImpactVelocity)
+void AProjectileGrenade::OnBounce(const FHitResult& ImpactResult, const FVector& ImpactVelocity)
 {
 	if (BounceSound) {
 		UGameplayStatics::PlaySoundAtLocation(
@@ -39,7 +39,7 @@ void AProjectileGraenade::OnBounce(const FHitResult& ImpactResult, const FVector
 	}
 }
 
-void AProjectileGraenade::Destroyed() {
+void AProjectileGrenade::Destroyed() {
 
 	ExplodeDamage();
 	Super::Destroyed();

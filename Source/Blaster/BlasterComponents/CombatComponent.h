@@ -21,6 +21,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
 	void EquipWeapon(class AWeapon* WeaponToEquip);
+	void SwapWeapons();
 	void Reload();
 
 	UFUNCTION(BlueprintCallable)
@@ -56,6 +57,7 @@ protected:
 	void OnRep_SecondaryWeapon();
 
 	void Fire();
+	void LocalFire(const FVector_NetQuantize& TraceHitTarget);
 
 	UFUNCTION(Server, Reliable)
 	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
@@ -84,12 +86,13 @@ protected:
 	void DropEquippedWeapon();
 	void AttachActorToRightHand(AActor* ActorToAttach);
 	void AttachActorToLeftHand(AActor* ActorToAttach);
+	void AttachActorToBackpack(AActor* ActorToAttach);
 	void UpdateCarriedAmmo();
-	void PlayEquipWeaponSound();
+	void PlayEquipWeaponSound(AWeapon* WeaponToEquip);
 	void ReloadEmptyWeapon();
 	void ShowAttachedGrenade(bool bShowGrenade);
-	void EquipPrimaryWeapon(AWeapon* WeaponEquip);
-	void EquipSecondaryWeapon(AWeapon* WeaponEquip);
+	void EquipPrimaryWeapon(AWeapon* WeaponToEquip);
+	void EquipSecondaryWeapon(AWeapon* WeaponToEquip);
 private:
 	UPROPERTY()
 	class ABlasterCharacter* Character;
@@ -211,4 +214,5 @@ private:
 	void UpdateHUDGrenades();
 public:
 	FORCEINLINE int32 GetGrenades() const { return Grenades; }
+	bool ShouldSwapWeapons();
 };

@@ -4,17 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "Projectile.h"
-#include "ProjectileGraenade.generated.h"
+#include "ProjectileGrenade.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API AProjectileGraenade : public AProjectile
+class BLASTER_API AProjectileGrenade : public AProjectile
 {
 	GENERATED_BODY()
 public:
-	AProjectileGraenade();
+	AProjectileGrenade();
 	virtual void Destroyed() override;
 protected:
 	virtual void BeginPlay() override;

@@ -60,10 +60,9 @@ protected:
 	virtual void Jump() override;
 	void FireButtonPressed();
 	void FireButtonReleased();
-
 	void PlayHitReactMontage();
-
-
+	void DropOrDestroyWeapon(AWeapon* Weapon);
+	void DropOrDestroyWeapons();
 
 	UFUNCTION()
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);

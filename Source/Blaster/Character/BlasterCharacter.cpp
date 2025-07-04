@@ -135,18 +135,8 @@ void ABlasterCharacter::OnRep_ReplicatedMovement() {
 }
 
 void ABlasterCharacter::Elim()
-{
-	if(Combat && Combat->EquippedWeapon)
-	{
-		if (Combat->EquippedWeapon->bDestroyWeapon)
-		{
-			Combat->EquippedWeapon->Destroy();
-		}
-		else
-		{
-			Combat->EquippedWeapon->Dropped();
-		}
-	}
+{	
+	DropOrDestroyWeapons();
 	MulticastElim(); // Call the multicast function to handle elimination
 	GetWorldTimerManager().SetTimer(
 		ElimTimer, 
@@ -155,6 +145,32 @@ void ABlasterCharacter::Elim()
 		ElimDelay
 	); // Set a timer for the elimination delay
 	
+}
+
+void ABlasterCharacter::DropOrDestroyWeapon(AWeapon* Weapon)
+{
+	if (Weapon == nullptr) return;
+	if (Weapon->bDestroyWeapon)
+	{
+		Weapon->Destroy();
+	}
+	else
+	{
+		Weapon->Dropped();
+	}
+}
+
+void ABlasterCharacter::DropOrDestroyWeapons()
+{
+	if (Combat)
+	{
+		if (Combat->EquippedWeapon) {
+			DropOrDestroyWeapon(Combat->EquippedWeapon);
+		}
+		if (Combat->SecondaryWeapon) {
+			DropOrDestroyWeapon(Combat->SecondaryWeapon);
+		}
+	}
 }
 
 void ABlasterCharacter::MulticastElim_Implementation()
@@ -436,17 +452,20 @@ void ABlasterCharacter::EquipButtonPressed()
 	{
 		ServerEquipButtonPressed();
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Combat component is null."));
-	}
 }
 
 void ABlasterCharacter::ServerEquipButtonPressed_Implementation()
 {
 	if (Combat) // Only allow equipping on the server
 	{
-		Combat->EquipWeapon(OverlappingWeapon);
+		if (OverlappingWeapon)
+		{
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else if(Combat->ShouldSwapWeapons())
+		{
+			Combat->SwapWeapons();
+		}
 	}
 }
 
