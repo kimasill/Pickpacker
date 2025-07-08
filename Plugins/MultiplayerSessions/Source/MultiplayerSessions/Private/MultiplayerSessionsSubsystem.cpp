@@ -126,7 +126,6 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 	if(SessionInterface)
 	{
 		SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionCompleteDelegateHandle);
-		return;
 	}
 
 	if(LastSessionSearch->SearchResults.Num() <= 0)

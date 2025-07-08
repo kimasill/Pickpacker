@@ -20,7 +20,6 @@ public:
 	virtual void Fire(const FVector& HitTarget) override;
 
 protected:
-	FVector TraceEndWithScatter(const FVector& TractStart, const FVector& HitTarget) const;
 	void WeaponTraceHit(const FVector& TraceStart, const FVector& HitTarget, FHitResult& OutHit);
 
 	UPROPERTY(EditAnywhere)
@@ -28,10 +27,6 @@ protected:
 
 	UPROPERTY(EditAnywhere)
 	USoundCue* ImpactSound; // Sound to play on impact
-
-	UPROPERTY(EditAnywhere)
-	float Damage = 20.f; // Amount of damage this weapon does
-
 private:
 	
 	UPROPERTY(EditAnywhere)
@@ -43,17 +38,4 @@ private:
 	UPROPERTY(EditAnywhere)
 	USoundCue* FireSound; // Sound to play when firing
 
-
-	/**
-	* Trace end with scatter
-	*/
-
-	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
-	float DistanceToSphere = 800.f; // Distance to sphere for scatter effect
-
-	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
-	float SphereRadius = 75.f; // Radius of the sphere for scatter effect
-
-	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
-	bool bUseScatter = false; // Whether to use scatter effect or not
 };

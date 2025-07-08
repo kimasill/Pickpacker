@@ -18,6 +18,15 @@ enum  class EWeaponState : uint8
 
 	EWS_MAX UMETA(DisplayName = "DefaultMAX") // This is used to ensure the enum has a maximum value
 };
+
+UENUM(BlueprintType)
+enum class EFireType : uint8
+{
+	EFT_HitScan UMETA(DisplayName = "Hit Scan"),
+	EFT_Projectile UMETA(DisplayName = "Projectile"),
+	EFT_Shotgun UMETA(DisplayName = "Shotgun"),
+	EFT_MAX UMETA(DisplayName = "DefaultMAX")
+};
 UCLASS()
 class BLASTER_API AWeapon : public AActor
 {
@@ -33,7 +42,7 @@ public:
 	virtual void Fire(const FVector& HitTarget);
 	void Dropped();
 	void AddAmmo(int32 Amount);
-
+	FVector TraceEndWithScatter(const FVector& HitTarget) const;
 
 	/**
 	*  Textures for the weapon crosshair
@@ -79,6 +88,12 @@ public:
 
 	void EnableCustomDepth(bool bEnable);
 	bool bDestroyWeapon = false; // Flag to determine if the weapon should be destroyed after use
+
+	UPROPERTY(EditAnywhere)
+	EFireType FireType;
+
+	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
+	bool bUseScatter = false; // Whether to use scatter effect or not
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnWeaponStateSet();
@@ -101,6 +116,27 @@ protected:
 		UPrimitiveComponent* OtherComp, 
 		int32 OtherBodyIndex
 	);
+
+	UPROPERTY(EditAnywhere)
+	float Damage = 20.f; // Amount of damage this weapon does
+
+	UPROPERTY(EditAnywhere)
+	bool bUseServerSideRewind = false; // Whether to use server-side rewind for hit registration
+
+	UPROPERTY()
+	class ABlasterCharacter* BlasterOwnerCharacter;
+	UPROPERTY()
+	class ABlasterPlayerController* BlasterOwnerController;
+
+	/**
+	* Trace end with scatter
+	*/
+
+	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
+	float DistanceToSphere = 800.f; // Distance to sphere for scatter effect
+
+	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
+	float SphereRadius = 75.f; // Radius of the sphere for scatter effect
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
 	USkeletalMeshComponent* WeaponMesh;
@@ -123,23 +159,26 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Weapon Properties")
 	TSubclassOf<class ACasing> CasingClass;
 	
-	UPROPERTY(EditAnywhere, ReplicatedUsing = OnRep_Ammo)
+	UPROPERTY(EditAnywhere)
 	int32 Ammo;
 
-	UFUNCTION()
-	void OnRep_Ammo();
+	UFUNCTION(Client, Reliable)
+	void ClientUpdateAmmo(int32 ServerAmmo);
 
+	UFUNCTION(Client, Reliable)
+	void ClientAddAmmo(int32 AmmoToAdd);
 	void SpendRound();
 	UPROPERTY(EditAnywhere)
 	int32 MagCapacity;
 
-	UPROPERTY()
-	class ABlasterCharacter* BlasterOwnerCharacter;
-	UPROPERTY()
-	class ABlasterPlayerController* BlasterOwnerController;
+	//The number of unprocessed server requests for ammo updates
+	//Incremented in SpendRound, decremented in ClientUpdateAmmo
+	int32 Sequence = 0;
 
 	UPROPERTY(EditAnywhere)
 	EWeaponType WeaponType;
+
+
 
 public:
 	void SetWeaponState(EWeaponState State);
@@ -152,4 +191,5 @@ public:
 	FORCEINLINE EWeaponType GetWeaponType() const { return WeaponType; }
 	FORCEINLINE int32 GetAmmo() const { return Ammo; }
 	FORCEINLINE int32 GetMagCapacity() const { return MagCapacity; }
+	FORCEINLINE float GetDamage() const { return Damage; }
 };
