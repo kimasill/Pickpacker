@@ -120,13 +120,16 @@ protected:
 	UPROPERTY(EditAnywhere)
 	float Damage = 20.f; // Amount of damage this weapon does
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(Replicated, EditAnywhere)
 	bool bUseServerSideRewind = false; // Whether to use server-side rewind for hit registration
 
 	UPROPERTY()
 	class ABlasterCharacter* BlasterOwnerCharacter;
 	UPROPERTY()
 	class ABlasterPlayerController* BlasterOwnerController;
+
+	UFUNCTION()
+	void OnPingTooHigh(bool bPingTooHigh);
 
 	/**
 	* Trace end with scatter
@@ -137,6 +140,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
 	float SphereRadius = 75.f; // Radius of the sphere for scatter effect
+
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
 	USkeletalMeshComponent* WeaponMesh;

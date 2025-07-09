@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "BlasterPlayerController.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHighPingDelegate, bool, bHighPing);
 /**
  * 
  */
@@ -34,6 +35,7 @@ public:
 	void HandleCooldown();
 
 	float SingleTripTime = 0.f;
+	FHighPingDelegate HighPingDelegate; // Delegate for high ping events
 protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();
@@ -116,6 +118,10 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	float CheckPingFrequency = 20.f; // How often to check ping
+
+	UFUNCTION(Server, Reliable)
+	void ServerReportPingStatus(bool bHighPing); // Server reports high ping status
+
 
 	UPROPERTY(EditAnywhere)
 	float HighPingThreshold = 50.f; // Threshold for high ping warning

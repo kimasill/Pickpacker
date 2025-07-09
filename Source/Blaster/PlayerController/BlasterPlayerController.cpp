@@ -47,11 +47,16 @@ void ABlasterPlayerController::CheckPing(float DeltaTime)
 	{
         PlayerState = PlayerState == nullptr ? TObjectPtr<APlayerState>(GetPlayerState<APlayerState>()) : PlayerState;
 		{
+			UE_LOG(LogTemp, Warning, TEXT("PlayerState->GetPing() * 4: %f"), PlayerState->ExactPing * 4);
 			if (PlayerState->ExactPing * 4 > HighPingThreshold) // ping is compressed by 4 times in the player state
 			{
 				HighPingWarning();
                 
 				PingAnimationRunningTime = 0.f;
+				ServerReportPingStatus(true);
+			}
+			else {
+				ServerReportPingStatus(false);
 			}
 			HighPingRunningTime = 0.f;
 		}
@@ -68,6 +73,12 @@ void ABlasterPlayerController::CheckPing(float DeltaTime)
 			StopHighPingWarning();
 		}
 	}
+}
+
+// Is the ping high? If so, show the warning animation
+void ABlasterPlayerController::ServerReportPingStatus_Implementation(bool bHighPing)
+{
+	HighPingDelegate.Broadcast(bHighPing);
 }
 void ABlasterPlayerController::CheckTimeSync(float DeltaTime)
 {
@@ -441,6 +452,7 @@ void ABlasterPlayerController::OnRep_MatchState()
 		HandleCooldown();
 	}
 }
+
 
 void ABlasterPlayerController::HandleMatchHasStarted()
 {
