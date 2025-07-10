@@ -182,17 +182,26 @@ void AWeapon::AddAmmo(int32 AmmoToAdd)
 	SetHUDAmmo();
 	ClientAddAmmo(AmmoToAdd);
 }
+void AWeapon::PredictAddAmmo(int32 AmmoToAdd)
+{
+	Ammo = FMath::Clamp(Ammo + AmmoToAdd, 0, MagCapacity);
+	PredictedAmmo = AmmoToAdd;
+	SetHUDAmmo();
+}
 
 void AWeapon::ClientAddAmmo_Implementation(int32 AmmoToAdd)
 {
-	Ammo = FMath::Clamp(Ammo + AmmoToAdd, 0, MagCapacity);
+	Ammo = FMath::Clamp(Ammo + AmmoToAdd - PredictedAmmo, 0, MagCapacity);
 	BlasterOwnerCharacter = BlasterOwnerCharacter == nullptr ? Cast<ABlasterCharacter>(GetOwner()) : BlasterOwnerCharacter;
 	if (BlasterOwnerCharacter && BlasterOwnerCharacter->GetCombat() && IsFull())
 	{
 		BlasterOwnerCharacter->GetCombat()->JumpToShotgunEnd();
 	}
+	PredictedAmmo = 0;
 	SetHUDAmmo();
 }
+
+
 void AWeapon::OnRep_Owner()
 {
 	Super::OnRep_Owner();

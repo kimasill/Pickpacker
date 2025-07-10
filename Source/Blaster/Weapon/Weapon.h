@@ -42,6 +42,7 @@ public:
 	virtual void Fire(const FVector& HitTarget);
 	void Dropped();
 	void AddAmmo(int32 Amount);
+	void PredictAddAmmo(int32 AmmoToAdd);
 	FVector TraceEndWithScatter(const FVector& HitTarget) const;
 
 	/**
@@ -93,7 +94,7 @@ public:
 	EFireType FireType;
 
 	UPROPERTY(EditAnywhere, Category = "Weapon Scatter")
-	bool bUseScatter = false; // Whether to use scatter effect or not
+	bool bUseScatter = false; // Whether to use scatter effect for the weapon
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnWeaponStateSet();
@@ -178,11 +179,10 @@ private:
 	//The number of unprocessed server requests for ammo updates
 	//Incremented in SpendRound, decremented in ClientUpdateAmmo
 	int32 Sequence = 0;
+	int32 PredictedAmmo = 0; // Ammo predicted on the client side
 
 	UPROPERTY(EditAnywhere)
 	EWeaponType WeaponType;
-
-
 
 public:
 	void SetWeaponState(EWeaponState State);

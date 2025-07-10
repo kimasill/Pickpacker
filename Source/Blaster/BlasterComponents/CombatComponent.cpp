@@ -457,6 +457,16 @@ void UCombatComponent::FinishReloading()
 		CombatState = ECombatState::ECS_Unoccupied;
 		UpdateAmmoValues();
 	}
+	else if (Character->IsLocallyControlled())
+	{
+		CombatState = ECombatState::ECS_Unoccupied;
+
+		if (EquippedWeapon)
+		{
+			const int32 ReloadAmount = AmountToReload();
+			EquippedWeapon->PredictAddAmmo(ReloadAmount);
+		}
+	}
 	if (bFireButtonPressed)
 	{
 		Fire();
