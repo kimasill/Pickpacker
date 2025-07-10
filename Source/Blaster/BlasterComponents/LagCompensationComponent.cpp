@@ -14,7 +14,6 @@ ULagCompensationComponent::ULagCompensationComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 
 }
-
 void ULagCompensationComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -216,6 +215,108 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileConfirmHit(const FF
 	return FServerSideRewindResult{ false, false };
 }
 
+FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits(const TArray<FFramePackage>& FramePackages, const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+{
+	for (auto& Frame : FramePackages) {
+		if (Frame.Character == nullptr) return FExplosiveServerSideRewindResult();
+	}
+	TArray<FFramePackage> CurrentFrames;
+	FExplosiveServerSideRewindResult ExplosiveResult;
+
+	for (const FFramePackage& Frame : FramePackages)
+	{
+		if (Frame.Character == nullptr) continue;
+		FFramePackage CurrentFrame;
+		CurrentFrame.Character = Frame.Character;
+		CacheBoxPositions(Frame.Character, CurrentFrame);
+		MoveBoxes(Frame.Character, Frame);
+		CurrentFrames.Add(CurrentFrame);
+	}
+
+	for (auto& Frame : FramePackages)
+	{
+		if (Frame.Character == nullptr) continue;
+
+		const FVector CharacterLocation = Frame.Character->GetActorLocation();
+		const float DistanceToCharacter = (CharacterLocation - ExplosionLocation).Size();
+
+		if (DistanceToCharacter <= DamageOuterRadius) // Check if Obstacle is within the outer radius
+		{
+			TArray<FVector> TracePoints;
+			TracePoints.Add(CharacterLocation); // Add the character's location as a trace point
+
+			if(Frame.HitBoxInfo.Contains(FName("head")))
+			{
+				TracePoints.Add(Frame.HitBoxInfo[FName("head")].Location);
+			}
+			if (Frame.HitBoxInfo.Contains(FName("hand_l")))
+			{
+				TracePoints.Add(Frame.HitBoxInfo[FName("hand_l")].Location);
+			}
+			if (Frame.HitBoxInfo.Contains(FName("hand_r")))
+			{
+				TracePoints.Add(Frame.HitBoxInfo[FName("hand_r")].Location);
+			}
+			if (Frame.HitBoxInfo.Contains(FName("foot_l")))
+			{
+				TracePoints.Add(Frame.HitBoxInfo[FName("foot_l")].Location);
+			}
+			if (Frame.HitBoxInfo.Contains(FName("foot_r")))
+			{
+				TracePoints.Add(Frame.HitBoxInfo[FName("foot_r")].Location);
+			}
+
+			bool bHitConfirmed = false;
+			for (const FVector& TracePoint : TracePoints)
+			{
+				FHitResult HitResult;
+				GetWorld()->LineTraceSingleByChannel(
+					HitResult,
+					ExplosionLocation,
+					TracePoint,
+					ECC_HitBox
+				);
+				ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(HitResult.GetActor());
+				if (BlasterCharacter)
+				{
+					if (HitResult.Component.IsValid())
+					{
+						UBoxComponent* Box = Cast<UBoxComponent>(HitResult.Component);
+						if (Box)
+						{
+							DrawDebugBox(
+								GetWorld(),
+								Box->GetComponentLocation(),
+								Box->GetScaledBoxExtent(),
+								FQuat(Box->GetComponentRotation()),
+								FColor::Red,
+								false,
+								4.f
+							);
+						}
+					}
+					if (ExplosiveResult.DamageMap.Contains(BlasterCharacter))
+					{
+						ExplosiveResult.DamageMap[BlasterCharacter]++;
+					}
+					else
+					{
+						ExplosiveResult.DamageMap.Emplace(BlasterCharacter, 1);
+					}
+					ExplosiveResult.DamageDistance.Emplace(BlasterCharacter, DistanceToCharacter);
+					break; // We only need to confirm one hit for the character
+				}
+			}
+		}
+	}
+
+	for (auto& Frame : CurrentFrames)
+	{
+		ResetHitBoxes(Frame.Character, Frame);
+	}
+
+	return FExplosiveServerSideRewindResult(ExplosiveResult);
+}
 
 FShotgunServerSideRewindResult ULagCompensationComponent::ShotgunConfirmHits(const TArray<FFramePackage>& FramePackages, const FVector_NetQuantize& TraceStart, const TArray<FVector_NetQuantize>& HitLocations)
 {
@@ -345,7 +446,6 @@ FShotgunServerSideRewindResult ULagCompensationComponent::ShotgunConfirmHits(con
 				}
 			}
 		}
-
 	}
 	for (auto& Frame : CurrentFrames)
 	{
@@ -510,6 +610,17 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileServerSideRewind(AB
 	return ProjectileConfirmHit(FrameToCheck, HitCharacter, TraceStart, InitialVelocity, HitTime);
 }
 
+FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveServerSideRewind(const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+{
+	TArray<FFramePackage> FramesToCheck;
+	for (ABlasterCharacter* HitCharacter : HitCharacters)
+	{
+		FramesToCheck.Add(GetFrameToCheck(HitCharacter, HitTime));
+	}
+	return ExplosiveConfirmHits(FramesToCheck, HitCharacters, ExplosionLocation, DamageInnerRadius, DamageOuterRadius, HitTime, DamageTypeClass);
+}
+
+
 void ULagCompensationComponent::ServerScoreRequest_Implementation(ABlasterCharacter* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize& HitLocation, float HitTime, AWeapon* DamageCauser)
 {
 	FServerSideRewindResult Confirm = ServerSideRewind(HitCharacter, TraceStart, HitLocation, HitTime);
@@ -543,6 +654,35 @@ void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABla
 	}
 }
 
+void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float BaseDamage, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+{
+	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, DamageInnerRadius, DamageOuterRadius, HitTime, DamageTypeClass);
+	for (auto& HitCharacter : HitCharacters)
+	{
+		if (HitCharacter == nullptr || Character == nullptr) continue;
+		if (Confirm.DamageMap.Contains(HitCharacter))
+		{
+			float Distance = Confirm.DamageDistance[HitCharacter];
+			float TotalDamage = 0.f;
+			if (Distance <= DamageInnerRadius)
+			{
+				TotalDamage = BaseDamage;
+			}
+			else
+			{
+				const float Falloff = (Distance - DamageInnerRadius) / (DamageOuterRadius - DamageInnerRadius);
+				TotalDamage = FMath::Lerp(BaseDamage, MinimumDamage, FMath::Pow(Falloff, DamageFalloff));
+			}
+			UGameplayStatics::ApplyDamage(
+				HitCharacter,
+				TotalDamage,
+				Character->Controller,
+				Character,
+				DamageTypeClass
+			);
+		}
+	}
+}
 void ULagCompensationComponent::ServerShotgunScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& TraceStart, const TArray<FVector_NetQuantize>& HitLocations, float HitTime)
 {
 	FShotgunServerSideRewindResult Confirm = ShotgunServerSideRewind(HitCharacters, TraceStart, HitLocations, HitTime);

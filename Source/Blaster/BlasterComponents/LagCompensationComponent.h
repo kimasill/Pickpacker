@@ -49,6 +49,18 @@ struct FServerSideRewindResult
 };
 
 USTRUCT(BlueprintType)
+struct FExplosiveServerSideRewindResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TMap<ABlasterCharacter*, uint32> DamageMap; // Maps characters to damage dealt
+
+	UPROPERTY()
+	TMap<ABlasterCharacter*, uint32> DamageDistance; // Maps characters to distance from explosion
+};
+
+USTRUCT(BlueprintType)
 struct FShotgunServerSideRewindResult
 {
 	GENERATED_BODY()
@@ -93,6 +105,18 @@ public:
 		float HitTime
 	);
 
+	/**
+	* Explosive Rewind
+	*/
+
+	FExplosiveServerSideRewindResult ExplosiveServerSideRewind(
+		const TArray<ABlasterCharacter*>& HitCharacters,
+		const FVector& ExplosionLocation,
+		float DamageInnerRadius,
+		float DamageOuterRadius,
+		float HitTime,
+		TSubclassOf<UDamageType> DamageTypeClass
+	);
 
 	/**
 	* Shotgun Rewind
@@ -120,6 +144,19 @@ public:
 		const FVector_NetQuantize& TraceStart,
 		const FVector_NetQuantize100& InitialVelocity,
 		float HitTime
+	);
+
+	UFUNCTION(Server, Reliable)
+	void ServerExplosiveScoreRequest(
+		const TArray<ABlasterCharacter*>& HitCharacters, 
+		const FVector_NetQuantize& ExplosionLocation, 
+		float DamageInnerRadius,
+		float DamageOuterRadius,
+		float BaseDamage,
+		float MinimumDamage,
+		float DamageFalloff,
+		float HitTime,
+		TSubclassOf<UDamageType> DamageTypeClass
 	);
 
 	UFUNCTION(Server, Reliable)
@@ -159,6 +196,19 @@ protected:
 		const FVector_NetQuantize& TraceStart,
 		const FVector_NetQuantize100& InitialVelocity,
 		float HitTime
+	);
+
+	/**
+	* Explosives
+	*/
+	FExplosiveServerSideRewindResult ExplosiveConfirmHits(
+			const TArray<FFramePackage>& Packages,
+			const TArray<ABlasterCharacter*>& HitCharacters,
+			const FVector& ExplosionLocation,
+			float DamageInnerRadius,
+			float DamageOuterRadius,
+			float HitTime,
+			TSubclassOf<UDamageType> DamageTypeClass
 	);
 
 	/**
