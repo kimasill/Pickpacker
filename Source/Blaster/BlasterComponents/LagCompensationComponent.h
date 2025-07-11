@@ -156,7 +156,8 @@ public:
 		float MinimumDamage,
 		float DamageFalloff,
 		float HitTime,
-		TSubclassOf<UDamageType> DamageTypeClass
+		TSubclassOf<UDamageType> DamageTypeClass,
+		class AActor* DamageCauser
 	);
 
 	UFUNCTION(Server, Reliable)

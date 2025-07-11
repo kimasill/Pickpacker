@@ -42,7 +42,6 @@ public:
 	virtual void Fire(const FVector& HitTarget);
 	void Dropped();
 	void AddAmmo(int32 Amount);
-	void PredictAddAmmo(int32 AmmoToAdd);
 	FVector TraceEndWithScatter(const FVector& HitTarget) const;
 
 	/**
@@ -179,7 +178,6 @@ private:
 	//The number of unprocessed server requests for ammo updates
 	//Incremented in SpendRound, decremented in ClientUpdateAmmo
 	int32 Sequence = 0;
-	int32 PredictedAmmo = 0; // Ammo predicted on the client side
 
 	UPROPERTY(EditAnywhere)
 	EWeaponType WeaponType;

@@ -174,30 +174,25 @@ void AWeapon::ClientUpdateAmmo_Implementation(int32 ServerAmmo)
 	Ammo = ServerAmmo;
 	--Sequence;
 	Ammo -= Sequence;
+	UE_LOG(LogTemp, Warning, TEXT("Client Update Ammo: %d"), Ammo);
 	SetHUDAmmo();
 }
+
 void AWeapon::AddAmmo(int32 AmmoToAdd)
 {
 	Ammo = FMath::Clamp(Ammo + AmmoToAdd, 0, MagCapacity);
 	SetHUDAmmo();
 	ClientAddAmmo(AmmoToAdd);
 }
-void AWeapon::PredictAddAmmo(int32 AmmoToAdd)
-{
-	Ammo = FMath::Clamp(Ammo + AmmoToAdd, 0, MagCapacity);
-	PredictedAmmo = AmmoToAdd;
-	SetHUDAmmo();
-}
-
 void AWeapon::ClientAddAmmo_Implementation(int32 AmmoToAdd)
 {
-	Ammo = FMath::Clamp(Ammo + AmmoToAdd - PredictedAmmo, 0, MagCapacity);
+	Ammo = FMath::Clamp(Ammo + AmmoToAdd, 0, MagCapacity);
+	UE_LOG(LogTemp, Warning, TEXT("Client Add Ammo: %d"), Ammo);
 	BlasterOwnerCharacter = BlasterOwnerCharacter == nullptr ? Cast<ABlasterCharacter>(GetOwner()) : BlasterOwnerCharacter;
 	if (BlasterOwnerCharacter && BlasterOwnerCharacter->GetCombat() && IsFull())
 	{
 		BlasterOwnerCharacter->GetCombat()->JumpToShotgunEnd();
 	}
-	PredictedAmmo = 0;
 	SetHUDAmmo();
 }
 
@@ -316,7 +311,8 @@ void AWeapon::OnEquippedSecondary()
 		WeaponMesh->SetEnableGravity(true);
 		WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
 	}
-	if (WeaponMesh) {
+	if (WeaponMesh)
+	{
 		WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_TAN);
 		WeaponMesh->MarkRenderStateDirty();
 	}

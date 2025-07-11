@@ -654,9 +654,9 @@ void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABla
 	}
 }
 
-void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float BaseDamage, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float InnerRadius, float OuterRadius, float BaseDamage, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, AActor* DamageCauser)
 {
-	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, DamageInnerRadius, DamageOuterRadius, HitTime, DamageTypeClass);
+	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, InnerRadius, OuterRadius, HitTime, DamageTypeClass);
 	for (auto& HitCharacter : HitCharacters)
 	{
 		if (HitCharacter == nullptr || Character == nullptr) continue;
@@ -664,20 +664,21 @@ void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const
 		{
 			float Distance = Confirm.DamageDistance[HitCharacter];
 			float TotalDamage = 0.f;
-			if (Distance <= DamageInnerRadius)
+			if (Distance <= InnerRadius)
 			{
 				TotalDamage = BaseDamage;
 			}
 			else
 			{
-				const float Falloff = (Distance - DamageInnerRadius) / (DamageOuterRadius - DamageInnerRadius);
-				TotalDamage = FMath::Lerp(BaseDamage, MinimumDamage, FMath::Pow(Falloff, DamageFalloff));
+				const float Falloff = (Distance - InnerRadius) / (OuterRadius - InnerRadius);
+				TotalDamage = BaseDamage * FMath::Pow(1.0f - Falloff, DamageFalloff);
+				TotalDamage = FMath::Max(TotalDamage, MinimumDamage);
 			}
 			UGameplayStatics::ApplyDamage(
 				HitCharacter,
 				TotalDamage,
 				Character->Controller,
-				Character,
+				DamageCauser,
 				DamageTypeClass
 			);
 		}

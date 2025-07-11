@@ -10,7 +10,10 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 #include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Blaster/Blaster.h"
+#include "Engine/OverlapResult.h"
+#include "Blaster/BlasterComponents/LagCompensationComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 
@@ -120,24 +123,72 @@ void AProjectile::DestroyTimerFinished()
 void AProjectile::ExplodeDamage()
 {
 	APawn* FiringPawn = GetInstigator();
-	if (FiringPawn && HasAuthority())
+	if (FiringPawn)
 	{
 		AController* FiringController = FiringPawn->GetController();
+		ABlasterCharacter* OwnerCharacter = Cast<ABlasterCharacter>(FiringPawn);
 		if (FiringController)
 		{
-			UGameplayStatics::ApplyRadialDamageWithFalloff(
-				this, // World context object
-				Damage, // Base damage
-				10.f, // Minimum damage
-				GetActorLocation(), // Origin of the damage
-				DamageInnerRadius, // Inner radius
-				DamageOuterRadius, // Outer radius
-				1.f, // Damage falloff
-				UDamageType::StaticClass(), // Damage type class
-				TArray<AActor*>(), // Ignore actors
-				this, // Damage causer
-				FiringController // Instigated by controller
-			);
+			if (HasAuthority() && !bUseServerSideRewind)
+			{
+				UGameplayStatics::ApplyRadialDamageWithFalloff(
+					this, // World context object
+					Damage, // Base damage
+					10.f, // Minimum damage
+					GetActorLocation(), // Origin of the damage
+					DamageInnerRadius, // Inner radius
+					DamageOuterRadius, // Outer radius
+					1.f, // Damage falloff
+					UDamageType::StaticClass(), // Damage type class
+					TArray<AActor*>(), // Ignore actors
+					this, // Damage causer
+					FiringController, // Instigated by controller
+					ECollisionChannel::ECC_Visibility // Collision channel
+				);
+			}
+			if(OwnerCharacter && !HasAuthority() && bUseServerSideRewind)
+			{
+				ABlasterPlayerController* OwnerController = Cast<ABlasterPlayerController>(OwnerCharacter->Controller);
+
+				TArray<FOverlapResult> OverlapResults;
+				TArray<ABlasterCharacter*> HitCharacters;
+				FCollisionObjectQueryParams ObjectQueryParams(ECollisionChannel::ECC_Visibility);
+				FCollisionShape SphereShape = FCollisionShape::MakeSphere(DamageOuterRadius);
+				GetWorld()->OverlapMultiByObjectType(
+					OverlapResults, // Array to fill with overlapping actors
+					GetActorLocation(), // Center of the overlap
+					FQuat::Identity, // No rotation
+					ObjectQueryParams, // Object types to check
+					SphereShape // Sphere shape for overlap
+				);
+
+				for (const FOverlapResult& Result : OverlapResults)
+				{
+					// FOverlapResult에서 액터 정보를 가져옵니다.
+					AActor* OverlappedActor = Result.GetActor();
+					ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OverlappedActor);
+
+					if (BlasterCharacter && !HitCharacters.Contains(BlasterCharacter))                        
+					{
+						HitCharacters.Add(BlasterCharacter);
+					}
+				}				
+				if (OwnerCharacter->GetLagCompensation() && HitCharacters.Num() > 0)
+				{
+					OwnerCharacter->GetLagCompensation()->ServerExplosiveScoreRequest(
+						HitCharacters,
+						GetActorLocation(),
+						DamageInnerRadius,
+						DamageOuterRadius,
+						Damage,
+						10.f, // Minimum Damage
+						1.f, // DamageFalloff
+						OwnerController->GetServerTime() - OwnerController->SingleTripTime,
+						UDamageType::StaticClass(),
+						this // Damage Causer
+					);
+				}
+			}
 		}
 	}
 }

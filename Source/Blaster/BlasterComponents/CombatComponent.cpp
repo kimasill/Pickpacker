@@ -300,11 +300,11 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 
 void UCombatComponent::SwapWeapons()
 {
-	if (CombatState != ECombatState::ECS_Unoccupied || Character == nullptr) return;
+	if (CombatState != ECombatState::ECS_Unoccupied || Character == nullptr || !Character->HasAuthority()) return;
 
 	Character->PlaySwapMontage();
-	Character->bFinishedSwapping = false;
 	CombatState = ECombatState::ECS_SwappingWeapons;
+	Character->bFinishedSwapping = false;
 	if (SecondaryWeapon) SecondaryWeapon->EnableCustomDepth(false);
 }
 
@@ -332,11 +332,7 @@ void UCombatComponent::EquipSecondaryWeapon(AWeapon* WeaponToEquip)
 	SecondaryWeapon->SetWeaponState(EWeaponState::EWS_EquippedSecondary);
 	AttachActorToBackpack(WeaponToEquip);
 	PlayEquipWeaponSound(WeaponToEquip);
-	
-
-	if (SecondaryWeapon == nullptr) return;
 	SecondaryWeapon->SetOwner(Character);
-
 }
 void UCombatComponent::OnRep_Aiming()
 {
@@ -456,16 +452,6 @@ void UCombatComponent::FinishReloading()
 	{
 		CombatState = ECombatState::ECS_Unoccupied;
 		UpdateAmmoValues();
-	}
-	else if (Character->IsLocallyControlled())
-	{
-		CombatState = ECombatState::ECS_Unoccupied;
-
-		if (EquippedWeapon)
-		{
-			const int32 ReloadAmount = AmountToReload();
-			EquippedWeapon->PredictAddAmmo(ReloadAmount);
-		}
 	}
 	if (bFireButtonPressed)
 	{
@@ -697,7 +683,6 @@ void UCombatComponent::OnRep_SecondaryWeapon()
 		SecondaryWeapon->SetWeaponState(EWeaponState::EWS_EquippedSecondary);
 		AttachActorToBackpack(SecondaryWeapon);
 		PlayEquipWeaponSound(SecondaryWeapon);
-
 	}
 }
 
@@ -830,11 +815,11 @@ void UCombatComponent::OnRep_CarriedAmmo()
 	{
 		Controller->SetHUDCarriedAmmo(CarriedAmmo);
 	}
-	bool bJumpToShotgunEnd = CombatState == ECombatState::ECS_Reloading &&
-		EquippedWeapon &&
+	bool bJumpToShotgunEnd =
+		CombatState == ECombatState::ECS_Reloading &&
+		EquippedWeapon != nullptr &&
 		EquippedWeapon->GetWeaponType() == EWeaponType::EWT_Shotgun &&
 		CarriedAmmo == 0;
-
 	if (bJumpToShotgunEnd)
 	{
 		JumpToShotgunEnd();
