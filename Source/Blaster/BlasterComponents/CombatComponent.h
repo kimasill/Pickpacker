@@ -114,14 +114,15 @@ private:
 	UPROPERTY()
 	class ABlasterHUD* HUD;
 
-	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)	
+	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;
 
 	UPROPERTY(ReplicatedUsing = OnRep_SecondaryWeapon)
 	AWeapon* SecondaryWeapon;
 
 	UPROPERTY(ReplicatedUsing = OnRep_Aiming)
-	bool bAiming;
+	bool bAiming = false;
+
 
 	bool bAimButtonPressed = false;
 
@@ -230,6 +231,8 @@ private:
 	int32 MaxGrenades = 4;
 
 	void UpdateHUDGrenades();
+
+	bool bDidSwap = false;
 public:
 	FORCEINLINE int32 GetGrenades() const { return Grenades; }
 	bool ShouldSwapWeapons();

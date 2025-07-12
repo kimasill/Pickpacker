@@ -65,7 +65,7 @@ protected:
 	void ServerCheckMatchState(); // Server checks match state
 
 	UFUNCTION(Client, Reliable)
-	void ClientJoinMidGame(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime); // Client joins mid-game and initializes HUD
+	void ClientJoinMidgame(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime); // Client joins mid-game and initializes HUD
 
 	void HighPingWarning();
 	void StopHighPingWarning();

@@ -9,24 +9,26 @@
 
 
 UENUM(BlueprintType)
-enum  class EWeaponState : uint8
+enum class EWeaponState : uint8
 {
 	EWS_Initial UMETA(DisplayName = "Initial State"),
 	EWS_Equipped UMETA(DisplayName = "Equipped"),
 	EWS_EquippedSecondary UMETA(DisplayName = "Equipped Secondary"),
 	EWS_Dropped UMETA(DisplayName = "Dropped"),
 
-	EWS_MAX UMETA(DisplayName = "DefaultMAX") // This is used to ensure the enum has a maximum value
+	EWS_MAX UMETA(DisplayName = "DefaultMAX")
 };
 
 UENUM(BlueprintType)
 enum class EFireType : uint8
 {
-	EFT_HitScan UMETA(DisplayName = "Hit Scan"),
-	EFT_Projectile UMETA(DisplayName = "Projectile"),
-	EFT_Shotgun UMETA(DisplayName = "Shotgun"),
+	EFT_HitScan UMETA(DisplayName = "Hit Scan Weapon"),
+	EFT_Projectile UMETA(DisplayName = "Projectile Weapon"),
+	EFT_Shotgun UMETA(DisplayName = "Shotgun Weapon"),
+
 	EFT_MAX UMETA(DisplayName = "DefaultMAX")
 };
+
 UCLASS()
 class BLASTER_API AWeapon : public AActor
 {
@@ -42,7 +44,7 @@ public:
 	virtual void Fire(const FVector& HitTarget);
 	void Dropped();
 	void AddAmmo(int32 Amount);
-	FVector TraceEndWithScatter(const FVector& HitTarget) const;
+	FVector TraceEndWithScatter(const FVector& HitTarget);
 
 	/**
 	*  Textures for the weapon crosshair
@@ -101,7 +103,7 @@ protected:
 	virtual void OnDropped();
 	virtual void OnEquippedSecondary();
 	UFUNCTION()
-	virtual void OnShphereOverlap(
+	virtual void OnSphereOverlap(
 		UPrimitiveComponent* OverlappedComponent, 
 		AActor* OtherActor, UPrimitiveComponent* OtherComp, 
 		int32 OtherBodyIndex, 

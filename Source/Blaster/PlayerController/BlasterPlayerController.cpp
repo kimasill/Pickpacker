@@ -9,86 +9,91 @@
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Blaster/GameMode/BlasterGameMode.h"
+#include "Blaster/PlayerState/BlasterPlayerState.h"
 #include "Blaster/HUD/Announcement.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blaster/BlasterComponents/CombatComponent.h"
-#include "Blaster/PlayerState/BlasterPlayerState.h"
 #include "Blaster/GameState/BlasterGameState.h"
 #include "Components/Image.h"
 
 void ABlasterPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
 	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
-
-
 	ServerCheckMatchState();
 }
+
 void ABlasterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
 	DOREPLIFETIME(ABlasterPlayerController, MatchState);
 }
 
 void ABlasterPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
 	SetHUDTime();
 	CheckTimeSync(DeltaTime);
 	PollInit();
-
 	CheckPing(DeltaTime);
 }
 
 void ABlasterPlayerController::CheckPing(float DeltaTime)
 {
+	if (HasAuthority()) return;
 	HighPingRunningTime += DeltaTime;
-	if (HighPingRunningTime >= CheckPingFrequency)
+	if (HighPingRunningTime > CheckPingFrequency)
 	{
-        PlayerState = PlayerState == nullptr ? TObjectPtr<APlayerState>(GetPlayerState<APlayerState>()) : PlayerState;
+		PlayerState = PlayerState == nullptr ? TObjectPtr<APlayerState>(GetPlayerState<APlayerState>()) : PlayerState;
+		if (PlayerState)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PlayerState->GetPing() * 4: %f"), PlayerState->ExactPing * 4);
-			if (PlayerState->ExactPing * 4 > HighPingThreshold) // ping is compressed by 4 times in the player state
+			UE_LOG(LogTemp, Warning, TEXT("PlayerState->GetPing() * 4 : %f"), PlayerState->ExactPing * 4);
+			if (PlayerState->ExactPing * 4 > HighPingThreshold) // ping is compressed; it's actually ping / 4
 			{
 				HighPingWarning();
-                
 				PingAnimationRunningTime = 0.f;
 				ServerReportPingStatus(true);
 			}
-			else {
+			else
+			{
 				ServerReportPingStatus(false);
 			}
-			HighPingRunningTime = 0.f;
 		}
+		HighPingRunningTime = 0.f;
 	}
-	bool bHighPingAnimationValid =
+	bool bHighPingAnimationPlaying =
 		BlasterHUD && BlasterHUD->CharacterOverlay &&
 		BlasterHUD->CharacterOverlay->HighPingAnimation &&
 		BlasterHUD->CharacterOverlay->IsAnimationPlaying(BlasterHUD->CharacterOverlay->HighPingAnimation);
-	if (bHighPingAnimationValid)
+	if (bHighPingAnimationPlaying)
 	{
 		PingAnimationRunningTime += DeltaTime;
-		if (PingAnimationRunningTime >= HighPingDuration)
+		if (PingAnimationRunningTime > HighPingDuration)
 		{
 			StopHighPingWarning();
 		}
 	}
 }
 
-// Is the ping high? If so, show the warning animation
+// Is the ping too high?
 void ABlasterPlayerController::ServerReportPingStatus_Implementation(bool bHighPing)
 {
 	HighPingDelegate.Broadcast(bHighPing);
 }
+
 void ABlasterPlayerController::CheckTimeSync(float DeltaTime)
 {
 	TimeSyncRunningTime += DeltaTime;
-	if (IsLocalController() && TimeSyncRunningTime >= TimeSyncFrequency)
+	if (IsLocalController() && TimeSyncRunningTime > TimeSyncFrequency)
 	{
-		TimeSyncRunningTime = 0.f;
 		ServerRequestServerTime(GetWorld()->GetTimeSeconds());
+		TimeSyncRunningTime = 0.f;
 	}
 }
+
 void ABlasterPlayerController::HighPingWarning()
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
@@ -96,23 +101,23 @@ void ABlasterPlayerController::HighPingWarning()
 		BlasterHUD->CharacterOverlay &&
 		BlasterHUD->CharacterOverlay->HighPingImage &&
 		BlasterHUD->CharacterOverlay->HighPingAnimation;
-
 	if (bHUDValid)
 	{
 		BlasterHUD->CharacterOverlay->HighPingImage->SetOpacity(1.f);
 		BlasterHUD->CharacterOverlay->PlayAnimation(
 			BlasterHUD->CharacterOverlay->HighPingAnimation,
 			0.f,
-			5 // play 5 times
-		);
+			5);
 	}
 }
+
 void ABlasterPlayerController::StopHighPingWarning()
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
 	bool bHUDValid = BlasterHUD &&
 		BlasterHUD->CharacterOverlay &&
-		BlasterHUD->CharacterOverlay->HighPingImage;
+		BlasterHUD->CharacterOverlay->HighPingImage &&
+		BlasterHUD->CharacterOverlay->HighPingAnimation;
 	if (bHUDValid)
 	{
 		BlasterHUD->CharacterOverlay->HighPingImage->SetOpacity(0.f);
@@ -122,6 +127,7 @@ void ABlasterPlayerController::StopHighPingWarning()
 		}
 	}
 }
+
 void ABlasterPlayerController::ServerCheckMatchState_Implementation()
 {
 	ABlasterGameMode* GameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this));
@@ -132,15 +138,11 @@ void ABlasterPlayerController::ServerCheckMatchState_Implementation()
 		CooldownTime = GameMode->CooldownTime;
 		LevelStartingTime = GameMode->LevelStartingTime;
 		MatchState = GameMode->GetMatchState();
-		ClientJoinMidGame(MatchState, WarmupTime, MatchTime, CooldownTime, LevelStartingTime);
-		if (BlasterHUD && MatchState == MatchState::WaitingToStart)
-		{
-			BlasterHUD->AddAnnouncement();
-		}
+		ClientJoinMidgame(MatchState, WarmupTime, MatchTime, CooldownTime, LevelStartingTime);
 	}
 }
 
-void ABlasterPlayerController::ClientJoinMidGame_Implementation(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime)
+void ABlasterPlayerController::ClientJoinMidgame_Implementation(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime)
 {
 	WarmupTime = Warmup;
 	MatchTime = Match;
@@ -153,12 +155,13 @@ void ABlasterPlayerController::ClientJoinMidGame_Implementation(FName StateOfMat
 		BlasterHUD->AddAnnouncement();
 	}
 }
+
 void ABlasterPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-	
 	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(InPawn);
-	if (BlasterCharacter) {
+	if (BlasterCharacter)
+	{
 		SetHUDHealth(BlasterCharacter->GetHealth(), BlasterCharacter->GetMaxHealth());
 	}
 }
@@ -166,12 +169,11 @@ void ABlasterPlayerController::OnPossess(APawn* InPawn)
 void ABlasterPlayerController::SetHUDHealth(float Health, float MaxHealth)
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
-	bool bHUDValid = BlasterHUD && 
-		BlasterHUD->CharacterOverlay && 
-		BlasterHUD->CharacterOverlay->HealthBar && 
+	bool bHUDValid = BlasterHUD &&
+		BlasterHUD->CharacterOverlay &&
+		BlasterHUD->CharacterOverlay->HealthBar &&
 		BlasterHUD->CharacterOverlay->HealthText;
-	
-	if(bHUDValid)
+	if (bHUDValid)
 	{
 		const float HealthPercent = Health / MaxHealth;
 		BlasterHUD->CharacterOverlay->HealthBar->SetPercent(HealthPercent);
@@ -222,8 +224,8 @@ void ABlasterPlayerController::SetHUDScore(float Score)
 	}
 	else
 	{
-			bInitializeScore = true;
-			HUDScore = Score;
+		bInitializeScore = true;
+		HUDScore = Score;
 	}
 }
 
@@ -245,7 +247,7 @@ void ABlasterPlayerController::SetHUDDefeats(int32 Defeats)
 	}
 }
 
-void ABlasterPlayerController::SetHUDWeaponAmmo(int32 ammo)
+void ABlasterPlayerController::SetHUDWeaponAmmo(int32 Ammo)
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
 	bool bHUDValid = BlasterHUD &&
@@ -253,17 +255,17 @@ void ABlasterPlayerController::SetHUDWeaponAmmo(int32 ammo)
 		BlasterHUD->CharacterOverlay->WeaponAmmoAmount;
 	if (bHUDValid)
 	{
-		FString AmmoText = FString::Printf(TEXT("%d"), ammo);
+		FString AmmoText = FString::Printf(TEXT("%d"), Ammo);
 		BlasterHUD->CharacterOverlay->WeaponAmmoAmount->SetText(FText::FromString(AmmoText));
 	}
 	else
 	{
 		bInitializeWeaponAmmo = true;
-		HUDWeaponAmmo = ammo;
+		HUDWeaponAmmo = Ammo;
 	}
 }
 
-void ABlasterPlayerController::SetHUDCarriedAmmo(int32 ammo)
+void ABlasterPlayerController::SetHUDCarriedAmmo(int32 Ammo)
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
 	bool bHUDValid = BlasterHUD &&
@@ -271,13 +273,13 @@ void ABlasterPlayerController::SetHUDCarriedAmmo(int32 ammo)
 		BlasterHUD->CharacterOverlay->CarriedAmmoAmount;
 	if (bHUDValid)
 	{
-		FString AmmoText = FString::Printf(TEXT("%d"), ammo);
+		FString AmmoText = FString::Printf(TEXT("%d"), Ammo);
 		BlasterHUD->CharacterOverlay->CarriedAmmoAmount->SetText(FText::FromString(AmmoText));
 	}
 	else
 	{
 		bInitializeCarriedAmmo = true;
-		HUDCarriedAmmo = ammo;
+		HUDCarriedAmmo = Ammo;
 	}
 }
 
@@ -289,15 +291,16 @@ void ABlasterPlayerController::SetHUDMatchCountdown(float CountdownTime)
 		BlasterHUD->CharacterOverlay->MatchCountdownText;
 	if (bHUDValid)
 	{
-		if(CountdownTime < 0.f)
+		if (CountdownTime < 0.f)
 		{
-			BlasterHUD->CharacterOverlay->MatchCountdownText->SetText(FText());			
+			BlasterHUD->CharacterOverlay->MatchCountdownText->SetText(FText());
 			return;
 		}
-		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.0f);
-		int32 Seconds = CountdownTime - (Minutes * 60);
+
+		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.f);
+		int32 Seconds = CountdownTime - Minutes * 60;
+
 		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
-		
 		BlasterHUD->CharacterOverlay->MatchCountdownText->SetText(FText::FromString(CountdownText));
 	}
 }
@@ -310,13 +313,15 @@ void ABlasterPlayerController::SetHUDAnnouncementCountdown(float CountdownTime)
 		BlasterHUD->Announcement->WarmupTime;
 	if (bHUDValid)
 	{
-		if(CountdownTime < 0.f)
+		if (CountdownTime < 0.f)
 		{
-			BlasterHUD->Announcement->WarmupTime->SetText(FText());			
+			BlasterHUD->Announcement->WarmupTime->SetText(FText());
 			return;
 		}
-		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.0f);
-		int32 Seconds = CountdownTime - (Minutes * 60);
+
+		int32 Minutes = FMath::FloorToInt(CountdownTime / 60.f);
+		int32 Seconds = CountdownTime - Minutes * 60;
+
 		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
 		BlasterHUD->Announcement->WarmupTime->SetText(FText::FromString(CountdownText));
 	}
@@ -334,84 +339,73 @@ void ABlasterPlayerController::SetHUDGrenades(int32 Grenades)
 		BlasterHUD->CharacterOverlay->GrenadesText->SetText(FText::FromString(GrenadesText));
 	}
 	else
-	{		
+	{
+		bInitializeGrenades = true;
 		HUDGrenades = Grenades;
 	}
 }
 
-
-
 void ABlasterPlayerController::SetHUDTime()
 {
 	float TimeLeft = 0.f;
-	if(MatchState == MatchState::WaitingToStart) TimeLeft = WarmupTime - GetServerTime() + LevelStartingTime;
-	else if(MatchState == MatchState::InProgress) TimeLeft = WarmupTime + MatchTime - GetServerTime() + LevelStartingTime;
+	if (MatchState == MatchState::WaitingToStart) TimeLeft = WarmupTime - GetServerTime() + LevelStartingTime;
+	else if (MatchState == MatchState::InProgress) TimeLeft = WarmupTime + MatchTime - GetServerTime() + LevelStartingTime;
 	else if (MatchState == MatchState::Cooldown) TimeLeft = CooldownTime + WarmupTime + MatchTime - GetServerTime() + LevelStartingTime;
-	
 	uint32 SecondsLeft = FMath::CeilToInt(TimeLeft);
-
-	if (HasAuthority())
+	if (CountdownInt != SecondsLeft)
 	{
-		BlasterGameMode = BlasterGameMode == nullptr ? Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this)) : BlasterGameMode;
-		if (BlasterGameMode)
-		{
-			SecondsLeft = FMath::CeilToInt(BlasterGameMode->GetCountdownTime() + LevelStartingTime);
-		}
-	}
-	if(CountdownInt != SecondsLeft)
-	{
-		if(MatchState == MatchState::WaitingToStart || MatchState == MatchState::Cooldown)
+		if (MatchState == MatchState::WaitingToStart || MatchState == MatchState::Cooldown)
 		{
 			SetHUDAnnouncementCountdown(TimeLeft);
 		}
-		else if(MatchState == MatchState::InProgress)
+		if (MatchState == MatchState::InProgress)
 		{
 			SetHUDMatchCountdown(TimeLeft);
 		}
 	}
 
-
 	CountdownInt = SecondsLeft;
 }
 
-void ABlasterPlayerController::PollInit(                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             )
+void ABlasterPlayerController::PollInit()
 {
-	if (CharacterOverlay == nullptr) {
+	if (CharacterOverlay == nullptr)
+	{
 		if (BlasterHUD && BlasterHUD->CharacterOverlay)
 		{
-				CharacterOverlay = BlasterHUD->CharacterOverlay;			
-				if (CharacterOverlay)
+			CharacterOverlay = BlasterHUD->CharacterOverlay;
+			if (CharacterOverlay)
+			{
+				if (bInitializeHealth) SetHUDHealth(HUDHealth, HUDMaxHealth);
+				if (bInitializeShield) SetHUDShield(HUDShield, HUDMaxShield);
+				if (bInitializeScore) SetHUDScore(HUDScore);
+				if (bInitializeDefeats) SetHUDDefeats(HUDDefeats);
+				if (bInitializeCarriedAmmo) SetHUDCarriedAmmo(HUDCarriedAmmo);
+				if (bInitializeWeaponAmmo) SetHUDWeaponAmmo(HUDWeaponAmmo);
+
+				ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+				if (BlasterCharacter && BlasterCharacter->GetCombat())
 				{
-					if(bInitializeHealth) SetHUDHealth(HUDHealth, HUDMaxHealth);
-					if(bInitializeShield) SetHUDShield(HUDShield, HUDMaxShield);
-					if(bInitializeScore) SetHUDScore(HUDScore);
-					if(bInitializeDefeats) SetHUDDefeats(HUDDefeats);
-					if (bInitializeCarriedAmmo) SetHUDCarriedAmmo(HUDCarriedAmmo);
-					if (bInitializeWeaponAmmo) SetHUDWeaponAmmo(HUDWeaponAmmo);
-
-					ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
-					if(BlasterCharacter && BlasterCharacter->GetCombat())
-					{
-						if(bInitializeGrenades) SetHUDGrenades(BlasterCharacter->GetCombat()->GetGrenades());
-					}
+					if (bInitializeGrenades) SetHUDGrenades(BlasterCharacter->GetCombat()->GetGrenades());
 				}
-
+			}
 		}
 	}
 }
+
 void ABlasterPlayerController::ServerRequestServerTime_Implementation(float TimeOfClientRequest)
 {
 	float ServerTimeOfReceipt = GetWorld()->GetTimeSeconds();
 	ClientReportServerTime(TimeOfClientRequest, ServerTimeOfReceipt);
 }
-void ABlasterPlayerController::ClientReportServerTime_Implementation(float TimeOfClientRequest, float TimeServerRecievedClientRequest)
+
+void ABlasterPlayerController::ClientReportServerTime_Implementation(float TimeOfClientRequest, float TimeServerReceivedClientRequest)
 {
 	float RoundTripTime = GetWorld()->GetTimeSeconds() - TimeOfClientRequest;
-	SingleTripTime = RoundTripTime * 0.5f;
-	float CurrentServerTime = TimeServerRecievedClientRequest + (0.5f * RoundTripTime);
+	SingleTripTime = 0.5f * RoundTripTime;
+	float CurrentServerTime = TimeServerReceivedClientRequest + SingleTripTime;
 	ClientServerDelta = CurrentServerTime - GetWorld()->GetTimeSeconds();
 }
-
 
 float ABlasterPlayerController::GetServerTime()
 {
@@ -422,7 +416,7 @@ float ABlasterPlayerController::GetServerTime()
 void ABlasterPlayerController::ReceivedPlayer()
 {
 	Super::ReceivedPlayer();
-	if(IsLocalController())
+	if (IsLocalController())
 	{
 		ServerRequestServerTime(GetWorld()->GetTimeSeconds());
 	}
@@ -431,6 +425,7 @@ void ABlasterPlayerController::ReceivedPlayer()
 void ABlasterPlayerController::OnMatchStateSet(FName State)
 {
 	MatchState = State;
+
 	if (MatchState == MatchState::InProgress)
 	{
 		HandleMatchHasStarted();
@@ -453,16 +448,12 @@ void ABlasterPlayerController::OnRep_MatchState()
 	}
 }
 
-
 void ABlasterPlayerController::HandleMatchHasStarted()
 {
 	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
 	if (BlasterHUD)
 	{
-		if (BlasterHUD->CharacterOverlay == nullptr)
-		{
-			BlasterHUD->AddCharacterOverlay();
-		}
+		if (BlasterHUD->CharacterOverlay == nullptr) BlasterHUD->AddCharacterOverlay();
 		if (BlasterHUD->Announcement)
 		{
 			BlasterHUD->Announcement->SetVisibility(ESlateVisibility::Hidden);
@@ -476,51 +467,49 @@ void ABlasterPlayerController::HandleCooldown()
 	if (BlasterHUD)
 	{
 		BlasterHUD->CharacterOverlay->RemoveFromParent();
-		bool bHUDValid = BlasterHUD &&
-			BlasterHUD->Announcement &&
+		bool bHUDValid = BlasterHUD->Announcement &&
 			BlasterHUD->Announcement->AnnouncementText &&
 			BlasterHUD->Announcement->InfoText;
-		
+
 		if (bHUDValid)
 		{
 			BlasterHUD->Announcement->SetVisibility(ESlateVisibility::Visible);
-			FString AnnouncementText("Match Over!\nWaiting for next match to start...");
+			FString AnnouncementText("New Match Starts In:");
 			BlasterHUD->Announcement->AnnouncementText->SetText(FText::FromString(AnnouncementText));
 
 			ABlasterGameState* BlasterGameState = Cast<ABlasterGameState>(UGameplayStatics::GetGameState(this));
 			ABlasterPlayerState* BlasterPlayerState = GetPlayerState<ABlasterPlayerState>();
-			if (BlasterGameState)
+			if (BlasterGameState && BlasterPlayerState)
 			{
 				TArray<ABlasterPlayerState*> TopPlayers = BlasterGameState->TopScoringPlayers;
 				FString InfoTextString;
 				if (TopPlayers.Num() == 0)
 				{
-					InfoTextString = FString("No Winner");
+					InfoTextString = FString("There is no winner.");
 				}
-				else if(TopPlayers.Num() == 1 && TopPlayers[0] == BlasterPlayerState)
+				else if (TopPlayers.Num() == 1 && TopPlayers[0] == BlasterPlayerState)
 				{
-					InfoTextString = FString::Printf(TEXT("You are Winner"));
+					InfoTextString = FString("You are the winner!");
 				}
 				else if (TopPlayers.Num() == 1)
 				{
-					InfoTextString = FString::Printf(TEXT("Winner: %s\n"), *TopPlayers[0]->GetPlayerName());
+					InfoTextString = FString::Printf(TEXT("Winner: \n%s"), *TopPlayers[0]->GetPlayerName());
 				}
-				else if(TopPlayers.Num() > 1)
+				else if (TopPlayers.Num() > 1)
 				{
-					InfoTextString = FString("Players tied for the win: \n");
-					for(auto TiedPlayer : TopPlayers)
+					InfoTextString = FString("Players tied for the win:\n");
+					for (auto TiedPlayer : TopPlayers)
 					{
 						InfoTextString.Append(FString::Printf(TEXT("%s\n"), *TiedPlayer->GetPlayerName()));
 					}
-					
 				}
+
 				BlasterHUD->Announcement->InfoText->SetText(FText::FromString(InfoTextString));
 			}
-			BlasterHUD->Announcement->InfoText->SetText(FText());
 		}
 	}
 	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
-	if(BlasterCharacter && BlasterCharacter->GetCombat())
+	if (BlasterCharacter && BlasterCharacter->GetCombat())
 	{
 		BlasterCharacter->bDisableGameplay = true;
 		BlasterCharacter->GetCombat()->FireButtonPressed(false);

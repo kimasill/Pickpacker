@@ -26,20 +26,20 @@
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
 
 ABlasterCharacter::ABlasterCharacter()
-{ 	
+{
 	PrimaryActorTick.bCanEverTick = true;
-	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(GetMesh());
-	CameraBoom->TargetArmLength = 600.0f; // The camera follows at this distance behind the character
-	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
+	CameraBoom->TargetArmLength = 600.f;
+	CameraBoom->bUsePawnControlRotation = true;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom
-	FollowCamera->bUsePawnControlRotation = false; // Don't rotate the camera with the controller
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
 
-	bUseControllerRotationYaw = false; // Disable yaw rotation for the character, we will control it with the camera
-	GetCharacterMovement()->bOrientRotationToMovement = true; // Character will move in the direction of input
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bOrientRotationToMovement = true;
 
 	OverHeadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverHeadWidget"));
 	OverHeadWidget->SetupAttachment(RootComponent);
@@ -49,28 +49,28 @@ ABlasterCharacter::ABlasterCharacter()
 
 	Buff = CreateDefaultSubobject<UBuffComponent>(TEXT("BuffComponent"));
 	Buff->SetIsReplicated(true);
-	
+
 	LagCompensation = CreateDefaultSubobject<ULagCompensationComponent>(TEXT("LagCompensation"));
-	   
-	GetCharacterMovement()->NavAgentProps.bCanCrouch = true; // Enable crouching for the character
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore); // Ignore camera collisions
-	GetMesh()->SetCollisionObjectType(ECC_SkeletalMesh); // Ignore camera collisions on the mesh
+
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+	GetMesh()->SetCollisionObjectType(ECC_SkeletalMesh);
 	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
 	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
-	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f); // Set rotation rate for the character movement
-	
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f);
+
 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
-	SetNetUpdateFrequency(66.f); // Set network update frequency for smoother movement
-	SetMinNetUpdateFrequency(33.f); // Minimum network update frequency for smoother movement
+	NetUpdateFrequency = 66.f;
+	MinNetUpdateFrequency = 33.f;
 
-	DissolveTimeline = CreateDefaultSubobject <UTimelineComponent>(TEXT("DissolveTimelineComponent"));
+	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
 
-	AttachedGrenade = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AttachedGrenade"));
+	AttachedGrenade = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Attached Grenade"));
 	AttachedGrenade->SetupAttachment(GetMesh(), FName("GrenadeSocket"));
 	AttachedGrenade->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	/**
-	*  Hit boxes for server-side rewind
+	* Hit boxes for server-side rewind
 	*/
 
 	head = CreateDefaultSubobject<UBoxComponent>(TEXT("head"));
@@ -81,73 +81,73 @@ ABlasterCharacter::ABlasterCharacter()
 	pelvis->SetupAttachment(GetMesh(), FName("pelvis"));
 	HitCollisionBoxes.Add(FName("pelvis"), pelvis);
 
-    spine_02 = CreateDefaultSubobject<UBoxComponent>(TEXT("spine_02"));
-    spine_02->SetupAttachment(GetMesh(), FName("spine_02"));
+	spine_02 = CreateDefaultSubobject<UBoxComponent>(TEXT("spine_02"));
+	spine_02->SetupAttachment(GetMesh(), FName("spine_02"));
 	HitCollisionBoxes.Add(FName("spine_02"), spine_02);
 
-    spine_03 = CreateDefaultSubobject<UBoxComponent>(TEXT("spine_03"));
-    spine_03->SetupAttachment(GetMesh(), FName("spine_03"));
+	spine_03 = CreateDefaultSubobject<UBoxComponent>(TEXT("spine_03"));
+	spine_03->SetupAttachment(GetMesh(), FName("spine_03"));
 	HitCollisionBoxes.Add(FName("spine_03"), spine_03);
 
-    upperarm_l = CreateDefaultSubobject<UBoxComponent>(TEXT("upperarm_l"));
-    upperarm_l->SetupAttachment(GetMesh(), FName("upperarm_l"));
+	upperarm_l = CreateDefaultSubobject<UBoxComponent>(TEXT("upperarm_l"));
+	upperarm_l->SetupAttachment(GetMesh(), FName("upperarm_l"));
 	HitCollisionBoxes.Add(FName("upperarm_l"), upperarm_l);
 
-    upperarm_r = CreateDefaultSubobject<UBoxComponent>(TEXT("upperarm_r"));
-    upperarm_r->SetupAttachment(GetMesh(), FName("upperarm_r"));
+	upperarm_r = CreateDefaultSubobject<UBoxComponent>(TEXT("upperarm_r"));
+	upperarm_r->SetupAttachment(GetMesh(), FName("upperarm_r"));
 	HitCollisionBoxes.Add(FName("upperarm_r"), upperarm_r);
 
-    lowerarm_l = CreateDefaultSubobject<UBoxComponent>(TEXT("lowerarm_l"));
-    lowerarm_l->SetupAttachment(GetMesh(), FName("lowerarm_l"));
+	lowerarm_l = CreateDefaultSubobject<UBoxComponent>(TEXT("lowerarm_l"));
+	lowerarm_l->SetupAttachment(GetMesh(), FName("lowerarm_l"));
 	HitCollisionBoxes.Add(FName("lowerarm_l"), lowerarm_l);
 
-    lowerarm_r = CreateDefaultSubobject<UBoxComponent>(TEXT("lowerarm_r"));
-    lowerarm_r->SetupAttachment(GetMesh(), FName("lowerarm_r"));
+	lowerarm_r = CreateDefaultSubobject<UBoxComponent>(TEXT("lowerarm_r"));
+	lowerarm_r->SetupAttachment(GetMesh(), FName("lowerarm_r"));
 	HitCollisionBoxes.Add(FName("lowerarm_r"), lowerarm_r);
 
-    hand_l = CreateDefaultSubobject<UBoxComponent>(TEXT("hand_l"));
-    hand_l->SetupAttachment(GetMesh(), FName("hand_l"));
+	hand_l = CreateDefaultSubobject<UBoxComponent>(TEXT("hand_l"));
+	hand_l->SetupAttachment(GetMesh(), FName("hand_l"));
 	HitCollisionBoxes.Add(FName("hand_l"), hand_l);
 
-    hand_r = CreateDefaultSubobject<UBoxComponent>(TEXT("hand_r"));
-    hand_r->SetupAttachment(GetMesh(), FName("hand_r"));
+	hand_r = CreateDefaultSubobject<UBoxComponent>(TEXT("hand_r"));
+	hand_r->SetupAttachment(GetMesh(), FName("hand_r"));
 	HitCollisionBoxes.Add(FName("hand_r"), hand_r);
-
-    backpack = CreateDefaultSubobject<UBoxComponent>(TEXT("backpack"));
-    backpack->SetupAttachment(GetMesh(), FName("backpack"));
-	HitCollisionBoxes.Add(FName("backpack"), backpack);
 
 	blanket = CreateDefaultSubobject<UBoxComponent>(TEXT("blanket"));
 	blanket->SetupAttachment(GetMesh(), FName("backpack"));
 	HitCollisionBoxes.Add(FName("blanket"), blanket);
 
-    thigh_l = CreateDefaultSubobject<UBoxComponent>(TEXT("thigh_l"));
-    thigh_l->SetupAttachment(GetMesh(), FName("thigh_l"));
+	backpack = CreateDefaultSubobject<UBoxComponent>(TEXT("backpack"));
+	backpack->SetupAttachment(GetMesh(), FName("backpack"));
+	HitCollisionBoxes.Add(FName("backpack"), backpack);
+
+	thigh_l = CreateDefaultSubobject<UBoxComponent>(TEXT("thigh_l"));
+	thigh_l->SetupAttachment(GetMesh(), FName("thigh_l"));
 	HitCollisionBoxes.Add(FName("thigh_l"), thigh_l);
 
-    thigh_r = CreateDefaultSubobject<UBoxComponent>(TEXT("thigh_r"));
-    thigh_r->SetupAttachment(GetMesh(), FName("thigh_r"));
+	thigh_r = CreateDefaultSubobject<UBoxComponent>(TEXT("thigh_r"));
+	thigh_r->SetupAttachment(GetMesh(), FName("thigh_r"));
 	HitCollisionBoxes.Add(FName("thigh_r"), thigh_r);
 
-    calf_l = CreateDefaultSubobject<UBoxComponent>(TEXT("calf_l"));
-    calf_l->SetupAttachment(GetMesh(), FName("calf_l"));
+	calf_l = CreateDefaultSubobject<UBoxComponent>(TEXT("calf_l"));
+	calf_l->SetupAttachment(GetMesh(), FName("calf_l"));
 	HitCollisionBoxes.Add(FName("calf_l"), calf_l);
 
-    calf_r = CreateDefaultSubobject<UBoxComponent>(TEXT("calf_r"));
-    calf_r->SetupAttachment(GetMesh(), FName("calf_r"));
+	calf_r = CreateDefaultSubobject<UBoxComponent>(TEXT("calf_r"));
+	calf_r->SetupAttachment(GetMesh(), FName("calf_r"));
 	HitCollisionBoxes.Add(FName("calf_r"), calf_r);
 
-    foot_l = CreateDefaultSubobject<UBoxComponent>(TEXT("foot_l"));
-    foot_l->SetupAttachment(GetMesh(), FName("foot_l"));
+	foot_l = CreateDefaultSubobject<UBoxComponent>(TEXT("foot_l"));
+	foot_l->SetupAttachment(GetMesh(), FName("foot_l"));
 	HitCollisionBoxes.Add(FName("foot_l"), foot_l);
 
-    foot_r = CreateDefaultSubobject<UBoxComponent>(TEXT("foot_r"));
-    foot_r->SetupAttachment(GetMesh(), FName("foot_r"));
+	foot_r = CreateDefaultSubobject<UBoxComponent>(TEXT("foot_r"));
+	foot_r->SetupAttachment(GetMesh(), FName("foot_r"));
 	HitCollisionBoxes.Add(FName("foot_r"), foot_r);
 
-	for(auto Box: HitCollisionBoxes)
+	for (auto Box : HitCollisionBoxes)
 	{
-		if(Box.Value)
+		if (Box.Value)
 		{
 			Box.Value->SetCollisionObjectType(ECC_HitBox);
 			Box.Value->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
@@ -156,84 +156,102 @@ ABlasterCharacter::ABlasterCharacter()
 		}
 	}
 }
+
 void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-		Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	// Replicate the OverHeadWidget to all clients
-		DOREPLIFETIME_CONDITION(ABlasterCharacter, OverlappingWeapon, COND_OwnerOnly);
-		DOREPLIFETIME(ABlasterCharacter, Health);
-		DOREPLIFETIME(ABlasterCharacter, Shield);
-		DOREPLIFETIME(ABlasterCharacter, bDisableGameplay);
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME_CONDITION(ABlasterCharacter, OverlappingWeapon, COND_OwnerOnly);
+	DOREPLIFETIME(ABlasterCharacter, Health);
+	DOREPLIFETIME(ABlasterCharacter, Shield);
+	DOREPLIFETIME(ABlasterCharacter, bDisableGameplay);
 }
-void ABlasterCharacter::BeginPlay()
+
+void ABlasterCharacter::OnRep_ReplicatedMovement()
 {
-	Super::BeginPlay();
-	SpawnDefaultWeapon();
-	UpdateHUDAmmo();
-	UpdateHUDHealth();
-	UpdateHUDShield(); 
-	if (HasAuthority())
-	{
-		OnTakeAnyDamage.AddDynamic(this, &ABlasterCharacter::ReceiveDamage);
-	}
-
-	if(AttachedGrenade)
-	{
-		AttachedGrenade->SetVisibility(false); // Hide the attached grenade mesh initially
-	}
-}
-
-void ABlasterCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-	
-	RotateInPlace(DeltaTime);
-	HideCameraIfCharacterClose();
-	PollInit();
-}
-
-
-
-void ABlasterCharacter::RotateInPlace(float DeltaTime)
-{
-	if (bDisableGameplay)
-	{
-		bUseControllerRotationYaw = false;
-		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
-		return;
-	}
-	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
-	{
-		AimOffset(DeltaTime); // Call the AimOffset function to update aiming offset
-	}
-	else
-	{
-		TimeSinceLastMovementReplication += DeltaTime; // Increment the timer for last movement replication
-		if (TimeSinceLastMovementReplication > 0.15f) // If enough time has passed since the last movement replication
-		{
-			OnRep_ReplicatedMovement();
-		}
-		CalculateAO_Pitch();
-	}
-}
-void ABlasterCharacter::OnRep_ReplicatedMovement() {
-	Super::OnRep_ReplicatedMovement();	
+	Super::OnRep_ReplicatedMovement();
 	SimProxiesTurn();
-	TimeSinceLastMovementReplication = 0.f; // Reset the timer for last movement replication
+	TimeSinceLastMovementReplication = 0.f;
 }
 
 void ABlasterCharacter::Elim()
-{	
+{
 	DropOrDestroyWeapons();
-	MulticastElim(); // Call the multicast function to handle elimination
+	MulticastElim();
 	GetWorldTimerManager().SetTimer(
-		ElimTimer, 
-		this, 
-		&ABlasterCharacter::ElimTimerFinished, 
+		ElimTimer,
+		this,
+		&ABlasterCharacter::ElimTimerFinished,
 		ElimDelay
-	); // Set a timer for the elimination delay
-	
+	);
+}
+
+void ABlasterCharacter::MulticastElim_Implementation()
+{
+	if (BlasterPlayerController)
+	{
+		BlasterPlayerController->SetHUDWeaponAmmo(0);
+	}
+	bElimmed = true;
+	PlayElimMontage();
+	// Start dissolve effect
+	if (DissolveMaterialInstance)
+	{
+		DynamicDissolveMaterialInstance = UMaterialInstanceDynamic::Create(DissolveMaterialInstance, this);
+		GetMesh()->SetMaterial(0, DynamicDissolveMaterialInstance);
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), 0.55f);
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Glow"), 200.f);
+	}
+	StartDissolve();
+
+	// Disable character movement
+	bDisableGameplay = true;
+	GetCharacterMovement()->DisableMovement();
+	if (Combat)
+	{
+		Combat->FireButtonPressed(false);
+	}
+	// Disable collision
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Spawn elim bot
+	if (ElimBotEffect)
+	{
+		FVector ElimBotSpawnPoint(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z + 200.f);
+		ElimBotComponent = UGameplayStatics::SpawnEmitterAtLocation(
+			GetWorld(),
+			ElimBotEffect,
+			ElimBotSpawnPoint,
+			GetActorRotation()
+		);
+	}
+	if (ElimBotSound)
+	{
+		UGameplayStatics::SpawnSoundAtLocation(
+			this,
+			ElimBotSound,
+			GetActorLocation()
+		);
+	}
+	bool bHideSniperScope = IsLocallyControlled() &&
+		Combat &&
+		Combat->bAiming &&
+		Combat->EquippedWeapon &&
+		Combat->EquippedWeapon->GetWeaponType() == EWeaponType::EWT_SniperRifle;
+	if (bHideSniperScope)
+	{
+		ShowSniperScopeWidget(false);
+	}
+}
+
+void ABlasterCharacter::ElimTimerFinished()
+{
+	ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>();
+	if (BlasterGameMode)
+	{
+		BlasterGameMode->RequestRespawn(this, Controller);
+	}
 }
 
 void ABlasterCharacter::DropOrDestroyWeapon(AWeapon* Weapon)
@@ -253,108 +271,89 @@ void ABlasterCharacter::DropOrDestroyWeapons()
 {
 	if (Combat)
 	{
-		if (Combat->EquippedWeapon) {
+		if (Combat->EquippedWeapon)
+		{
 			DropOrDestroyWeapon(Combat->EquippedWeapon);
 		}
-		if (Combat->SecondaryWeapon) {
+		if (Combat->SecondaryWeapon)
+		{
 			DropOrDestroyWeapon(Combat->SecondaryWeapon);
 		}
 	}
 }
 
-void ABlasterCharacter::MulticastElim_Implementation()
+void ABlasterCharacter::Destroyed()
 {
-	if (BlasterPlayerController)
-	{
-		BlasterPlayerController->SetHUDWeaponAmmo(0);
-	}
-	bElimmed = true;
-	PlayElimMontage();
-	// Start dissolve effect
-	if (DissolveMaterialInstance)
-	{
-		DynamicDissolveMaterialInstance = UMaterialInstanceDynamic::Create(DissolveMaterialInstance, this);
-
-		GetMesh()->SetMaterial(0, DynamicDissolveMaterialInstance);
-		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), 0.55f);
-		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Glow"), 200.f);
-	}
-
-	StartDissolve();
-
-	//Disable character movement
-	GetCharacterMovement()->DisableMovement();
-	GetCharacterMovement()->StopMovementImmediately();
-
-	bDisableGameplay = true;
-	GetCharacterMovement()->DisableMovement();
-	if(Combat)
-	{
-		Combat->FireButtonPressed(false); // Ensure firing is disabled
-	}
-	//Disable collision
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	//Spawn elim bot
-	if (ElimBotEffect) 
-	{
-		FVector ElimBotSpawnPoint(GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z + 200.f);
-		ElimBotComponent = UGameplayStatics::SpawnEmitterAtLocation(
-			GetWorld(),
-			ElimBotEffect, 
-			ElimBotSpawnPoint,
-			GetActorRotation()
-			); // Spawn the elimination bot effect
-	}
-
-	if (ElimBotSound)
-	{
-		UGameplayStatics::SpawnSoundAtLocation(
-			this, 
-			ElimBotSound, 
-			GetActorLocation()
-		);
-	}
-	bool bHideSniperScope = IsLocallyControlled() &&
-		Combat &&
-		Combat->bAiming &&
-		Combat->EquippedWeapon &&
-		Combat->EquippedWeapon->GetWeaponType() == EWeaponType::EWT_SniperRifle;
-		if(bHideSniperScope)
-		{
-			ShowSniperScopeWidget(false);
-		}
-}
-
-
-void ABlasterCharacter::ElimTimerFinished()
-{
-	ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>(); // Get the game mode
-	if (BlasterGameMode)
-	{
-		BlasterGameMode->RequestRespawn(this, Controller);
-	}
-}
-void ABlasterCharacter::Destroyed() {
 	Super::Destroyed();
 
 	if (ElimBotComponent)
 	{
-		ElimBotComponent->DestroyComponent(); // Destroy the elimination bot component
+		ElimBotComponent->DestroyComponent();
 	}
-	ABlasterGameMode* BlasterGameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this)); // Get the game mode
-	bool bMatchNotInProgress = BlasterGameMode && BlasterGameMode->GetMatchState() != MatchState::InProgress; // Check if the match is not in progress
-	if(Combat && Combat->EquippedWeapon && bMatchNotInProgress)
+
+	ABlasterGameMode* BlasterGameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this));
+	bool bMatchNotInProgress = BlasterGameMode && BlasterGameMode->GetMatchState() != MatchState::InProgress;
+	if (Combat && Combat->EquippedWeapon && bMatchNotInProgress)
 	{
-		Combat->EquippedWeapon->Destroy(); // Drop the equipped weapon
+		Combat->EquippedWeapon->Destroy();
 	}
 }
+
+void ABlasterCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+	SpawnDefaultWeapon();
+	UpdateHUDAmmo();
+	UpdateHUDHealth();
+	UpdateHUDShield();
+	if (HasAuthority())
+	{
+		OnTakeAnyDamage.AddDynamic(this, &ABlasterCharacter::ReceiveDamage);
+	}
+	if (AttachedGrenade)
+	{
+		AttachedGrenade->SetVisibility(false);
+	}
+}
+
+void ABlasterCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	RotateInPlace(DeltaTime);
+	HideCameraIfCharacterClose();
+	PollInit();
+}
+
+void ABlasterCharacter::RotateInPlace(float DeltaTime)
+{
+	if (bDisableGameplay)
+	{
+		bUseControllerRotationYaw = false;
+		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+		return;
+	}
+	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
+	{
+		AimOffset(DeltaTime);
+	}
+	else
+	{
+		TimeSinceLastMovementReplication += DeltaTime;
+		if (TimeSinceLastMovementReplication > 0.25f)
+		{
+			OnRep_ReplicatedMovement();
+		}
+		CalculateAO_Pitch();
+	}
+}
+
 void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ABlasterCharacter::Jump);
-	
+
 	PlayerInputComponent->BindAxis("MoveForward", this, &ABlasterCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ABlasterCharacter::MoveRight);
 	PlayerInputComponent->BindAxis("Turn", this, &ABlasterCharacter::Turn);
@@ -377,10 +376,13 @@ void ABlasterCharacter::PostInitializeComponents()
 	{
 		Combat->Character = this;
 	}
-	if(Buff)
+	if (Buff)
 	{
 		Buff->Character = this;
-		Buff->SetInitialSpeeds(GetCharacterMovement()->MaxWalkSpeed, GetCharacterMovement()->MaxWalkSpeedCrouched);
+		Buff->SetInitialSpeeds(
+			GetCharacterMovement()->MaxWalkSpeed,
+			GetCharacterMovement()->MaxWalkSpeedCrouched
+		);
 		Buff->SetInitialJumpVelocity(GetCharacterMovement()->JumpZVelocity);
 	}
 	if (LagCompensation)
@@ -388,10 +390,11 @@ void ABlasterCharacter::PostInitializeComponents()
 		LagCompensation->Character = this;
 		if (Controller)
 		{
-			LagCompensation->Controller = Cast<ABlasterPlayerController>(Controller); // Cast the controller to BlasterPlayerController
+			LagCompensation->Controller = Cast<ABlasterPlayerController>(Controller);
 		}
 	}
 }
+
 void ABlasterCharacter::PlayFireMontage(bool bAiming)
 {
 	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
@@ -399,20 +402,21 @@ void ABlasterCharacter::PlayFireMontage(bool bAiming)
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && FireWeaponMontage)
 	{
-		AnimInstance->Montage_Play(FireWeaponMontage); // Play the fire montage
+		AnimInstance->Montage_Play(FireWeaponMontage);
 		FName SectionName;
-		SectionName = bAiming ? FName("RifleAim") : FName("RifleHip"); // Determine the section based on aiming state
+		SectionName = bAiming ? FName("RifleAim") : FName("RifleHip");
 		AnimInstance->Montage_JumpToSection(SectionName);
 	}
-
 }
+
 void ABlasterCharacter::PlayReloadMontage()
 {
 	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
+
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && ReloadMontage)
 	{
-		AnimInstance->Montage_Play(ReloadMontage); // Play the reload montage
+		AnimInstance->Montage_Play(ReloadMontage);
 		FName SectionName;
 
 		switch (Combat->EquippedWeapon->GetWeaponType())
@@ -420,7 +424,7 @@ void ABlasterCharacter::PlayReloadMontage()
 		case EWeaponType::EWT_AssaultRifle:
 			SectionName = FName("Rifle");
 			break;
-		case EWeaponType::EWE_RocketLauncher:
+		case EWeaponType::EWT_RocketLauncher:
 			SectionName = FName("RocketLauncher");
 			break;
 		case EWeaponType::EWT_Pistol:
@@ -439,189 +443,48 @@ void ABlasterCharacter::PlayReloadMontage()
 			SectionName = FName("GrenadeLauncher");
 			break;
 		}
+
 		AnimInstance->Montage_JumpToSection(SectionName);
 	}
 }
+
 void ABlasterCharacter::PlayElimMontage()
-{	
+{
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && ElimMontage)
 	{
 		AnimInstance->Montage_Play(ElimMontage);
 	}
 }
+
 void ABlasterCharacter::PlayThrowGrenadeMontage()
 {
-	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before playing montage
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && ThrowGrenadeMontage)
 	{
-		AnimInstance->Montage_Play(ThrowGrenadeMontage); // Play the fire montage
+		AnimInstance->Montage_Play(ThrowGrenadeMontage);
 	}
 }
+
 void ABlasterCharacter::PlaySwapMontage()
 {
-	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before playing montage
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && SwapMontage)
 	{
-		AnimInstance->Montage_Play(SwapMontage); // Play the fire montage
+		AnimInstance->Montage_Play(SwapMontage);
 	}
 }
+
 void ABlasterCharacter::PlayHitReactMontage()
 {
-	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before playing montage
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 	if (AnimInstance && HitReactMontage)
 	{
-		AnimInstance->Montage_Play(HitReactMontage); // Play the fire montage
-		FName SectionName("FromFront");		
+		AnimInstance->Montage_Play(HitReactMontage);
+		FName SectionName("FromFront");
 		AnimInstance->Montage_JumpToSection(SectionName);
-	}
-}
-void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
-{
-	if (bElimmed) return;
-	float DamageToHealth = Damage;
-	if (Shield > 0.f)
-	{
-		if (Shield >= Damage)
-		{
-			Shield = FMath::Clamp(Shield - Damage, 0.f, MaxShield);
-			DamageToHealth = 0.f;
-		}
-		else
-		{
-			DamageToHealth = FMath::Clamp(DamageToHealth - Shield, 0.f, MaxHealth);
-			Shield = 0.f;
-		}
-	}
-	Health = FMath::Clamp(Health - DamageToHealth, 0.f, MaxHealth); // Clamp health to ensure it doesn't go below 0 or above MaxHealth
-	UpdateHUDHealth();
-	UpdateHUDShield();
-	PlayHitReactMontage();
-
-	if (Health == 0.f){
-		ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>(); // Get the game mode
-		if (BlasterGameMode) {
-			BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
-			ABlasterPlayerController* AttackerController = Cast<ABlasterPlayerController>(InstigatorController);
-			BlasterGameMode->PlayerEliminated(this, BlasterPlayerController, AttackerController); // Call the PlayerEliminated function on the game mode
-		}
-	}
-	
-
-}
-
-void ABlasterCharacter::MoveForward(float Value)
-{
-	if (bDisableGameplay) return;
-	if(Controller != nullptr && Value != 0.0f)
-	{		
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-		// Get the forward vector
-		const FVector Direction(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X));
-		AddMovementInput(Direction, Value);
-	}
-}
-
-void ABlasterCharacter::MoveRight(float Value)
-{
-	if (bDisableGameplay) return;
-	if (Controller != nullptr && Value != 0.0f)
-	{
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-		// Get the right vector
-		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-		AddMovementInput(Direction, Value);
-	}
-}
-
-void ABlasterCharacter::Turn(float Value)
-{
-		AddControllerYawInput(Value);
-}
-
-void ABlasterCharacter::LookUp(float Value)
-{
-		AddControllerPitchInput(Value);
-}
-
-void ABlasterCharacter::EquipButtonPressed()
-{
-	if (bDisableGameplay) return;
-	if(Combat) // Only allow equipping on the server
-	{
-		if(Combat->CombatState == ECombatState::ECS_Unoccupied) ServerEquipButtonPressed();
-		bool bSwap = Combat->ShouldSwapWeapons() &&
-			!HasAuthority() &&
-			Combat->CombatState == ECombatState::ECS_Unoccupied &&
-			OverlappingWeapon == nullptr;
-		if (bSwap)
-		{
-			PlaySwapMontage();
-			Combat->CombatState = ECombatState::ECS_SwappingWeapons;
-			bFinishedSwapping = false;
-		}
-	}
-}
-
-void ABlasterCharacter::ServerEquipButtonPressed_Implementation()
-{
-	if (Combat) // Only allow equipping on the server
-	{
-		if (OverlappingWeapon)
-		{
-			Combat->EquipWeapon(OverlappingWeapon);
-		}
-		else if(Combat->ShouldSwapWeapons())
-		{
-			Combat->SwapWeapons();
-		}
-	}
-}
-
-void ABlasterCharacter::CrouchButtonPressed()
-{
-	if (bDisableGameplay) return;
-	if(bIsCrouched) // If already crouched, uncrouch
-	{
-		UnCrouch(); // Call the built-in uncrouch function
-		return;
-	}
-	else
-	{
-		Crouch(); // Call the built-in crouch function
-	}	
-}
-
-void ABlasterCharacter::ReloadButtonPressed()
-{
-	if (bDisableGameplay) return;
-	if (Combat)
-	{
-		Combat->Reload(); // Call the Combat component's Reload function
-	}
-}
-
-void ABlasterCharacter::AimButtonPressed()
-{
-	if (bDisableGameplay) return;
-	if(Combat)
-	{
-		Combat->SetAiming(true); // Set aiming state to true		
-	}
-}
-
-void ABlasterCharacter::AimButtonReleased()
-{
-	if (bDisableGameplay) return;
-	if (Combat)
-	{
-		Combat->SetAiming(false); // Set aiming to false
 	}
 }
 
@@ -633,43 +496,194 @@ void ABlasterCharacter::GrenadeButtonPressed()
 	}
 }
 
+void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
+{
+	if (bElimmed) return;
+
+	float DamageToHealth = Damage;
+	if (Shield > 0.f)
+	{
+		if (Shield >= Damage)
+		{
+			Shield = FMath::Clamp(Shield - Damage, 0.f, MaxShield);
+			DamageToHealth = 0.f;
+		}
+		else
+		{
+			Shield = 0.f;
+			DamageToHealth = FMath::Clamp(DamageToHealth - Shield, 0.f, Damage);
+		}
+	}
+
+	Health = FMath::Clamp(Health - DamageToHealth, 0.f, MaxHealth);
+
+	UpdateHUDHealth();
+	UpdateHUDShield();
+	PlayHitReactMontage();
+
+	if (Health == 0.f)
+	{
+		ABlasterGameMode* BlasterGameMode = GetWorld()->GetAuthGameMode<ABlasterGameMode>();
+		if (BlasterGameMode)
+		{
+			BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
+			ABlasterPlayerController* AttackerController = Cast<ABlasterPlayerController>(InstigatorController);
+			BlasterGameMode->PlayerEliminated(this, BlasterPlayerController, AttackerController);
+		}
+	}
+}
+
+void ABlasterCharacter::MoveForward(float Value)
+{
+	if (bDisableGameplay) return;
+	if (Controller != nullptr && Value != 0.f)
+	{
+		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
+		const FVector Direction(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X));
+		AddMovementInput(Direction, Value);
+	}
+}
+
+void ABlasterCharacter::MoveRight(float Value)
+{
+	if (bDisableGameplay) return;
+	if (Controller != nullptr && Value != 0.f)
+	{
+		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
+		const FVector Direction(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y));
+		AddMovementInput(Direction, Value);
+	}
+}
+
+void ABlasterCharacter::Turn(float Value)
+{
+	AddControllerYawInput(Value);
+}
+
+void ABlasterCharacter::LookUp(float Value)
+{
+	AddControllerPitchInput(Value);
+}
+
+void ABlasterCharacter::EquipButtonPressed()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		if (Combat->CombatState == ECombatState::ECS_Unoccupied) ServerEquipButtonPressed();
+		bool bSwap = Combat->ShouldSwapWeapons() &&
+			!HasAuthority() &&
+			Combat->CombatState == ECombatState::ECS_Unoccupied &&
+			OverlappingWeapon == nullptr;
+
+		if (bSwap)
+		{
+			PlaySwapMontage();
+			Combat->CombatState = ECombatState::ECS_SwappingWeapons;
+			bFinishedSwapping = false;
+		}
+	}
+}
+
+void ABlasterCharacter::ServerEquipButtonPressed_Implementation()
+{
+	if (Combat)
+	{
+		if (OverlappingWeapon)
+		{
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else if (Combat->ShouldSwapWeapons())
+		{
+			Combat->SwapWeapons();
+		}
+	}
+}
+
+void ABlasterCharacter::CrouchButtonPressed()
+{
+	if (bDisableGameplay) return;
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Crouch();
+	}
+}
+
+void ABlasterCharacter::ReloadButtonPressed()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		Combat->Reload();
+	}
+}
+
+void ABlasterCharacter::AimButtonPressed()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		Combat->SetAiming(true);
+	}
+}
+
+void ABlasterCharacter::AimButtonReleased()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		Combat->SetAiming(false);
+	}
+}
+
+float ABlasterCharacter::CalculateSpeed()
+{
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0.f;
+	return Velocity.Size();
+}
+
 void ABlasterCharacter::AimOffset(float DeltaTime)
 {
-
-	// Locally calculate the aim offset based on the character's rotation and velocity
 	if (Combat && Combat->EquippedWeapon == nullptr) return;
 	float Speed = CalculateSpeed();
 	bool bIsInAir = GetCharacterMovement()->IsFalling();
 
-	if (Speed == 0.f && !bIsInAir)// If the character is not moving and not in the air
+	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
 	{
 		bRotateRootBone = true;
 		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
-		FRotator DeltaRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
-		AO_Yaw = DeltaRotation.Yaw; // Calculate the yaw offset
-		if (TurningInPlace == ETurningInPlace::ETIP_NotTurning) {
+		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+		AO_Yaw = DeltaAimRotation.Yaw;
+		if (TurningInPlace == ETurningInPlace::ETIP_NotTurning)
+		{
 			InterpAO_Yaw = AO_Yaw;
 		}
-		bUseControllerRotationYaw = true; // Disable controller yaw rotation
+		bUseControllerRotationYaw = true;
 		TurnInPlace(DeltaTime);
 	}
-	if(Speed > 0.f || bIsInAir)// running or in the air
+	if (Speed > 0.f || bIsInAir) // running, or jumping
 	{
 		bRotateRootBone = false;
-		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f); // Use the controller's yaw rotation
-		AO_Yaw = 0.f; // Reset the yaw offset
-		bUseControllerRotationYaw = true; // Enable controller yaw rotation
+		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		AO_Yaw = 0.f;
+		bUseControllerRotationYaw = true;
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	}
+
 	CalculateAO_Pitch();
 }
 
 void ABlasterCharacter::CalculateAO_Pitch()
 {
-	AO_Pitch = GetBaseAimRotation().Pitch; // Use the base aim rotation pitch
+	AO_Pitch = GetBaseAimRotation().Pitch;
 	if (AO_Pitch > 90.f && !IsLocallyControlled())
 	{
-		// map the pitch to a range of -90 to 90 degrees
+		// map pitch from [270, 360) to [-90, 0)
 		FVector2D InRange(270.f, 360.f);
 		FVector2D OutRange(-90.f, 0.f);
 		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
@@ -678,19 +692,19 @@ void ABlasterCharacter::CalculateAO_Pitch()
 
 void ABlasterCharacter::SimProxiesTurn()
 {
-	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return; // Ensure Combat component is valid before simulating turn
-
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
 	bRotateRootBone = false;
 	float Speed = CalculateSpeed();
-	if(Speed > 0.f) // If the character is moving, no need to turn in place
+	if (Speed > 0.f)
 	{
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 		return;
 	}
 
-	ProxyRotationLastFrame = ProxyRotation;// Store the last frame's proxy rotation
-	ProxyRotation = GetActorRotation(); // Get the current actor rotation
-	ProxyYaw = UKismetMathLibrary::NormalizedDeltaRotator(ProxyRotation, ProxyRotationLastFrame).Yaw; // Normalize the delta rotation	
+	ProxyRotationLastFrame = ProxyRotation;
+	ProxyRotation = GetActorRotation();
+	ProxyYaw = UKismetMathLibrary::NormalizedDeltaRotator(ProxyRotation, ProxyRotationLastFrame).Yaw;
+
 	if (FMath::Abs(ProxyYaw) > TurnThreshold)
 	{
 		if (ProxyYaw > TurnThreshold)
@@ -707,7 +721,39 @@ void ABlasterCharacter::SimProxiesTurn()
 		}
 		return;
 	}
-	TurningInPlace = ETurningInPlace::ETIP_NotTurning; // If the proxy yaw is within the threshold, set not turning
+	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+
+}
+
+void ABlasterCharacter::Jump()
+{
+	if (bDisableGameplay) return;
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Super::Jump();
+	}
+}
+
+void ABlasterCharacter::FireButtonPressed()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		Combat->FireButtonPressed(true);
+	}
+}
+
+void ABlasterCharacter::FireButtonReleased()
+{
+	if (bDisableGameplay) return;
+	if (Combat)
+	{
+		Combat->FireButtonPressed(false);
+	}
 }
 
 void ABlasterCharacter::TurnInPlace(float DeltaTime)
@@ -720,7 +766,6 @@ void ABlasterCharacter::TurnInPlace(float DeltaTime)
 	{
 		TurningInPlace = ETurningInPlace::ETIP_Left;
 	}
-
 	if (TurningInPlace != ETurningInPlace::ETIP_NotTurning)
 	{
 		InterpAO_Yaw = FMath::FInterpTo(InterpAO_Yaw, 0.f, DeltaTime, 4.f);
@@ -736,10 +781,11 @@ void ABlasterCharacter::TurnInPlace(float DeltaTime)
 void ABlasterCharacter::HideCameraIfCharacterClose()
 {
 	if (!IsLocallyControlled()) return;
-	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold) {
+	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
+	{
 		GetMesh()->SetVisibility(false);
 		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
-		{         
+		{
 			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = true;
 		}
 	}
@@ -751,14 +797,6 @@ void ABlasterCharacter::HideCameraIfCharacterClose()
 			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = false;
 		}
 	}
-	
-}
-
-float ABlasterCharacter::CalculateSpeed()
-{
-	FVector Velocity = GetVelocity();
-	Velocity.Z = 0;
-	return Velocity.Size();
 }
 
 void ABlasterCharacter::OnRep_Health(float LastHealth)
@@ -781,29 +819,29 @@ void ABlasterCharacter::OnRep_Shield(float LastShield)
 
 void ABlasterCharacter::UpdateHUDHealth()
 {
-	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
+	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
 	if (BlasterPlayerController)
 	{
-		BlasterPlayerController->SetHUDHealth(Health, MaxHealth); // Set the HUD health on the player controller
+		BlasterPlayerController->SetHUDHealth(Health, MaxHealth);
 	}
 }
 
 void ABlasterCharacter::UpdateHUDShield()
 {
-	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
+	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
 	if (BlasterPlayerController)
 	{
-		BlasterPlayerController->SetHUDShield(Shield, MaxShield); // Set the HUD shield on the player controller
+		BlasterPlayerController->SetHUDShield(Shield, MaxShield);
 	}
 }
 
 void ABlasterCharacter::UpdateHUDAmmo()
 {
-	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController; // Cast the controller to BlasterPlayerController
+	BlasterPlayerController = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
 	if (BlasterPlayerController && Combat && Combat->EquippedWeapon)
 	{
 		BlasterPlayerController->SetHUDCarriedAmmo(Combat->CarriedAmmo);
-		BlasterPlayerController->SetHUDWeaponAmmo(Combat->EquippedWeapon->GetAmmo()); // Set the HUD weapon ammo on the player controller
+		BlasterPlayerController->SetHUDWeaponAmmo(Combat->EquippedWeapon->GetAmmo());
 	}
 }
 
@@ -811,7 +849,8 @@ void ABlasterCharacter::SpawnDefaultWeapon()
 {
 	ABlasterGameMode* BlasterGameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this));
 	UWorld* World = GetWorld();
-	if (BlasterGameMode && World && !bElimmed && DefaultWeaponClass) {
+	if (BlasterGameMode && World && !bElimmed && DefaultWeaponClass)
+	{
 		AWeapon* StartingWeapon = World->SpawnActor<AWeapon>(DefaultWeaponClass);
 		StartingWeapon->bDestroyWeapon = true;
 		if (Combat)
@@ -825,11 +864,11 @@ void ABlasterCharacter::PollInit()
 {
 	if (BlasterPlayerState == nullptr)
 	{
-		BlasterPlayerState = GetPlayerState<ABlasterPlayerState>(); // Get the player state
-		if(BlasterPlayerState)
+		BlasterPlayerState = GetPlayerState<ABlasterPlayerState>();
+		if (BlasterPlayerState)
 		{
 			BlasterPlayerState->AddToScore(0.f);
-			BlasterPlayerState->AddToDefeats(0.f); // Initialize score and defeats to 0
+			BlasterPlayerState->AddToDefeats(0);
 		}
 	}
 }
@@ -840,7 +879,6 @@ void ABlasterCharacter::UpdateDissolveMaterial(float DissolveValue)
 	{
 		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), DissolveValue);
 	}
-
 }
 
 void ABlasterCharacter::StartDissolve()
@@ -860,7 +898,7 @@ void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 		OverlappingWeapon->ShowPickupWidget(false);
 	}
 	OverlappingWeapon = Weapon;
-	if(IsLocallyControlled())
+	if (IsLocallyControlled())
 	{
 		if (OverlappingWeapon)
 		{
@@ -868,48 +906,18 @@ void ABlasterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 		}
 	}
 }
+
 void ABlasterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 {
-	if(OverlappingWeapon)
+	if (OverlappingWeapon)
 	{
 		OverlappingWeapon->ShowPickupWidget(true);
-	}	
-	if(LastWeapon)
+	}
+	if (LastWeapon)
 	{
 		LastWeapon->ShowPickupWidget(false);
 	}
 }
-
-void ABlasterCharacter::Jump() {
-	if (bDisableGameplay) return;
-	if (bIsCrouched) // If the character is crouched, uncrouch before jumping
-	{
-		UnCrouch();
-	}
-	else 
-	{
-		Super::Jump();
-	}	
-}
-
-void ABlasterCharacter::FireButtonPressed()
-{
-	if (bDisableGameplay) return;
-	if(Combat)
-	{		
-		Combat->FireButtonPressed(true);
-	}
-}
-
-void ABlasterCharacter::FireButtonReleased()
-{
-	if (bDisableGameplay) return;
-	if(Combat)
-	{
-		Combat->FireButtonPressed(false); // Call the Combat component's FireButtonReleased function
-	}
-}
-
 
 bool ABlasterCharacter::IsWeaponEquipped()
 {
@@ -924,13 +932,13 @@ bool ABlasterCharacter::IsAiming()
 AWeapon* ABlasterCharacter::GetEquippedWeapon()
 {
 	if (Combat == nullptr) return nullptr;
-	return Combat->EquippedWeapon; // Return the currently equipped weapon
+	return Combat->EquippedWeapon;
 }
 
 FVector ABlasterCharacter::GetHitTarget() const
 {
-	if (Combat == nullptr) return FVector(); // Ensure Combat component is valid before accessing HitTarget
-	return Combat->HitTarget; // Return the hit target vector
+	if (Combat == nullptr) return FVector();
+	return Combat->HitTarget;
 }
 
 ECombatState ABlasterCharacter::GetCombatState() const
@@ -941,7 +949,6 @@ ECombatState ABlasterCharacter::GetCombatState() const
 
 bool ABlasterCharacter::IsLocallyReloading()
 {
-	if (Combat == nullptr) return false; // Ensure Combat component is valid before checking reloading state
-	return Combat->bLocallyReloading; // Return whether the character is locally reloading
+	if (Combat == nullptr) return false;
+	return Combat->bLocallyReloading;
 }
-
