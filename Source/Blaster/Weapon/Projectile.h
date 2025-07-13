@@ -98,7 +98,7 @@ private:
 	float DestroyTime = 3.f;
 
 public:	
-	virtual float GetExplosiveDamage() const override { return Damage; }
 	virtual AWeapon* GetExplosiveCauser() const override { return OwningWeapon ? OwningWeapon : nullptr; }
+	virtual FExplosiveInfo GetExplosiveInfo() const override;
 	FORCEINLINE float GetDamage() const { return Damage; }
 };

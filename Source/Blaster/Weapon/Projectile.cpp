@@ -180,10 +180,6 @@ void AProjectile::ExplodeDamage()
 					OwnerCharacter->GetLagCompensation()->ServerExplosiveScoreRequest(
 						HitCharacters,
 						GetActorLocation(),
-						DamageInnerRadius,
-						DamageOuterRadius,
-						MinimumDamage, // Minimum Damage
-						DamageFalloff, // DamageFalloff
 						OwnerController->GetServerTime() - OwnerController->SingleTripTime,
 						UDamageType::StaticClass(),
 						this // Damage Causer
@@ -192,6 +188,17 @@ void AProjectile::ExplodeDamage()
 			}
 		}
 	}
+}
+
+FExplosiveInfo AProjectile::GetExplosiveInfo() const
+{
+	FExplosiveInfo Info;
+	Info.OuterDamage = MinimumDamage;
+	Info.InnerDamage = Damage;
+	Info.InnerRadius = DamageInnerRadius;
+	Info.OuterRadius = DamageOuterRadius;
+	Info.Falloff = DamageFalloff;
+	return Info;
 }
 
 void AProjectile::Destroyed()

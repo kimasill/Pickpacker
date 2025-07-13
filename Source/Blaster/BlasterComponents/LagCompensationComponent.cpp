@@ -216,14 +216,18 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileConfirmHit(const FF
 	return FServerSideRewindResult{ false, false };
 }
 
-FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits(const TArray<FFramePackage>& FramePackages, const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits(const TArray<FFramePackage>& FramePackages, const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, class AActor* DamageCauser)
 {
 	for (auto& Frame : FramePackages) {
 		if (Frame.Character == nullptr) return FExplosiveServerSideRewindResult();
 	}
 	TArray<FFramePackage> CurrentFrames;
 	FExplosiveServerSideRewindResult ExplosiveResult;
-
+	IExplosiveSource* ExplosiveSource = Cast<IExplosiveSource>(DamageCauser);
+	if(ExplosiveSource == nullptr)
+	{
+		return FExplosiveServerSideRewindResult();
+	}
 	for (const FFramePackage& Frame : FramePackages)
 	{
 		if (Frame.Character == nullptr) continue;
@@ -252,8 +256,9 @@ FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits
 
 		const FVector CharacterLocation = Frame.Character->GetActorLocation();
 		const float DistanceToCharacter = (CharacterLocation - ExplosionLocation).Size();
+		FExplosiveInfo ExplosiveInfo = ExplosiveSource->GetExplosiveInfo();
 
-		if (DistanceToCharacter <= DamageOuterRadius) // Check if Obstacle is within the outer radius
+		if (DistanceToCharacter <= ExplosiveInfo.OuterRadius) // Check if Obstacle is within the outer radius
 		{
 			TArray<FVector> TracePoints;
 			TracePoints.Add(CharacterLocation); // Add the character's location as a trace point
@@ -624,14 +629,14 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileServerSideRewind(AB
 	return ProjectileConfirmHit(FrameToCheck, HitCharacter, TraceStart, InitialVelocity, HitTime);
 }
 
-FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveServerSideRewind(const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float DamageInnerRadius, float DamageOuterRadius, float HitTime, TSubclassOf<UDamageType> DamageTypeClass)
+FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveServerSideRewind(const TArray<ABlasterCharacter*>& HitCharacters, const FVector& ExplosionLocation, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, class AActor* DamageCauser)
 {
 	TArray<FFramePackage> FramesToCheck;
 	for (ABlasterCharacter* HitCharacter : HitCharacters)
 	{
 		FramesToCheck.Add(GetFrameToCheck(HitCharacter, HitTime));
 	}
-	return ExplosiveConfirmHits(FramesToCheck, HitCharacters, ExplosionLocation, DamageInnerRadius, DamageOuterRadius, HitTime, DamageTypeClass);
+	return ExplosiveConfirmHits(FramesToCheck, HitCharacters, ExplosionLocation,HitTime, DamageTypeClass, DamageCauser);
 }
 
 
@@ -668,11 +673,19 @@ void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABla
 	}
 }
 
-void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float InnerRadius, float OuterRadius, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, AActor* DamageCauser)
+void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, AActor* DamageCauser)
 {
-	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, InnerRadius, OuterRadius, HitTime, DamageTypeClass);
+	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, HitTime, DamageTypeClass, DamageCauser);
 	IExplosiveSource* ExplosiveSource = Cast<IExplosiveSource>(DamageCauser);
 	if (ExplosiveSource == nullptr || Character == nullptr) return;
+	FExplosiveInfo ExplosiveInfo = ExplosiveSource->GetExplosiveInfo();
+
+	const float InnerRadius = ExplosiveInfo.InnerRadius;
+	const float OuterRadius = ExplosiveInfo.OuterRadius;
+	const float DamageFalloff = ExplosiveInfo.Falloff;
+	const float MinimumDamage = ExplosiveInfo.OuterDamage;
+	const float MaximumDamage = ExplosiveInfo.InnerDamage;
+
 
 	for (auto& HitCharacter : HitCharacters)
 	{
@@ -680,7 +693,7 @@ void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const
 		if (Confirm.DamageMap.Contains(HitCharacter))
 		{
 			float Distance = Confirm.DamageDistance[HitCharacter];
-			float TotalDamage = ExplosiveSource->GetExplosiveDamage() + ExplosiveSource->GetExplosiveCauser()->GetDamage(); // Full damage for inner radius
+			float TotalDamage = MaximumDamage + ExplosiveSource->GetExplosiveCauser()->GetDamage(); // Full damage for inner radius
 			if (Distance > InnerRadius)
 			{
 				const float Falloff = (Distance - InnerRadius) / (OuterRadius - InnerRadius);

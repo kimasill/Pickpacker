@@ -112,10 +112,9 @@ public:
 	FExplosiveServerSideRewindResult ExplosiveServerSideRewind(
 		const TArray<ABlasterCharacter*>& HitCharacters,
 		const FVector& ExplosionLocation,
-		float DamageInnerRadius,
-		float DamageOuterRadius,
 		float HitTime,
-		TSubclassOf<UDamageType> DamageTypeClass
+		TSubclassOf<UDamageType> DamageTypeClass,
+		class AActor* DamageCauser
 	);
 
 	/**
@@ -151,10 +150,6 @@ public:
 	void ServerExplosiveScoreRequest(
 		const TArray<ABlasterCharacter*>& HitCharacters, 
 		const FVector_NetQuantize& ExplosionLocation, 
-		float DamageInnerRadius,
-		float DamageOuterRadius,
-		float MinimumDamage,
-		float DamageFalloff,
 		float HitTime,
 		TSubclassOf<UDamageType> DamageTypeClass,
 		class AActor* DamageCauser
@@ -206,10 +201,9 @@ protected:
 			const TArray<FFramePackage>& Packages,
 			const TArray<ABlasterCharacter*>& HitCharacters,
 			const FVector& ExplosionLocation,
-			float DamageInnerRadius,
-			float DamageOuterRadius,
 			float HitTime,
-			TSubclassOf<UDamageType> DamageTypeClass
+			TSubclassOf<UDamageType> DamageTypeClass,
+			class AActor* DamageCauser
 	);
 
 	/**
