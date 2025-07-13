@@ -6,6 +6,7 @@
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
+#include "Blaster/Weapon/Weapon.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 
 AProjectileBullet::AProjectileBullet()
@@ -41,10 +42,10 @@ void AProjectileBullet::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 	{
 		ABlasterPlayerController* OwnerController = Cast<ABlasterPlayerController>(OwnerCharacter->Controller);
 		if (OwnerController)
-		{
+		{			
 			if (OwnerCharacter->HasAuthority() && !bUseServerSideRewind)
 			{
-				UGameplayStatics::ApplyDamage(OtherActor, Damage, OwnerController, this, UDamageType::StaticClass());
+				UGameplayStatics::ApplyDamage(OtherActor, OwningWeapon->GetDamage() + Damage, OwnerController, this, UDamageType::StaticClass());
 				Super::OnHit(HitComp, OtherActor, OtherComp, NormalImpulse, Hit);
 				return;
 			}			
@@ -55,7 +56,8 @@ void AProjectileBullet::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 					HitCharacter,
 					TraceStart,
 					InitialVelocity,
-					OwnerController->GetServerTime() - OwnerController->SingleTripTime
+					OwnerController->GetServerTime() - OwnerController->SingleTripTime,
+					this
 				);
 			}
 		}

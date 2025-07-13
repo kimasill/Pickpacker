@@ -4,10 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Blaster/Interfaces/ExplosiveSource.h"
+#include "Blaster/Weapon/Weapon.h"
 #include "Projectile.generated.h"
 
+
 UCLASS()
-class BLASTER_API AProjectile : public AActor
+class BLASTER_API AProjectile : public AActor, public IExplosiveSource
 {
 	GENERATED_BODY()
 	
@@ -16,6 +19,10 @@ public:
 	AProjectile();
 	virtual void Tick(float DeltaTime) override;
 	virtual void Destroyed() override;
+	
+
+	UPROPERTY()
+	class AWeapon* OwningWeapon = nullptr; // Pointer to the weapon that fired this projectile
 
 	/**
 	* Used with server-side rewind
@@ -91,5 +98,7 @@ private:
 	float DestroyTime = 3.f;
 
 public:	
-
+	virtual float GetExplosiveDamage() const override { return Damage; }
+	virtual AWeapon* GetExplosiveCauser() const override { return OwningWeapon ? OwningWeapon : nullptr; }
+	FORCEINLINE float GetDamage() const { return Damage; }
 };

@@ -12,6 +12,7 @@
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Blaster/Blaster.h"
+#include "Blaster/Weapon/Weapon.h"
 #include "Engine/OverlapResult.h"
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
 #include "NiagaraFunctionLibrary.h"
@@ -126,15 +127,15 @@ void AProjectile::ExplodeDamage()
 	if (FiringPawn)
 	{
 		AController* FiringController = FiringPawn->GetController();
-		ABlasterCharacter* OwnerCharacter = Cast<ABlasterCharacter>(FiringPawn);
+		ABlasterCharacter* OwnerCharacter = Cast<ABlasterCharacter>(FiringPawn);		
 		if (FiringController)
 		{
 			if (OwnerCharacter && OwnerCharacter->HasAuthority() && !bUseServerSideRewind)
 			{
 				UGameplayStatics::ApplyRadialDamageWithFalloff(
 					this, // World context object
-					Damage, // Base damage
-					MinimumDamage, // Minimum damage
+					OwningWeapon->GetDamage() + Damage,
+					MinimumDamage, // Minimum damage					
 					GetActorLocation(), // Origin of the damage
 					DamageInnerRadius, // Inner radius
 					DamageOuterRadius, // Outer radius
@@ -181,7 +182,6 @@ void AProjectile::ExplodeDamage()
 						GetActorLocation(),
 						DamageInnerRadius,
 						DamageOuterRadius,
-						Damage,
 						MinimumDamage, // Minimum Damage
 						DamageFalloff, // DamageFalloff
 						OwnerController->GetServerTime() - OwnerController->SingleTripTime,

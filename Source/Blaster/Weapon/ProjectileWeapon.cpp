@@ -34,7 +34,7 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 				{
 					SpawnedProjectile = World->SpawnActor<AProjectile>(ProjectileClass, SocketTransform.GetLocation(), TargetRotation, SpawnParams);
 					SpawnedProjectile->bUseServerSideRewind = false; // Don't use server-side rewind for the projectile
-					SpawnedProjectile->Damage = Damage;
+					SpawnedProjectile->OwningWeapon = this; // Set the owning weapon for the projectile
 				}
 				else // server, not locally controlled - spawn non-replicated projectile
 				{
@@ -50,7 +50,7 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 					SpawnedProjectile->bUseServerSideRewind = true;
 					SpawnedProjectile->TraceStart = SocketTransform.GetLocation();
 					SpawnedProjectile->InitialVelocity = SpawnedProjectile->GetActorForwardVector() * SpawnedProjectile->InitialSpeed;
-					SpawnedProjectile->Damage = Damage;
+					SpawnedProjectile->OwningWeapon = this; // Set the owning weapon for the projectile
 				}
 				else
 				{
@@ -65,7 +65,7 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 			{
 				SpawnedProjectile = World->SpawnActor<AProjectile>(ProjectileClass, SocketTransform.GetLocation(), TargetRotation, SpawnParams);
 				SpawnedProjectile->bUseServerSideRewind = false; // Don't use server-side rewind for the projectile
-				SpawnedProjectile->Damage = Damage;
+				SpawnedProjectile->bUseServerSideRewind = false;
 			}
 		}
 	}

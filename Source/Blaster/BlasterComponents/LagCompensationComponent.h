@@ -143,7 +143,8 @@ public:
 		ABlasterCharacter* HitCharacter,
 		const FVector_NetQuantize& TraceStart,
 		const FVector_NetQuantize100& InitialVelocity,
-		float HitTime
+		float HitTime,
+		class AProjectile* DamageCauser
 	);
 
 	UFUNCTION(Server, Reliable)
@@ -152,7 +153,6 @@ public:
 		const FVector_NetQuantize& ExplosionLocation, 
 		float DamageInnerRadius,
 		float DamageOuterRadius,
-		float BaseDamage,
 		float MinimumDamage,
 		float DamageFalloff,
 		float HitTime,

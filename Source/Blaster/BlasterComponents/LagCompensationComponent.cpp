@@ -4,6 +4,7 @@
 #include "LagCompensationComponent.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Weapon/Weapon.h"
+#include "Blaster/Weapon/Projectile.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blaster/Blaster.h"
@@ -651,7 +652,7 @@ void ULagCompensationComponent::ServerScoreRequest_Implementation(ABlasterCharac
 }
 
 
-void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABlasterCharacter* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize100& InitialVelocity, float HitTime)
+void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABlasterCharacter* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize100& InitialVelocity, float HitTime, AProjectile* DamageCauserProjectile)
 {
 	if (HitCharacter == nullptr) return;
 	FServerSideRewindResult Confirm = ProjectileServerSideRewind(HitCharacter, TraceStart, InitialVelocity, HitTime);
@@ -659,7 +660,7 @@ void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABla
 	{
 		UGameplayStatics::ApplyDamage(
 			HitCharacter,
-			Character->GetEquippedWeapon()->GetDamage(),
+			Character->GetEquippedWeapon()->GetDamage() + DamageCauserProjectile->GetDamage(),
 			Character->Controller,
 			Character->GetEquippedWeapon(),
 			UDamageType::StaticClass()
@@ -667,24 +668,23 @@ void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABla
 	}
 }
 
-void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float InnerRadius, float OuterRadius, float BaseDamage, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, AActor* DamageCauser)
+void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const TArray<ABlasterCharacter*>& HitCharacters, const FVector_NetQuantize& ExplosionLocation, float InnerRadius, float OuterRadius, float MinimumDamage, float DamageFalloff, float HitTime, TSubclassOf<UDamageType> DamageTypeClass, AActor* DamageCauser)
 {
 	FExplosiveServerSideRewindResult Confirm = ExplosiveServerSideRewind(HitCharacters, ExplosionLocation, InnerRadius, OuterRadius, HitTime, DamageTypeClass);
+	IExplosiveSource* ExplosiveSource = Cast<IExplosiveSource>(DamageCauser);
+	if (ExplosiveSource == nullptr || Character == nullptr) return;
+
 	for (auto& HitCharacter : HitCharacters)
 	{
 		if (HitCharacter == nullptr || Character == nullptr) continue;
 		if (Confirm.DamageMap.Contains(HitCharacter))
 		{
 			float Distance = Confirm.DamageDistance[HitCharacter];
-			float TotalDamage = 0.f;
-			if (Distance <= InnerRadius)
-			{
-				TotalDamage = BaseDamage;
-			}
-			else
+			float TotalDamage = ExplosiveSource->GetExplosiveDamage() + ExplosiveSource->GetExplosiveCauser()->GetDamage(); // Full damage for inner radius
+			if (Distance > InnerRadius)
 			{
 				const float Falloff = (Distance - InnerRadius) / (OuterRadius - InnerRadius);
-				TotalDamage = BaseDamage * FMath::Pow(1.0f - Falloff, DamageFalloff);
+				TotalDamage = TotalDamage * FMath::Pow(1.0f - Falloff, DamageFalloff);
 			}
 			TotalDamage = FMath::Max(TotalDamage, MinimumDamage);
 
