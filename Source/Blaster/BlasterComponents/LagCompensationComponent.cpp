@@ -230,9 +230,21 @@ FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits
 		CurrentFrame.Character = Frame.Character;
 		CacheBoxPositions(Frame.Character, CurrentFrame);
 		MoveBoxes(Frame.Character, Frame);
+		EnableCharacterMeshCollision(Frame.Character, ECollisionEnabled::NoCollision);
 		CurrentFrames.Add(CurrentFrame);
 	}
-
+	for (const FFramePackage& Frame : FramePackages)
+	{
+		if (Frame.Character == nullptr) continue;
+		for (auto& HitBoxPair : Frame.Character->HitCollisionBoxes)
+		{
+			if (HitBoxPair.Value != nullptr)
+			{
+				HitBoxPair.Value->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+				HitBoxPair.Value->SetCollisionResponseToChannel(ECC_HitBox, ECollisionResponse::ECR_Block);
+			}
+		}
+	}
 	for (auto& Frame : FramePackages)
 	{
 		if (Frame.Character == nullptr) continue;
@@ -313,6 +325,7 @@ FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits
 	for (auto& Frame : CurrentFrames)
 	{
 		ResetHitBoxes(Frame.Character, Frame);
+		EnableCharacterMeshCollision(Frame.Character, ECollisionEnabled::QueryAndPhysics);
 	}
 
 	return FExplosiveServerSideRewindResult(ExplosiveResult);
@@ -672,8 +685,9 @@ void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const
 			{
 				const float Falloff = (Distance - InnerRadius) / (OuterRadius - InnerRadius);
 				TotalDamage = BaseDamage * FMath::Pow(1.0f - Falloff, DamageFalloff);
-				TotalDamage = FMath::Max(TotalDamage, MinimumDamage);
 			}
+			TotalDamage = FMath::Max(TotalDamage, MinimumDamage);
+
 			UGameplayStatics::ApplyDamage(
 				HitCharacter,
 				TotalDamage,

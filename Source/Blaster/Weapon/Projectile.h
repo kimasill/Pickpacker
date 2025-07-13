@@ -28,6 +28,7 @@ public:
 	UPROPERTY(EditAnywhere)
 	float InitialSpeed = 15000.f; // Initial speed of the projectile
 
+	UPROPERTY(EditAnywhere)
 	float Damage = 20.f;
 
 protected:
@@ -68,6 +69,12 @@ protected:
 
 	UPROPERTY(EditAnywhere)
 	float DamageOuterRadius = 500.f; // Outer radius for area damage
+
+	UPROPERTY(EditAnywhere)
+	float DamageFalloff = 1.f; // Falloff for damage based on distance
+
+	UPROPERTY(EditAnywhere)
+	float MinimumDamage = 10.f; // Minimum damage dealt to targets within the outer radius
 
 private:
 

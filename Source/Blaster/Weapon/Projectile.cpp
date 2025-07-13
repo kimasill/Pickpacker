@@ -129,16 +129,16 @@ void AProjectile::ExplodeDamage()
 		ABlasterCharacter* OwnerCharacter = Cast<ABlasterCharacter>(FiringPawn);
 		if (FiringController)
 		{
-			if (HasAuthority() && !bUseServerSideRewind)
+			if (OwnerCharacter && OwnerCharacter->HasAuthority() && !bUseServerSideRewind)
 			{
 				UGameplayStatics::ApplyRadialDamageWithFalloff(
 					this, // World context object
 					Damage, // Base damage
-					10.f, // Minimum damage
+					MinimumDamage, // Minimum damage
 					GetActorLocation(), // Origin of the damage
 					DamageInnerRadius, // Inner radius
 					DamageOuterRadius, // Outer radius
-					1.f, // Damage falloff
+					DamageFalloff, // Damage falloff
 					UDamageType::StaticClass(), // Damage type class
 					TArray<AActor*>(), // Ignore actors
 					this, // Damage causer
@@ -146,13 +146,14 @@ void AProjectile::ExplodeDamage()
 					ECollisionChannel::ECC_Visibility // Collision channel
 				);
 			}
-			if(OwnerCharacter && !HasAuthority() && bUseServerSideRewind)
+			if(OwnerCharacter && !OwnerCharacter->HasAuthority() && OwnerCharacter->IsLocallyControlled() && bUseServerSideRewind)
 			{
 				ABlasterPlayerController* OwnerController = Cast<ABlasterPlayerController>(OwnerCharacter->Controller);
 
 				TArray<FOverlapResult> OverlapResults;
 				TArray<ABlasterCharacter*> HitCharacters;
-				FCollisionObjectQueryParams ObjectQueryParams(ECollisionChannel::ECC_Visibility);
+				FCollisionObjectQueryParams ObjectQueryParams;
+				ObjectQueryParams.AddObjectTypesToQuery(ECC_GameTraceChannel1);
 				FCollisionShape SphereShape = FCollisionShape::MakeSphere(DamageOuterRadius);
 				GetWorld()->OverlapMultiByObjectType(
 					OverlapResults, // Array to fill with overlapping actors
@@ -181,8 +182,8 @@ void AProjectile::ExplodeDamage()
 						DamageInnerRadius,
 						DamageOuterRadius,
 						Damage,
-						10.f, // Minimum Damage
-						1.f, // DamageFalloff
+						MinimumDamage, // Minimum Damage
+						DamageFalloff, // DamageFalloff
 						OwnerController->GetServerTime() - OwnerController->SingleTripTime,
 						UDamageType::StaticClass(),
 						this // Damage Causer
