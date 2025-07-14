@@ -770,7 +770,7 @@ void ULagCompensationComponent::SaveFramePackage()
 		SaveFramePackage(ThisFrame);
 		FrameHistory.AddHead(ThisFrame);
 
-		ShowFramePackage(ThisFrame, FColor::Green);
+		//ShowFramePackage(ThisFrame, FColor::Green);
 	}
 }
 

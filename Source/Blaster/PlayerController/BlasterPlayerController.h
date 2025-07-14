@@ -15,6 +15,7 @@ class BLASTER_API ABlasterPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 public:
+	
 	void SetHUDHealth(float Health, float MaxHealth);
 	void SetHUDShield(float Shield, float MaxShield);
 	void SetHUDScore(float Score);
@@ -40,6 +41,7 @@ protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();
 	void PollInit(); // Polls for the BlasterHUD and CharacterOverlay widgets
+	virtual void SetupInputComponent() override;
 
 	/**
 	* Sync time between server and client
@@ -70,9 +72,22 @@ protected:
 	void HighPingWarning();
 	void StopHighPingWarning();
 	void CheckPing(float DeltaTime);
+
+	void ShowReturnToMainMenu();
 private:
+
 	UPROPERTY()
 	class ABlasterHUD* BlasterHUD;
+
+	/**
+	* Return to Main Menu
+	*/
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	TSubclassOf<class UUserWidget> ReturnToMainMenuWidget; // Widget class for return to main menu
+
+	class UReturnToMainMenu* ReturnToMainMenu;
+
+	bool bReturnToMainMenuOpen = false; // Flag to check if the return to main menu widget is open
 
 	UPROPERTY()
 	class ABlasterGameMode* BlasterGameMode;
