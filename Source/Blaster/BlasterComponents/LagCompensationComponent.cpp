@@ -75,22 +75,6 @@ FServerSideRewindResult ULagCompensationComponent::ConfirmHit(const FFramePackag
 		);
 		if (ConfirmHitResult.bBlockingHit)
 		{
-			if (ConfirmHitResult.Component.IsValid())
-			{
-				UBoxComponent* Box = Cast<UBoxComponent>(ConfirmHitResult.Component);
-				if (Box)
-				{
-					DrawDebugBox(
-						GetWorld(),
-						Box->GetComponentLocation(),
-						Box->GetScaledBoxExtent(),
-						FQuat(Box->GetComponentRotation()),
-						FColor::Red,
-						false,
-						4.f
-					);
-				}
-			}
 			ResetHitBoxes(HitCharacter, CurrentFrame);
 			EnableCharacterMeshCollision(HitCharacter, ECollisionEnabled::QueryAndPhysics);
 			return FServerSideRewindResult{ true, true };
@@ -113,22 +97,6 @@ FServerSideRewindResult ULagCompensationComponent::ConfirmHit(const FFramePackag
 			);
 			if(ConfirmHitResult.bBlockingHit)
 			{
-				if (ConfirmHitResult.Component.IsValid())
-				{
-					UBoxComponent* Box = Cast<UBoxComponent>(ConfirmHitResult.Component);
-					if (Box)
-					{
-						DrawDebugBox(
-							GetWorld(),
-							Box->GetComponentLocation(),
-							Box->GetScaledBoxExtent(),
-							FQuat(Box->GetComponentRotation()),
-							FColor::Blue,
-							false,
-							4.f
-						);
-					}
-				}
 				ResetHitBoxes(HitCharacter, CurrentFrame);
 				EnableCharacterMeshCollision(HitCharacter, ECollisionEnabled::QueryAndPhysics);
 				return FServerSideRewindResult{ true, false };
@@ -161,23 +129,14 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileConfirmHit(const FF
 	PathParams.ProjectileRadius = 5.f;
 	PathParams.TraceChannel = ECC_HitBox;
 	PathParams.ActorsToIgnore.Add(GetOwner());
-	PathParams.DrawDebugTime = 4.f;
-	PathParams.DrawDebugType = EDrawDebugTrace::ForDuration;
+	//PathParams.DrawDebugTime = 4.f;
+	//PathParams.DrawDebugType = EDrawDebugTrace::ForDuration;
 
 	FPredictProjectilePathResult PathResult;
 	UGameplayStatics::PredictProjectilePath(this, PathParams, PathResult);
 
 	if (PathResult.HitResult.bBlockingHit) // we hit the head, return early
 	{
-		if (PathResult.HitResult.Component.IsValid())
-		{
-			UBoxComponent* Box = Cast<UBoxComponent>(PathResult.HitResult.Component);
-			if (Box)
-			{
-				DrawDebugBox(GetWorld(), Box->GetComponentLocation(), Box->GetScaledBoxExtent(), FQuat(Box->GetComponentRotation()), FColor::Red, false, 8.f);
-			}
-		}
-
 		ResetHitBoxes(HitCharacter, CurrentFrame);
 		EnableCharacterMeshCollision(HitCharacter, ECollisionEnabled::QueryAndPhysics);
 		return FServerSideRewindResult{ true, true };
@@ -196,15 +155,6 @@ FServerSideRewindResult ULagCompensationComponent::ProjectileConfirmHit(const FF
 		UGameplayStatics::PredictProjectilePath(this, PathParams, PathResult);
 		if (PathResult.HitResult.bBlockingHit)
 		{
-			if (PathResult.HitResult.Component.IsValid())
-			{
-				UBoxComponent* Box = Cast<UBoxComponent>(PathResult.HitResult.Component);
-				if (Box)
-				{
-					DrawDebugBox(GetWorld(), Box->GetComponentLocation(), Box->GetScaledBoxExtent(), FQuat(Box->GetComponentRotation()), FColor::Blue, false, 8.f);
-				}
-			}
-
 			ResetHitBoxes(HitCharacter, CurrentFrame);
 			EnableCharacterMeshCollision(HitCharacter, ECollisionEnabled::QueryAndPhysics);
 			return FServerSideRewindResult{ true, false };
@@ -297,22 +247,6 @@ FExplosiveServerSideRewindResult ULagCompensationComponent::ExplosiveConfirmHits
 				ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(HitResult.GetActor());
 				if (BlasterCharacter)
 				{
-					if (HitResult.Component.IsValid())
-					{
-						UBoxComponent* Box = Cast<UBoxComponent>(HitResult.Component);
-						if (Box)
-						{
-							DrawDebugBox(
-								GetWorld(),
-								Box->GetComponentLocation(),
-								Box->GetScaledBoxExtent(),
-								FQuat(Box->GetComponentRotation()),
-								FColor::Red,
-								false,
-								4.f
-							);
-						}
-					}
 					if (ExplosiveResult.DamageMap.Contains(BlasterCharacter))
 					{
 						ExplosiveResult.DamageMap[BlasterCharacter]++;
@@ -378,22 +312,6 @@ FShotgunServerSideRewindResult ULagCompensationComponent::ShotgunConfirmHits(con
 			ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(ConfirmHitResult.GetActor());
 			if (BlasterCharacter)
 			{
-				if (ConfirmHitResult.Component.IsValid())
-				{
-					UBoxComponent* Box = Cast<UBoxComponent>(ConfirmHitResult.Component);
-					if (Box)
-					{
-						DrawDebugBox(
-							GetWorld(),
-							Box->GetComponentLocation(),
-							Box->GetScaledBoxExtent(),
-							FQuat(Box->GetComponentRotation()),
-							FColor::Red,
-							false,
-							4.f
-						);
-					}
-				}
 				if (ShotgunResult.HeadShots.Contains(BlasterCharacter))
 				{
 					ShotgunResult.HeadShots[BlasterCharacter]++;
@@ -439,22 +357,6 @@ FShotgunServerSideRewindResult ULagCompensationComponent::ShotgunConfirmHits(con
 			ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(ConfirmHitResult.GetActor());
 			if (BlasterCharacter)
 			{
-				if (ConfirmHitResult.Component.IsValid())
-				{
-					UBoxComponent* Box = Cast<UBoxComponent>(ConfirmHitResult.Component);
-					if (Box)
-					{
-						DrawDebugBox(
-							GetWorld(),
-							Box->GetComponentLocation(),
-							Box->GetScaledBoxExtent(),
-							FQuat(Box->GetComponentRotation()),
-							FColor::Blue,
-							false,
-							4.f
-						);
-					}
-				}
 				if (ShotgunResult.BodyShots.Contains(BlasterCharacter))
 				{
 					ShotgunResult.BodyShots[BlasterCharacter]++;
@@ -693,7 +595,8 @@ void ULagCompensationComponent::ServerExplosiveScoreRequest_Implementation(const
 		if (Confirm.DamageMap.Contains(HitCharacter))
 		{
 			float Distance = Confirm.DamageDistance[HitCharacter];
-			float TotalDamage = MaximumDamage + ExplosiveSource->GetExplosiveCauser()->GetDamage(); // Full damage for inner radius
+			float WeaponDamage = Character->GetEquippedWeapon() ? Character->GetEquippedWeapon()->GetDamage() : 0.f;
+			float TotalDamage = MaximumDamage + WeaponDamage;// Full damage for inner radius
 			if (Distance > InnerRadius)
 			{
 				const float Falloff = (Distance - InnerRadius) / (OuterRadius - InnerRadius);

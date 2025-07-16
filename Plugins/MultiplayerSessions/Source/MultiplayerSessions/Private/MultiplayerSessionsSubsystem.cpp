@@ -131,6 +131,7 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 	if(LastSessionSearch->SearchResults.Num() <= 0)
 	{
 		MultiplayerOnFindSessionsComplete.Broadcast(TArray<FOnlineSessionSearchResult>(), false);
+		return;
 	}
 	MultiplayerOnFindSessionsComplete.Broadcast(LastSessionSearch->SearchResults, bwasSuccessful);
 }

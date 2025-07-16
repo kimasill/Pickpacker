@@ -22,13 +22,7 @@ void ABlasterGameState::UpdateTopScore(ABlasterPlayerState* ScoringPlayer)
 	{
 		TopScoringPlayers.AddUnique(ScoringPlayer);
 	}
-	else if(ScoringPlayer->GetScore() > TopScore)
-	{
-		TopScoringPlayers.Empty();
-		TopScoringPlayers.Add(ScoringPlayer);
-		TopScore = ScoringPlayer->GetScore();
-	}
-	else if(ScoringPlayer->GetScore() < TopScore)
+	else if (ScoringPlayer->GetScore() > TopScore)
 	{
 		TopScoringPlayers.Empty();
 		TopScoringPlayers.AddUnique(ScoringPlayer);
