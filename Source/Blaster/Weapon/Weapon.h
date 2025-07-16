@@ -122,6 +122,9 @@ protected:
 	UPROPERTY(EditAnywhere)
 	float Damage = 20.f; // Amount of damage this weapon does
 
+	UPROPERTY(EditAnywhere)
+	float HeadShotDamage = 40.f; // Amount of damage this weapon does on headshot
+
 	UPROPERTY(Replicated, EditAnywhere)
 	bool bUseServerSideRewind = false; // Whether to use server-side rewind for hit registration
 
@@ -196,4 +199,5 @@ public:
 	FORCEINLINE int32 GetAmmo() const { return Ammo; }
 	FORCEINLINE int32 GetMagCapacity() const { return MagCapacity; }
 	FORCEINLINE float GetDamage() const { return Damage; }
+	FORCEINLINE float GetHeadShotDamage() const { return HeadShotDamage; }
 };

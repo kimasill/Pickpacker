@@ -38,6 +38,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	float Damage = 20.f;
 
+	UPROPERTY(EditAnywhere)
+	float HeadShotDamage = 40;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -101,4 +104,5 @@ public:
 	virtual AWeapon* GetExplosiveCauser() const override { return OwningWeapon ? OwningWeapon : nullptr; }
 	virtual FExplosiveInfo GetExplosiveInfo() const override;
 	FORCEINLINE float GetDamage() const { return Damage; }
+	FORCEINLINE float GetHeadShotDamage() const { return HeadShotDamage; }
 };
