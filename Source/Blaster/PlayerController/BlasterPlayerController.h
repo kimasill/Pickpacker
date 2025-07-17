@@ -28,11 +28,17 @@ public:
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	void HideTeamScores(); // Hides team scores in the HUD
+	void InitTeamScores(); // Initializes team scores in the HUD
+	void SetHUDRedTeamScore(int32 Score); // Sets the red team score in the HUD
+	void SetHUDBlueTeamScore(int32 Score); // Sets the blue team score in the HUD
+
+
 
 	virtual float GetServerTime();
 	virtual void ReceivedPlayer() override; // Syncs with server clock as soon as possible
-	void OnMatchStateSet(FName State);
-	void HandleMatchHasStarted();
+	void OnMatchStateSet(FName State, bool bTeamsMatch = false);
+	void HandleMatchHasStarted(bool bTeamsMatch = false);
 	void HandleCooldown();
 
 	float SingleTripTime = 0.f;
@@ -79,6 +85,12 @@ protected:
 	
 	UFUNCTION(Client, Reliable)
 	void ClientElimAnnouncement(APlayerState* Attacker, APlayerState* Victim);
+
+	UPROPERTY(ReplicatedUsing = OnRep_ShowTeamScores)
+	bool bShowTeamScores = false; // Flag to check if team scores are shown
+
+	UFUNCTION()
+	void OnRep_ShowTeamScores(); // Called when ShowTeamScores is replicated
 private:
 
 	UPROPERTY()
