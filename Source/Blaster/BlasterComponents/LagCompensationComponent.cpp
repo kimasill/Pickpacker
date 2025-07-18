@@ -563,7 +563,7 @@ void ULagCompensationComponent::ServerScoreRequest_Implementation(ABlasterCharac
 
 void ULagCompensationComponent::ProjectileServerScoreRequest_Implementation(ABlasterCharacter* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize100& InitialVelocity, float HitTime, AProjectile* DamageCauserProjectile)
 {
-	if (HitCharacter == nullptr) return;
+	if (HitCharacter == nullptr || DamageCauserProjectile == nullptr) return;
 	FServerSideRewindResult Confirm = ProjectileServerSideRewind(HitCharacter, TraceStart, InitialVelocity, HitTime);
 	if (Character && HitCharacter && Confirm.bHitConfirmed && Character->GetEquippedWeapon())
 	{

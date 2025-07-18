@@ -91,6 +91,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_ShowTeamScores(); // Called when ShowTeamScores is replicated
+
+	FString GetInfoText(const TArray<class ABlasterPlayerState*>& Players); // Returns a string with player information for the HUD
+	FString GetTeamsInfoText(class ABlasterGameState* BlasterGameState); // Returns a string with team information for the HUD
 private:
 
 	UPROPERTY()
