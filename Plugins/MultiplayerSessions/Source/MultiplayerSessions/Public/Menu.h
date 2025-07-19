@@ -51,7 +51,10 @@ private:
 	// The subsystem that handles multiplayer sessions
 	class UMultiplayerSessionsSubsystem* MultiplayerSessionsSubsystem;
 
+	UPROPERTY(BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	int32 NumPublicConnections{4}; // Default number of connections
+
+	UPROPERTY(BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	FString MatchType{ TEXT("FreeForAll") }; // Default match type
 	FString PathToLobby{ TEXT("") }; // Default path to the lobby map
 };
