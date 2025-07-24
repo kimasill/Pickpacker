@@ -1,12 +1,26 @@
 # =========================
 # UNREAL ENGINE 5 GITIGNORE
 # =========================
+Binaries
+DerivedDataCache
+Intermediate
+Saved
+Build
 
 # Visual Studio IDE files
 .vs/
 .vscode/
 .idea/
-
+.vscode
+.vs
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
+*.sln
+*.suo
+*.xcodeproj
+*.xcworkspace
 # Visual Studio user-specific files
 *.rsuser
 *.suo
@@ -93,7 +107,13 @@ Build/*/**
 !Build/**/*.ico
 
 # Starter Content (Usually large and not needed in version control)
-Content/StarterContent/*
+**/Geometry
+**/Mannequin
+**/ThirdPerson
+**/ThirdPersonBP
+**/LearningKit_Games
+**/MilitaryWeapSilver
+**/StarterContent
 
 # Third Party Content (Add specific folders as needed)
 Content/Assets/FPS_Weapon_Bundle/*
@@ -103,12 +123,20 @@ Content/Assets/sA_PickupSet_1/*
 Content/Assets/Interface_And_Item_Sounds/*
 Content/Assets/Weapon_Pack/*
 
-# Allow core project assets but ignore large third-party assets
-# !Content/Assets/Animations/*
-# !Content/Assets/Sounds/*
-# !Content/Assets/FX/*
-# !Content/Assets/Materials/*
-# !Content/Assets/Textures/*
+# Large Asset folders - Exclude to reduce LFS usage
+Content/Assets/Animations/*
+Content/Assets/Sounds/*
+Content/Assets/Textures/Crosshairs/*
+Content/Assets/Textures/Grenades/*
+Content/Assets/Textures/Overlay/*
+
+# Allow only essential project assets
+!Content/Assets/Materials/MI_*.uasset
+!Content/Assets/Materials/M_DissolveEffect.uasset
+!Content/Assets/Materials/PP_Highlight.uasset
+!Content/Assets/Fonts/*
+!Content/Assets/Curves/*
+!Content/Assets/FX/SniperScope/*
 
 # All References folder content (mostly third-party examples)
 Content/References/*
