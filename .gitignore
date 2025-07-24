@@ -125,13 +125,6 @@ Content/Assets/sA_PickupSet_1/*
 Content/Assets/Interface_And_Item_Sounds/*
 Content/Assets/Weapon_Pack/*
 
-# Large Asset folders - Exclude to reduce LFS usage
-Content/Assets/Animations/*
-Content/Assets/Sounds/*
-Content/Assets/Textures/Crosshairs/*
-Content/Assets/Textures/Grenades/*
-Content/Assets/Textures/Overlay/*
-
 # Allow only essential project assets
 !Content/Assets/Materials/MI_*.uasset
 !Content/Assets/Materials/M_DissolveEffect.uasset
@@ -143,7 +136,8 @@ Content/Assets/Textures/Overlay/*
 # All References folder content (mostly third-party examples)
 **/References/*
 **/Characters/*
-
+**/Mannequins/*
+**/Mannequin_UE4/*
 
 # External Actors/Objects (Can be very large)
 Content/__ExternalActors__/*
