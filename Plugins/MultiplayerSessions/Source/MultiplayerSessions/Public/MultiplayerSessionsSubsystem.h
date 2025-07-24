@@ -64,6 +64,10 @@ private:
 	FDelegateHandle DestroySessionCompleteDelegateHandle;
 
 	bool bCreateSessionOnDestroy{ false }; // Flag to check if we need to create a session after destroying one
-	int32 LastNumPublicConnections{ 0 }; // Store the last number of public connections for session creation
+	int32 LastNumPublicConnections; // Store the last number of public connections for session creation
 	FString LastMatchType; // Store the last match type for session creation
+
+public:
+	int32 DesiredNumPublicConnections{ }; // Desired number of public connections for the next session creation
+	FString DesiredMatchType{ }; // Desired match type for the next session creation
 };
