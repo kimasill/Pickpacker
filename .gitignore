@@ -103,12 +103,12 @@ Content/Assets/sA_PickupSet_1/*
 Content/Assets/Interface_And_Item_Sounds/*
 Content/Assets/Weapon_Pack/*
 
-# Large Asset folders - Allow core project assets but ignore third-party
-# Content/Assets/Animations/*
-# Content/Assets/Sounds/*
-# Content/Assets/FX/*
-# Content/Assets/Materials/*
-# Content/Assets/Textures/*
+# Allow core project assets but ignore large third-party assets
+# !Content/Assets/Animations/*
+# !Content/Assets/Sounds/*
+# !Content/Assets/FX/*
+# !Content/Assets/Materials/*
+# !Content/Assets/Textures/*
 
 # All References folder content (mostly third-party examples)
 Content/References/*
