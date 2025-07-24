@@ -109,6 +109,8 @@ Build/*/**
 # Starter Content (Usually large and not needed in version control)
 **/Geometry
 **/Mannequin
+**/Mannequins
+**/Mannequin_UE4
 **/ThirdPerson
 **/ThirdPersonBP
 **/LearningKit_Games
@@ -139,7 +141,9 @@ Content/Assets/Textures/Overlay/*
 !Content/Assets/FX/SniperScope/*
 
 # All References folder content (mostly third-party examples)
-Content/References/*
+**/References/*
+**/Characters/*
+
 
 # External Actors/Objects (Can be very large)
 Content/__ExternalActors__/*
