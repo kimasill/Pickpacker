@@ -38,6 +38,14 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 				{
 					World->ServerTravel(FString("/Game/Maps/CaptureTheFlagMap?listen"));
 				}
+				else if (MatchType == "PickPacker")
+				{
+					World->ServerTravel(FString("/Game/Maps/DungeonMap?listen"));
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Unknown MatchType: %s"), *MatchType);
+				}
 			}
 		}
 	}	

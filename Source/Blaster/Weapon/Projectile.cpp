@@ -166,7 +166,7 @@ void AProjectile::ExplodeDamage()
 
 				for (const FOverlapResult& Result : OverlapResults)
 				{
-					// FOverlapResult¿¡¼­ ¾×ÅÍ Á¤º¸¸¦ °¡Á®¿É´Ï´Ù.
+					// FOverlapResultï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½É´Ï´ï¿½.
 					AActor* OverlappedActor = Result.GetActor();
 					ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OverlappedActor);
 

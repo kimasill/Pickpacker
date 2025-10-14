@@ -1,0 +1,17 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "s:\\project\\unreal5\\blaster\\plugins\\pickpacker\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pickpacker\\module.pickpacker.cpp",
+        "ProvidedModule": "",
+        "PCH": "s:\\project\\unreal5\\blaster\\intermediate\\build\\win64\\x64\\blastereditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.valexpapi.cpp20.inclorderunreal5_5.h.pch",
+        "Includes": [
+            "s:\\project\\unreal5\\blaster\\plugins\\pickpacker\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pickpacker\\definitions.pickpacker.h",
+            "s:\\project\\unreal5\\blaster\\plugins\\pickpacker\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pickpacker\\permoduleinline.gen.cpp",
+            "s:\\unrealengine\\ue_5.6\\engine\\source\\runtime\\core\\public\\hal\\permoduleinline.inl",
+            "s:\\project\\unreal5\\blaster\\plugins\\pickpacker\\source\\pickpacker\\private\\pickpacker.cpp",
+            "s:\\project\\unreal5\\blaster\\plugins\\pickpacker\\source\\pickpacker\\public\\pickpacker.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

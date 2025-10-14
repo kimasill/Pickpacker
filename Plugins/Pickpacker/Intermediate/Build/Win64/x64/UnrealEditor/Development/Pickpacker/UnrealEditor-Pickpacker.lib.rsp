@@ -1,0 +1,12 @@
+/NOLOGO
+/errorReport:prompt
+/MACHINE:x64
+/SUBSYSTEM:WINDOWS
+/DEF
+/NAME:"UnrealEditor-Pickpacker.dll"
+/IGNORE:4221
+/NODEFAULTLIB
+"S:/Project/Unreal5/Blaster/Intermediate/Build/Win64/x64/BlasterEditor/Development/UnrealEd/SharedPCH.UnrealEd.Project.ValApi.ValExpApi.Cpp20.InclOrderUnreal5_5.h.obj"
+"S:/Project/Unreal5/Blaster/Plugins/Pickpacker/Intermediate/Build/Win64/x64/UnrealEditor/Development/Pickpacker/Module.Pickpacker.cpp.obj"
+"S:/Project/Unreal5/Blaster/Plugins/Pickpacker/Intermediate/Build/Win64/x64/UnrealEditor/Development/Pickpacker/Default.rc2.res"
+/OUT:"S:/Project/Unreal5/Blaster/Plugins/Pickpacker/Intermediate/Build/Win64/x64/UnrealEditor/Development/Pickpacker/UnrealEditor-Pickpacker.lib"

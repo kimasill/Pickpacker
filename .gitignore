@@ -106,106 +106,35 @@ Build/*/**
 !Build/*/PakBlacklist*.txt
 !Build/**/*.ico
 
-# Starter Content (Usually large and not needed in version control)
-**/Geometry
-**/Mannequin
-**/Mannequins
-**/Mannequin_UE4
-**/ThirdPerson
-**/ThirdPersonBP
-**/LearningKit_Games
-**/MilitaryWeapSilver
-**/StarterContent
-
-# Third Party Content (Add specific folders as needed)
-Content/Assets/FPS_Weapon_Bundle/*
-Content/Assets/ParagonWraith/*
-Content/Assets/LearningKit_Games/*
-Content/Assets/sA_PickupSet_1/*
-Content/Assets/Interface_And_Item_Sounds/*
-Content/Assets/Weapon_Pack/*
-
-# Allow only essential project assets
-!Content/Assets/Materials/MI_*.uasset
-!Content/Assets/Materials/M_DissolveEffect.uasset
-!Content/Assets/Materials/PP_Highlight.uasset
-!Content/Assets/Fonts/*
-!Content/Assets/Curves/*
-!Content/Assets/FX/SniperScope/*
-
-# All References folder content (mostly third-party examples)
-**/References/*
-**/Characters/*
-**/Mannequins/*
-**/Mannequin_UE4/*
-
-# External Actors/Objects (Can be very large)
+# Optional large content you may want to exclude (adjust as needed)
 Content/__ExternalActors__/*
 Content/__ExternalObjects__/*
-
-# Developer-specific content
 Content/Developers/*
-
-# Collections
 Content/Collections/*
 
-# =========================
-# GENERAL FILES
-# =========================
-
-# Precompiled Assets
-SourceArt/**/*.png
-SourceArt/**/*.tga
-
-# Engine files
-**/EngineData/
-
-# macOS files
+# OS junk
 .DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows files
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
 
-# Backup files
-*.bak
-*.backup
-*_backup.*
-*.uasset.bak
+# Logs and dumps
+*.log
+Logs/*
+*.dmp
+
+# Temp files
 *.tmp
 *.temp
 *~
 
-# Log files
-*.log
-Logs/*
-
-# Asset Data (Custom game assets that might be large)
-GameAssets/*
-
-# Crash dumps
-*.dmp
-Saved/Crashes/*
-
-# Auto-generated screenshots
-Saved/Screenshots/*
-AutoScreenshot.png
-
-# Cooked content
+# Shader and cooked caches
 Saved/Cooked/*
-
-# Shader cache
 Saved/Shaders/*
 Saved/ShaderDebugInfo/*
-
-# Material stats
 Saved/MaterialStats/*
 Saved/MaterialStatsDebug/*
 
-# Temp files
-Temp.txt
-*.temp
+# Keep source, config, content, and plugin sources
+!Source/**
+!Config/**
+!Content/**
+!Plugins/**
