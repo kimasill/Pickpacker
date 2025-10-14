@@ -67,53 +67,18 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 			continue;
 		}
 
-		// Handle objectives
+		// Handle objectives (never spawn here; PCG graph should create/replicate)
 		if (Anchor.AnchorType == EPCGAnchorType::Objective)
 		{
-			if (bAllowRuntimeSpawnBySystem && ObjectivesDataTable)
-			{
-				FObjectiveRow* ObjectiveRow = ObjectivesDataTable->FindRow<FObjectiveRow>(Anchor.Tag, TEXT(""));
-				if (ObjectiveRow && ObjectiveRow->Class)
-				{
-					AActor* SpawnedActor = SpawnObjectiveActor(Anchor, *ObjectiveRow);
-					if (SpawnedActor)
-					{
-						ObjectiveCount++;
-						UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Spawned objective: %s at %s"),
-							*Anchor.Tag.ToString(), *Anchor.Location.ToString());
-					}
-				}
-			}
-			else
-			{
-				// Tag-consumption only: just count
-				ObjectiveCount++;
-			}
+			ObjectiveCount++;
 		}
 		// Handle extract points
 		else if (Anchor.AnchorType == EPCGAnchorType::Extract)
 		{
-			if (bAllowRuntimeSpawnBySystem && ObjectivesDataTable)
-			{
-				FObjectiveRow* ExtractRow = ObjectivesDataTable->FindRow<FObjectiveRow>(Anchor.Tag, TEXT(""));
-				if (ExtractRow && ExtractRow->Class)
-				{
-					AActor* SpawnedActor = SpawnObjectiveActor(Anchor, *ExtractRow);
-					if (SpawnedActor)
-					{
-						ExtractCount++;
-						UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Spawned extract point: %s at %s"),
-							*Anchor.Tag.ToString(), *Anchor.Location.ToString());
-					}
-				}
-			}
-			else
-			{
-				ExtractCount++;
-			}
+			ExtractCount++;
 		}
 		// Handle spawners
-		else if (bAllowRuntimeSpawnBySystem && SpawnersDataTable)
+		else if (bAllowRuntimeSpawnBySystem && bSpawnEnemiesFromAnchors && SpawnersDataTable && Anchor.AnchorType == EPCGAnchorType::EnemySpawn)
 		{
 			FSpawnerRow* SpawnerRow = SpawnersDataTable->FindRow<FSpawnerRow>(Anchor.Tag, TEXT(""));
 			if (SpawnerRow && SpawnerRow->Class)
@@ -124,21 +89,8 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 					AActor* SpawnedActor = SpawnSpawnerActor(Anchor, *SpawnerRow);
 					if (SpawnedActor)
 					{
-						switch (Anchor.AnchorType)
-						{
-						case EPCGAnchorType::EnemySpawn:
-							EnemySpawnCount++;
-							break;
-						case EPCGAnchorType::HazardSpawn:
-							HazardSpawnCount++;
-							break;
-						case EPCGAnchorType::ItemSpawn:
-							ItemSpawnCount++;
-							break;
-						}
-						
-						UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Spawned %s: %s at %s"),
-							*UEnum::GetValueAsString(Anchor.AnchorType),
+						EnemySpawnCount++;
+						UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Spawned Enemy: %s at %s"),
 							*Anchor.Tag.ToString(), *Anchor.Location.ToString());
 					}
 				}
@@ -285,6 +237,11 @@ AActor* UPCGAnchorSystem::SpawnObjectiveActor(const FPCGAnchorData& Anchor, cons
 	{
 		return nullptr;
 	}
+	// Server authority only
+	if (World->GetNetMode() == NM_Client)
+	{
+		return nullptr;
+	}
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -313,6 +270,11 @@ AActor* UPCGAnchorSystem::SpawnObjectiveActor(const FPCGAnchorData& Anchor, cons
 AActor* UPCGAnchorSystem::SpawnSpawnerActor(const FPCGAnchorData& Anchor, const FSpawnerRow& Row)
 {
 	if (!World || !Row.Class)
+	{
+		return nullptr;
+	}
+	// Server authority only
+	if (World->GetNetMode() == NM_Client)
 	{
 		return nullptr;
 	}

@@ -103,6 +103,16 @@ private:
 	UPROPERTY(EditAnywhere, Category = "PCG Anchor")
 	bool bAllowRuntimeSpawnBySystem = false;
 
+	/** Only enemies are allowed to be spawned by code; objectives/extract/hazard/item are never spawned here. */
+	UPROPERTY(EditAnywhere, Category = "PCG Anchor")
+	bool bSpawnEnemiesFromAnchors = true;
+
+	/** Helper: true if this object has a server world context (not client) */
+	bool IsServerWorld() const
+	{
+		return World && World->GetNetMode() != NM_Client;
+	}
+
 	// Tracking counters
 	int32 ObjectiveCount = 0;
 	int32 ExtractCount = 0;
