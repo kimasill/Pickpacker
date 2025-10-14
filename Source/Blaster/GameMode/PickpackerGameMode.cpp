@@ -26,6 +26,12 @@ void APickpackerGameMode::BeginPlay()
 	{
 		UE_LOG(LogTemp, Error, TEXT("[PickpackerGameMode] Failed to get PCG Dungeon Subsystem"));
 	}
+
+	// Optionally bind to generation complete (if subsystem fires it later)
+	// if (PCGDungeonSubsystem)
+	// {
+	//     PCGDungeonSubsystem->OnPCGGenerationComplete.AddDynamic(this, &APickpackerGameMode::OnPCGGenerationComplete);
+	// }
 }
 
 void APickpackerGameMode::OnMatchStateSet()
@@ -73,10 +79,12 @@ void APickpackerGameMode::HandleMatchStart()
 
 	// Start PCG generation
 	bPCGGenerationInProgress = true;
-	
+
+	// Trigger PCG generation. The subsystem will execute the PCG graph (server-only)
+	// and then scan world for PCG-tagged actors; it no longer spawns actors itself.
 	PCGDungeonSubsystem->GenerateDungeon(CurrentMissionConfig);
-	
-	// For now, assume synchronous success path and notify
+
+	// For T1-01 immediate path, treat as sync success and proceed.
 	OnPCGGenerationComplete(true);
 }
 

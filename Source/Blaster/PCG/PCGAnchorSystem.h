@@ -31,6 +31,12 @@ public:
 	void SetDataTables(UDataTable* ObjectivesTable, UDataTable* SpawnersTable);
 
 	/**
+	 * Set the world context used for scanning/spawning
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCG Anchor")
+	void SetWorldContext(UWorld* InWorld);
+
+	/**
 	 * Process PCG anchors and spawn actors
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCG Anchor")
@@ -41,6 +47,16 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCG Anchor")
 	bool ValidateAnchorPlacement(const TArray<FPCGAnchorData>& Anchors);
+
+	/**
+	 * Scan world for actors spawned by PCG graph and build anchor data from tags
+	 * Expected tags:
+	 *  - PCG.Anchor.Objective
+	 *  - PCG.Anchor.Extract
+	 *  - PCG.Spawner.Enemy / PCG.Spawner.Hazard / PCG.Spawner.Item
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCG Anchor")
+	TArray<FPCGAnchorData> ScanWorldForPCGTags() const;
 
 	/**
 	 * Get objective count by type
@@ -79,6 +95,13 @@ private:
 
 	UPROPERTY()
 	UWorld* World = nullptr;
+
+	/**
+	 * If true, this system will spawn runtime actors from anchors. If false (default),
+	 * it will not spawn and will assume PCG graph already spawned them; only validation/logging occurs.
+	 */
+	UPROPERTY(EditAnywhere, Category = "PCG Anchor")
+	bool bAllowRuntimeSpawnBySystem = false;
 
 	// Tracking counters
 	int32 ObjectiveCount = 0;

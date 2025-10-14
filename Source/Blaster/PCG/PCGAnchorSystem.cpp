@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "Engine/DataTable.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 
 UPCGAnchorSystem::UPCGAnchorSystem()
 {
@@ -35,9 +36,15 @@ void UPCGAnchorSystem::SetDataTables(UDataTable* ObjectivesTable, UDataTable* Sp
 	UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Data tables updated"));
 }
 
+void UPCGAnchorSystem::SetWorldContext(UWorld* InWorld)
+{
+	World = InWorld;
+}
+
 bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 {
-	if (!World)
+	// World is only required if we actually spawn. For tag-consumption mode, we can proceed without World.
+	if (bAllowRuntimeSpawnBySystem && !World)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[PCGAnchorSystem] World not set - cannot spawn actors"));
 		return false;
@@ -63,7 +70,7 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 		// Handle objectives
 		if (Anchor.AnchorType == EPCGAnchorType::Objective)
 		{
-			if (ObjectivesDataTable)
+			if (bAllowRuntimeSpawnBySystem && ObjectivesDataTable)
 			{
 				FObjectiveRow* ObjectiveRow = ObjectivesDataTable->FindRow<FObjectiveRow>(Anchor.Tag, TEXT(""));
 				if (ObjectiveRow && ObjectiveRow->Class)
@@ -77,11 +84,16 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 					}
 				}
 			}
+			else
+			{
+				// Tag-consumption only: just count
+				ObjectiveCount++;
+			}
 		}
 		// Handle extract points
 		else if (Anchor.AnchorType == EPCGAnchorType::Extract)
 		{
-			if (ObjectivesDataTable)
+			if (bAllowRuntimeSpawnBySystem && ObjectivesDataTable)
 			{
 				FObjectiveRow* ExtractRow = ObjectivesDataTable->FindRow<FObjectiveRow>(Anchor.Tag, TEXT(""));
 				if (ExtractRow && ExtractRow->Class)
@@ -95,9 +107,13 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 					}
 				}
 			}
+			else
+			{
+				ExtractCount++;
+			}
 		}
 		// Handle spawners
-		else if (SpawnersDataTable)
+		else if (bAllowRuntimeSpawnBySystem && SpawnersDataTable)
 		{
 			FSpawnerRow* SpawnerRow = SpawnersDataTable->FindRow<FSpawnerRow>(Anchor.Tag, TEXT(""));
 			if (SpawnerRow && SpawnerRow->Class)
@@ -128,6 +144,24 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 				}
 			}
 		}
+		else
+		{
+			// Tag-consumption: count only
+			switch (Anchor.AnchorType)
+			{
+			case EPCGAnchorType::EnemySpawn:
+				EnemySpawnCount++;
+				break;
+			case EPCGAnchorType::HazardSpawn:
+				HazardSpawnCount++;
+				break;
+			case EPCGAnchorType::ItemSpawn:
+				ItemSpawnCount++;
+				break;
+			default:
+				break;
+			}
+		}
 	}
 
 	// Validate placement
@@ -137,6 +171,78 @@ bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
 		ObjectiveCount, ExtractCount, EnemySpawnCount, HazardSpawnCount, ItemSpawnCount);
 
 	return bValidationPassed;
+}
+
+TArray<FPCGAnchorData> UPCGAnchorSystem::ScanWorldForPCGTags() const
+{
+	TArray<FPCGAnchorData> Anchors;
+	if (!World)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PCGAnchorSystem] World not set - cannot scan for PCG tags"));
+		return Anchors;
+	}
+
+	// Collect all actors and inspect tags
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (!Actor) continue;
+
+		EPCGAnchorType DetectedType = EPCGAnchorType::None;
+		FName DetectedTag = NAME_None;
+
+		for (const FName& TagName : Actor->Tags)
+		{
+			const FString TagStr = TagName.ToString();
+
+			if (TagStr.Equals(TEXT("PCG.Anchor.Objective"), ESearchCase::IgnoreCase))
+			{
+				DetectedType = EPCGAnchorType::Objective;
+				DetectedTag = FName(TEXT("Objective"));
+				break;
+			}
+			if (TagStr.Equals(TEXT("PCG.Anchor.Extract"), ESearchCase::IgnoreCase))
+			{
+				DetectedType = EPCGAnchorType::Extract;
+				DetectedTag = FName(TEXT("Extract"));
+				break;
+			}
+			if (TagStr.Equals(TEXT("PCG.Spawner.Enemy"), ESearchCase::IgnoreCase))
+			{
+				DetectedType = EPCGAnchorType::EnemySpawn;
+				DetectedTag = FName(TEXT("Enemy"));
+				break;
+			}
+			if (TagStr.Equals(TEXT("PCG.Spawner.Hazard"), ESearchCase::IgnoreCase))
+			{
+				DetectedType = EPCGAnchorType::HazardSpawn;
+				DetectedTag = FName(TEXT("Hazard"));
+				break;
+			}
+			if (TagStr.Equals(TEXT("PCG.Spawner.Item"), ESearchCase::IgnoreCase))
+			{
+				DetectedType = EPCGAnchorType::ItemSpawn;
+				DetectedTag = FName(TEXT("Item"));
+				break;
+			}
+		}
+
+		if (DetectedType != EPCGAnchorType::None)
+		{
+			FPCGAnchorData Data;
+			Data.AnchorType = DetectedType;
+			Data.Tag = DetectedTag;
+			Data.Location = Actor->GetActorLocation();
+			Data.Rotation = Actor->GetActorRotation();
+
+			// Optionally capture actor name/id
+			Data.Metadata.Add(TEXT("ActorName"), Actor->GetName());
+			Anchors.Add(MoveTemp(Data));
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] Scanned world and found %d PCG-tagged anchors"), Anchors.Num());
+	return Anchors;
 }
 
 bool UPCGAnchorSystem::ValidateAnchorPlacement(const TArray<FPCGAnchorData>& Anchors)
