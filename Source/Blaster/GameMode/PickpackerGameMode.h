@@ -7,9 +7,11 @@
 #include "Blaster/Subsystem/PCGDungeonSubSystem.h"
 #include "PickpackerGameMode.generated.h"
 
-/**
- * Pickpacker Game Mode - Handles match start and PCG generation
- */
+class APlayerController;
+class AActor;
+class APlayerStart;
+class APlayerState;
+
 UCLASS()
 class BLASTER_API APickpackerGameMode : public AGameMode
 {
@@ -20,61 +22,96 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void OnMatchStateSet() override;
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+	virtual void RestartPlayer(AController* NewPlayer) override;
 
-	/**
-	 * Handle match start - Generate dungeon and start gameplay
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
 	void HandleMatchStart();
 
-	/**
-	 * Set mission configuration
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
 	void SetMissionConfig(const FString& MissionId, int32 CustomSeed = 0);
 
-	/**
-	 * Get current mission configuration
-	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
 	const FSeedSet& GetMissionConfig() const { return CurrentMissionConfig; }
 
-protected:
-	/**
-	 * Called when PCG generation completes
-	 */
+	// Expose gameplay start so subsystem can safely trigger it after finalize
 	UFUNCTION()
-	void OnPCGGenerationComplete(bool bSuccess);
-
-	/**
-	 * Start the actual gameplay after PCG generation
-	 */
 	void StartGameplay();
 
+	// Server-only: called when GS triggers client PCG run; captures expected client count snapshot
+	void OnServerTriggerClientPCGRun(int32 ExpectedClients);
+
+	// Server-only: called when a client reports PCG ready
+	void RegisterClientPCGReady(APlayerState* ReportingPS);
+
+protected:
+	UFUNCTION()
+	void OnPCGGenerationComplete();
+
+	// Cache PCG-provided spawn points and transforms
+	void CachePCGPlayerStarts();
+	void CachePCGPlayerSpawnTransformsFromAnchors();
+
+	// Fallback: scan PlayerStart only when no PCG spawns available
+	void SelectRandomPlayerStarts();
+
 private:
-	/**
-	 * Current mission configuration
-	 */
 	UPROPERTY()
 	FSeedSet CurrentMissionConfig;
 
-	/**
-	 * Whether PCG generation is in progress
-	 */
 	UPROPERTY()
 	bool bPCGGenerationInProgress = false;
 
-	/**
-	 * Cached PCG subsystem reference
-	 */
+	UPROPERTY()
+	bool bPCGReady = false;
+
+	// Prevent double-start / double-spawn
+	UPROPERTY(Transient)
+	bool bGameplayStarted = false;
+
 	UPROPERTY()
 	UPCGDungeonSubSystem* PCGDungeonSubsystem = nullptr;
 
-	/**
-	 * Cached game state reference
-	 */
 	UPROPERTY()
-	class APickpackerGameState* PickpackerGameState = nullptr;
+	TArray<TWeakObjectPtr<APlayerController>> PendingSpawnControllers;
+
+	// AActor-based spawn points (from PCG tags)
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AActor>> SelectedSpawnPoints;
+
+	// Transform-based spawn points from GeneratePCGAnchors
+	UPROPERTY()
+	TArray<FTransform> SelectedSpawnTransforms;
+
+	int32 NextSpawnIndex = 0;
+	int32 NextTransformIndex = 0;
+
+	// Client readiness tracking (server-only)
+	UPROPERTY(Transient)
+	int32 ClientsPCGReadyCount_Server = 0;
+
+	UPROPERTY(Transient)
+	int32 ExpectedClientCountSnapshot_Server = -1;
+
+	UPROPERTY(Transient)
+	bool bAllClientsPCGReadyTriggered_Server = false;
+
+	UPROPERTY(Transient)
+	TSet<TWeakObjectPtr<APlayerState>> ReadyPlayers_Server;
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

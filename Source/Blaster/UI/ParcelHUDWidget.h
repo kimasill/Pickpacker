@@ -165,3 +165,5 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bEnableDebugLogging = true;
 };
+
+

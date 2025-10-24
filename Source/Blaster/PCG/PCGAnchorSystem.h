@@ -31,7 +31,7 @@ public:
 	void SetDataTables(UDataTable* ObjectivesTable, UDataTable* SpawnersTable);
 
 	/**
-	 * Set the world context used for scanning/spawning
+	 * Set world context for spawning actors
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCG Anchor")
 	void SetWorldContext(UWorld* InWorld);

@@ -11,6 +11,7 @@
 // Forward declare PCG plugin classes to avoid heavy includes in header
 class UPCGComponent;
 class UPCGGraph;
+class AActor;
 
 #include "PCGDungeonSubSystem.generated.h"
 
@@ -55,6 +56,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon")
 	TArray<FPCGAnchorData> GeneratePCGAnchors(const FSeedSet& SeedSet);
 
+
 	/**
 	 * Load PCG Level from Plugin
 	 */
@@ -70,6 +72,7 @@ public:
 	 * PCG generation complete delegate
 	 */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPCGGenerationComplete);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnClientPCGComplete);
 
 	/**
 	 * PCG generation complete event
@@ -77,56 +80,37 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "PCG Dungeon")
 	FOnPCGGenerationComplete OnPCGGenerationComplete;
 
+	UPROPERTY(BlueprintAssignable, Category = "PCG Dungeon")
+	FOnClientPCGComplete OnClientPCGComplete;
+
 	/**
 	 * Notify PCG generation completion
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon")
-	void NotifyPCGGenerationComplete();
+	void NotifyPCGGenerationComplete(UPCGComponent* InPCG);
 
-	/**
-	 * Find suitable room center for objectives
-	 */
-	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon")
-	FVector FindSuitableRoomCenter() const;
+	// Called on clients to indicate they have finished local PCG
+	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon|Client")
+	void MarkClientPCGReady();
 
-	/**
-	 * Find enemy spawn points in generated dungeon
-	 */
-	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon")
-	TArray<FVector> FindEnemySpawnPoints() const;
+private:
+	// Retry timer handle for waiting until proper PlayerController exists on client
+	FTimerHandle ClientReadyRetryHandle;
+	void TryReportClientReady();
 
-	/**
-	 * Find hazard spawn points in generated dungeon
-	 */
-	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon")
-	TArray<FVector> FindHazardSpawnPoints() const;
+	// Short grace delay after server PCG completes to allow late-joining clients before finalizing
+	FTimerHandle FinalizeWaitHandle;
+	void MaybeFinalizeAfterWait();
+
+	// Failsafe: force finalize and start gameplay if clients didn't report within timeout
+	FTimerHandle ForceFinalizeHandle;
+	void ForceFinalizeAfterTimeout();
 
 	/**
 	 * Get PCG Anchor System
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PCG Dungeon")
 	UPCGAnchorSystem* GetAnchorSystem() const { return AnchorSystem; }
-
-protected:
-	/**
-	 * Internal dungeon generation logic
-	 */
-	void InternalGenerateDungeon(const FSeedSet& SeedSet);
-
-	/**
-	 * Spawn PCG actors with proper replication
-	 */
-	void SpawnPCGActors(const TArray<FPCGAnchorData>& Anchors);
-
-	/**
-	 * Validate PCG generation results
-	 */
-	bool ValidatePCGGeneration(const TArray<FPCGAnchorData>& Anchors) const;
-
-	/**
-	 * Log PCG generation results
-	 */
-	void LogPCGGenerationResults(const TArray<FPCGAnchorData>& Anchors) const;
 
 public:
 	// PCG Anchor System
@@ -157,6 +141,37 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "PCG Dungeon")
 	float GenerationTimeout = 30.0f;
 
+	// Let Blueprint drive PCG execution instead of C++ (BP_Dungeon, etc.)
+	UPROPERTY(EditAnywhere, Category = "PCG Dungeon")
+	bool bUseBlueprintPCGControl = true;
+
+	// Auto-bounds settings for placed PCG components
+	UPROPERTY(EditAnywhere, Category = "PCG Dungeon|Bounds")
+	bool bAutoCreateBoundsIfMissing = true;
+
+	UPROPERTY(EditAnywhere, Category = "PCG Dungeon|Bounds")
+	FVector AutoBoundsExtent = FVector(5000.f, 5000.f, 2000.f);
+
+	// Client preview-only PCG: run PCG for visuals only (no actor spawns in BP graph). Server always authoritative for gameplay.
+	UPROPERTY(EditAnywhere, Category = "PCG Dungeon|Client")
+	bool bClientPreviewOnly = true;
+
+	// Client minimize scan cost: collect only PlayerSpawnPoint on client in NotifyPCGGenerationComplete
+	UPROPERTY(EditAnywhere, Category = "PCG Dungeon|Client")
+	bool bClientScanPlayerOnly = true;
+
+	// Expose cached spawn point accessors
+	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon|Spawns")
+	void GetSpawnPointsByTag(FName SpawnTag, TArray<AActor*>& OutActors) const;
+
+	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon|Spawns")
+	void GetPlayerSpawnPoints(TArray<AActor*>& OutActors) const { GetSpawnPointsByTag(FName("PlayerSpawnPoint"), OutActors); }
+
+public:
+	// Called after all clients finished their local PCG run to finalize on server
+	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon|Server")
+	void ServerFinalizePCG();
+
 protected:
 	// Current seed set
 	UPROPERTY()
@@ -169,6 +184,14 @@ protected:
 	UPROPERTY()
 	bool bGenerationComplete = false;
 
+	// True if this local world ran PCG as a client-side local sim (for dev flow)
+	UPROPERTY()
+	bool bClientLocalPCG = false;
+
+	// Server: waiting for clients to finish before finalizing
+	UPROPERTY()
+	bool bAwaitingClientsForFinalize = false;
+
 	// PCG Plugin Integration
 	UPROPERTY()
 	class UPCGComponent* PCGComponent;
@@ -179,4 +202,39 @@ protected:
 	// Generation timer
 	UPROPERTY()
 	float GenerationStartTime = 0.0f;
+
+	// Cache from PCG
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AActor>> CachedGeneratedActors;
+
+	UPROPERTY()
+	TWeakObjectPtr<UPCGComponent> LastPCGComponent;
+
+	// Blueprint should collect generated actors from the PCG component and return them
+	UFUNCTION(BlueprintImplementableEvent, Category = "PCG Dungeon|PCG")
+	void CollectPCGGeneratedActors(UPCGComponent* InPCG, TArray<AActor*>& OutActors);
+
+	UFUNCTION(BlueprintCallable, Category = "PCG Dungeon|PCG")
+	void ClearCachedPCGActors() { CachedGeneratedActors.Reset(); }
+
+protected:
+	/**
+	 * Internal dungeon generation logic
+	 */
+	void InternalGenerateDungeon(const FSeedSet& SeedSet);
+
+	/**
+	 * Spawn PCG actors with proper replication
+	 */
+	void SpawnPCGActors(const TArray<FPCGAnchorData>& Anchors);
+
+	/**
+	 * Validate PCG generation results
+	 */
+	bool ValidatePCGGeneration(const TArray<FPCGAnchorData>& Anchors) const;
+
+	/**
+	 * Log PCG generation results
+	 */
+	void LogPCGGenerationResults(const TArray<FPCGAnchorData>& Anchors) const;
 };

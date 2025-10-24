@@ -39,6 +39,15 @@ void UPCGAnchorSystem::SetDataTables(UDataTable* ObjectivesTable, UDataTable* Sp
 void UPCGAnchorSystem::SetWorldContext(UWorld* InWorld)
 {
 	World = InWorld;
+
+	if (World)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[PCGAnchorSystem] World context set: %s"), *World->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PCGAnchorSystem] World context cleared"));
+	}
 }
 
 bool UPCGAnchorSystem::ProcessAnchors(const TArray<FPCGAnchorData>& Anchors)
@@ -218,7 +227,6 @@ int32 UPCGAnchorSystem::GetObjectiveCount(EPCGAnchorType AnchorType) const
 	case EPCGAnchorType::EnemySpawn:
 		return EnemySpawnCount;
 	case EPCGAnchorType::HazardSpawn:
-		return HazardSpawnCount;
 	case EPCGAnchorType::ItemSpawn:
 		return ItemSpawnCount;
 	default:

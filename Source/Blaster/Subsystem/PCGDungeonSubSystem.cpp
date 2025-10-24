@@ -12,6 +12,14 @@
 #include "PCGComponent.h"
 #include "PCGGraph.h"
 #include "PCGSubsystem.h"
+#include "PCGManagedResource.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/BoxComponent.h"
+#include "PCG/PCGGenerator.h"
+#include "Blaster/GameState/PickpackerGameState.h"
+#include "Blaster/PlayerController/PickpackerPlayerController.h"
+#include "Blaster/PlayerState/PickpackerPlayerState.h"
+#include "Blaster/GameMode/PickpackerGameMode.h"
 
 UPCGDungeonSubSystem::UPCGDungeonSubSystem()
 {
@@ -31,12 +39,8 @@ UPCGDungeonSubSystem::UPCGDungeonSubSystem()
 
 void UPCGDungeonSubSystem::GenerateDungeon(const FSeedSet& SeedSet)
 {
-	if (!IsPCGGenerationAllowed())
+	if (!GetWorld())
 	{
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] PCG generation not allowed - not on server"));
-		}
 		return;
 	}
 
@@ -49,10 +53,12 @@ void UPCGDungeonSubSystem::GenerateDungeon(const FSeedSet& SeedSet)
 		return;
 	}
 
+	const bool bIsClient = (GetWorld()->GetNetMode() == NM_Client);
+	bClientLocalPCG = bIsClient;
+
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Starting PCG dungeon generation with seed: %d, mission: %s"),
-			SeedSet.Seed, *SeedSet.MissionId);
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Starting PCG (seed=%d, mission=%s, %s)"), SeedSet.Seed, *SeedSet.MissionId, bIsClient ? TEXT("Client") : TEXT("Server"));
 	}
 
 	CurrentSeedSet = SeedSet;
@@ -64,237 +70,171 @@ void UPCGDungeonSubSystem::GenerateDungeon(const FSeedSet& SeedSet)
 	InternalGenerateDungeon(SeedSet);
 }
 
-bool UPCGDungeonSubSystem::IsPCGGenerationAllowed() const
-{
-	if (!GetWorld())
-	{
-		return false;
-	}
-
-	// Only allow PCG generation on server
-	return GetWorld()->GetNetMode() == NM_DedicatedServer || GetWorld()->GetNetMode() == NM_ListenServer;
-}
-
-FSeedSet UPCGDungeonSubSystem::GetCurrentSeedSet() const
-{
-	return CurrentSeedSet;
-}
-
-void UPCGDungeonSubSystem::SetDataTables(UDataTable* ObjectivesTable, UDataTable* SpawnersTable)
-{
-	ObjectivesDataTable = ObjectivesTable;
-	SpawnersDataTable = SpawnersTable;
-
-	if (AnchorSystem)
-	{
-		AnchorSystem->SetDataTables(ObjectivesTable, SpawnersTable);
-	}
-
-	if (bEnableDebugLogging)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Data tables set - Objectives: %s, Spawners: %s"),
-			ObjectivesTable ? *ObjectivesTable->GetName() : TEXT("None"),
-			SpawnersTable ? *SpawnersTable->GetName() : TEXT("None"));
-	}
-}
-
 TArray<FPCGAnchorData> UPCGDungeonSubSystem::GeneratePCGAnchors(const FSeedSet& SeedSet)
 {
-	TArray<FPCGAnchorData> GeneratedAnchors;
+	TArray<FPCGAnchorData> Anchors;
 
-	if (!IsPCGGenerationAllowed())
-	{
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] Cannot generate PCG anchors - not on server"));
-		}
-		return GeneratedAnchors;
-	}
+	// Clients may also build anchors locally for visualization; server will be the one to spawn gameplay actors
 
-	// Set random seed for deterministic generation
+	// 시드 초기화 (결정적 결과)
 	FMath::RandInit(SeedSet.Seed);
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Generating PCG anchors with seed: %d"), SeedSet.Seed);
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Generating anchors from %d cached spawn points"), CachedGeneratedActors.Num());
 	}
 
-	// Generate objective anchors using PCG generated room centers
-	int32 ObjectiveCount = FMath::RandRange(1, 3);
-	for (int32 i = 0; i < ObjectiveCount; ++i)
-	{
-		FPCGAnchorData ObjectiveAnchor;
-		ObjectiveAnchor.AnchorType = EPCGAnchorType::Objective;
-		ObjectiveAnchor.Tag = FName(*FString::Printf(TEXT("Objective_%d"), i + 1));
-		ObjectiveAnchor.Location = FindSuitableRoomCenter(); // Use PCG generated room center
-		ObjectiveAnchor.Rotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-		ObjectiveAnchor.Metadata.Add(TEXT("MissionId"), SeedSet.MissionId);
-		ObjectiveAnchor.Metadata.Add(TEXT("Priority"), FString::FromInt(i + 1));
-		ObjectiveAnchor.Metadata.Add(TEXT("RoomType"), TEXT("Large"));
-		GeneratedAnchors.Add(ObjectiveAnchor);
-	}
+	// 캐시된 스폰 포인트 액터들을 앵커로 변환
+	int32 EnemySpawnIndex = 0;
+	int32 ObjectiveSpawnIndex = 0;
+	int32 HazardSpawnIndex = 0;
 
-	// Generate extract anchors
-	int32 ExtractCount = FMath::RandRange(1, 2);
-	for (int32 i = 0; i < ExtractCount; ++i)
+	for (const TWeakObjectPtr<AActor>& WeakActor : CachedGeneratedActors)
 	{
-		FPCGAnchorData ExtractAnchor;
-		ExtractAnchor.AnchorType = EPCGAnchorType::Extract;
-		ExtractAnchor.Tag = FName(*FString::Printf(TEXT("Extract_%d"), i + 1));
-		ExtractAnchor.Location = FVector(
-			FMath::RandRange(-800.0f, 800.0f),
-			FMath::RandRange(-800.0f, 800.0f),
-			FMath::RandRange(0.0f, 200.0f)
-		);
-		ExtractAnchor.Rotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-		ExtractAnchor.Metadata.Add(TEXT("MissionId"), SeedSet.MissionId);
-		ExtractAnchor.Metadata.Add(TEXT("ExtractType"), TEXT("Primary"));
-		GeneratedAnchors.Add(ExtractAnchor);
-	}
-
-	// Generate enemy spawn anchors using PCG generated spawn points
-	TArray<FVector> EnemySpawnPoints = FindEnemySpawnPoints();
-	for (int32 i = 0; i < EnemySpawnPoints.Num(); ++i)
-	{
-		FPCGAnchorData EnemySpawnAnchor;
-		EnemySpawnAnchor.AnchorType = EPCGAnchorType::EnemySpawn;
-		EnemySpawnAnchor.Tag = FName(*FString::Printf(TEXT("EnemySpawn_%d"), i + 1));
-		EnemySpawnAnchor.Location = EnemySpawnPoints[i]; // Use PCG generated spawn points
-		EnemySpawnAnchor.Rotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-		EnemySpawnAnchor.Metadata.Add(TEXT("MissionId"), SeedSet.MissionId);
-		EnemySpawnAnchor.Metadata.Add(TEXT("EnemyType"), (i % 2 == 0) ? TEXT("Stalker") : TEXT("Watcher"));
-		EnemySpawnAnchor.Metadata.Add(TEXT("SpawnArea"), TEXT("Corridor"));
-		GeneratedAnchors.Add(EnemySpawnAnchor);
-	}
-
-	// Generate hazard spawn anchors using PCG generated hazard points
-	TArray<FVector> HazardSpawnPoints = FindHazardSpawnPoints();
-	for (int32 i = 0; i < HazardSpawnPoints.Num(); ++i)
-	{
-		FPCGAnchorData HazardSpawnAnchor;
-		HazardSpawnAnchor.AnchorType = EPCGAnchorType::HazardSpawn;
-		HazardSpawnAnchor.Tag = FName(*FString::Printf(TEXT("HazardSpawn_%d"), i + 1));
-		HazardSpawnAnchor.Location = HazardSpawnPoints[i]; // Use PCG generated hazard points
-		HazardSpawnAnchor.Rotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-		HazardSpawnAnchor.Metadata.Add(TEXT("MissionId"), SeedSet.MissionId);
-		HazardSpawnAnchor.Metadata.Add(TEXT("HazardType"), TEXT("ElectricFloor"));
-		HazardSpawnAnchor.Metadata.Add(TEXT("FloorArea"), TEXT("Chokepoint"));
-		GeneratedAnchors.Add(HazardSpawnAnchor);
-	}
-
-	if (bEnableDebugLogging)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Generated %d PCG anchors"), GeneratedAnchors.Num());
-	}
-
-	return GeneratedAnchors;
-}
-
-bool UPCGDungeonSubSystem::LoadPCGLevel(const FString& LevelName)
-{
-	if (!IsPCGGenerationAllowed())
-	{
-		if (bEnableDebugLogging)
+		AActor* Actor = WeakActor.Get();
+		if (!Actor || !IsValid(Actor))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] Cannot load PCG level - not on server"));
+			continue;
 		}
-		return false;
+
+		FPCGAnchorData AnchorData;
+		AnchorData.Location = Actor->GetActorLocation();
+		AnchorData.Rotation = Actor->GetActorRotation();
+		AnchorData.Metadata.Add(TEXT("MissionId"), SeedSet.MissionId);
+
+		// PlayerSpawnPoint → Extract 앵커
+		if (Actor->ActorHasTag(FName("PlayerSpawnPoint")))
+		{
+			AnchorData.AnchorType = EPCGAnchorType::Extract;
+			AnchorData.Tag = FName("Extract_1");
+			AnchorData.Metadata.Add(TEXT("SpawnType"), TEXT("Player"));
+			AnchorData.Metadata.Add(TEXT("ExtractType"), TEXT("Primary"));
+			Anchors.Add(AnchorData);
+		}
+		// EnemySpawnPoint → EnemySpawn 앵커
+		else if (Actor->ActorHasTag(FName("EnemySpawnPoint")))
+		{
+			EnemySpawnIndex++;
+			AnchorData.AnchorType = EPCGAnchorType::EnemySpawn;
+			AnchorData.Tag = FName(*FString::Printf(TEXT("EnemySpawn_%d"), EnemySpawnIndex));
+			AnchorData.Metadata.Add(TEXT("SpawnType"), TEXT("Enemy"));
+			// 시드 기반으로 적 타입 할당 (결정적)
+			if ((SeedSet.Seed + EnemySpawnIndex) % 2 == 0)
+			{
+				AnchorData.Metadata.Add(TEXT("EnemyType"), TEXT("Stalker"));
+			}
+			else
+			{
+				AnchorData.Metadata.Add(TEXT("EnemyType"), TEXT("Watcher"));
+			}
+			Anchors.Add(AnchorData);
+		}
+		// ObjectiveSpawnPoint → Objective 앵커
+		else if (Actor->ActorHasTag(FName("ObjectiveSpawnPoint")))
+		{
+			ObjectiveSpawnIndex++;
+			AnchorData.AnchorType = EPCGAnchorType::Objective;
+			AnchorData.Tag = FName(*FString::Printf(TEXT("Objective_%d"), ObjectiveSpawnIndex));
+			AnchorData.Metadata.Add(TEXT("SpawnType"), TEXT("Objective"));
+			AnchorData.Metadata.Add(TEXT("Priority"), FString::FromInt(ObjectiveSpawnIndex));
+			Anchors.Add(AnchorData);
+		}
+		// HazardSpawnPoint → HazardSpawn 앵커
+		else if (Actor->ActorHasTag(FName("HazardSpawnPoint")))
+		{
+			HazardSpawnIndex++;
+			AnchorData.AnchorType = EPCGAnchorType::HazardSpawn;
+			AnchorData.Tag = FName(*FString::Printf(TEXT("HazardSpawn_%d"), HazardSpawnIndex));
+			AnchorData.Metadata.Add(TEXT("SpawnType"), TEXT("Hazard"));
+			AnchorData.Metadata.Add(TEXT("HazardType"), TEXT("ElectricFloor"));
+			Anchors.Add(AnchorData);
+		}
 	}
 
-	// Load PCG level from plugin
-	FString PCGLevelPath = FString::Printf(TEXT("/PCGDungeonGenerator/PCGDungeonGenerator/Content/Maps/%s"), *LevelName);
-	
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Loading PCG level: %s"), *PCGLevelPath);
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Generated %d anchors from spawn points"), Anchors.Num());
 	}
 
-	// TODO: Implement actual level loading logic
-	// This would involve loading the PCG level and setting up the PCG component
-	
-	return true;
+	return Anchors;
 }
 
 bool UPCGDungeonSubSystem::ExecutePCGGraph(const FString& GraphName)
 {
-	if (!IsPCGGenerationAllowed())
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] Cannot execute PCG graph - not on server"));
-		}
+		UE_LOG(LogTemp, Error, TEXT("[PCGDungeonSubSystem] World is null"));
 		return false;
 	}
 
-	// Execute PCG graph from plugin
-	FString PCGGraphPath = FString::Printf(TEXT("/PCGDungeonGenerator/PCGDungeonGenerator/Content/PCG/%s"), *GraphName);
-	
-	if (bEnableDebugLogging)
+	const bool bIsServerAuth = IsPCGGenerationAllowed();
+	const bool bShouldRunLocally = bIsServerAuth || bClientLocalPCG; // server always, client only when explicitly requested
+	if (!bShouldRunLocally)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Executing PCG graph: %s"), *PCGGraphPath);
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("[PCGDungeonSubSystem] Skipping PCG execution on this machine"));
+		}
+		return true;
 	}
 
-	// TODO: Implement actual PCG graph execution
-	// This would involve loading the PCG graph and executing it
-	
+	TArray<AActor*> Generators;
+	UGameplayStatics::GetAllActorsOfClass(World, APCGGenerator::StaticClass(), Generators);
+	if (Generators.Num() == 0)
+	{
+		UGameplayStatics::GetAllActorsWithTag(World, FName("PCGGenerator"), Generators);
+	}
+
+	bool bDispatched = false;
+	for (AActor* GenActor : Generators)
+	{
+		if (APCGGenerator* Gen = Cast<APCGGenerator>(GenActor))
+		{
+			if (bIsServerAuth)
+			{
+				Gen->RequestBlueprintPCG(CurrentSeedSet.Seed);
+			}
+			else
+			{
+				// Client: preview-only/local sim; BP should disable heavy spawners
+				Gen->RequestBlueprintPCGWithOptions(CurrentSeedSet.Seed, /*bPreviewOnly*/ true);
+			}
+			bDispatched = true;
+		}
+	}
+
+	if (bDispatched && bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Dispatched PCG to %d generator(s) (%s)"), Generators.Num(), bIsServerAuth ? TEXT("Server") : TEXT("Client"));
+	}
 	return true;
 }
 
 void UPCGDungeonSubSystem::InternalGenerateDungeon(const FSeedSet& SeedSet)
 {
-	if (!IsPCGGenerationAllowed())
-	{
-		return;
-	}
-
-	// Set random seed for deterministic generation
+	// Both server and client can execute the graph; only server will finalize/spawn
 	FMath::RandInit(SeedSet.Seed);
 
-	// Initialize anchor system
-	if (!AnchorSystem)
+	if (IsPCGGenerationAllowed())
 	{
-		AnchorSystem = NewObject<UPCGAnchorSystem>(this);
+		if (!AnchorSystem)
+		{
+			AnchorSystem = NewObject<UPCGAnchorSystem>(this);
+		}
+		if (AnchorSystem)
+		{
+			AnchorSystem->Initialize(ObjectivesDataTable, SpawnersDataTable);
+			AnchorSystem->SetWorldContext(GetWorld());
+		}
+		bAwaitingClientsForFinalize = true;
 	}
 
-	if (AnchorSystem)
-	{
-		AnchorSystem->Initialize(ObjectivesDataTable, SpawnersDataTable);
-		AnchorSystem->SetWorldContext(GetWorld());
-	}
-
-	// Execute PCG graph or ensure PCG level is loaded (server only path)
-	// NOTE: In this refactor we assume the PCG graph handles actual spawn and tagging.
 	ExecutePCGGraph(PCGGraphName);
-
-	// Scan world for PCG-tagged anchors generated by the PCG system
-	TArray<FPCGAnchorData> GeneratedAnchors;
-	if (AnchorSystem)
-	{
-		GeneratedAnchors = AnchorSystem->ScanWorldForPCGTags();
-		AnchorSystem->ProcessAnchors(GeneratedAnchors); // count/validate only by default
-	}
-
-	// Validate generation if enabled
-	if (bValidateGeneration)
-	{
-		ValidatePCGGeneration(GeneratedAnchors);
-	}
-
-	// Log results
-	LogPCGGenerationResults(GeneratedAnchors);
-
-	// Mark generation as complete
-	bIsGenerating = false;
-	bGenerationComplete = true;
-
-	if (bEnableDebugLogging)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] PCG dungeon generation completed"));
-	}
 }
 
 void UPCGDungeonSubSystem::SpawnPCGActors(const TArray<FPCGAnchorData>& Anchors)
-{
+{ 
 	// No-op after refactor: PCG system spawns actors; subsystem consumes tags only.
 }
 
@@ -367,9 +307,9 @@ void UPCGDungeonSubSystem::LogPCGGenerationResults(const TArray<FPCGAnchorData>&
 
 	// Count anchors by type
 	int32 ObjectiveCount = 0;
-	int32 ExtractCount = 0;
-	int32 EnemySpawnCount = 0;
-	int32 HazardSpawnCount = 0;
+		int32 ExtractCount = 0;
+		int32 EnemySpawnCount = 0;
+		int32 HazardSpawnCount = 0;
 
 	for (const FPCGAnchorData& Anchor : Anchors)
 	{
@@ -399,104 +339,364 @@ void UPCGDungeonSubSystem::LogPCGGenerationResults(const TArray<FPCGAnchorData>&
 	UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] ================================"));
 }
 
-void UPCGDungeonSubSystem::NotifyPCGGenerationComplete()
+void UPCGDungeonSubSystem::NotifyPCGGenerationComplete(UPCGComponent* InPCG)
 {
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] PCG generation completed - notifying listeners"));
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] PCG generation completed - collecting spawn points"));
 	}
 
-	// Broadcast completion event
-	OnPCGGenerationComplete.Broadcast();
+	LastPCGComponent = InPCG;
+	CachedGeneratedActors.Reset();
 
-	// Generate gameplay anchors after PCG completion
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[PCGDungeonSubSystem] World is null"));
+		return;
+	}
+
+	const bool bIsClientWorld = (World->GetNetMode() == NM_Client);
+
+	if (!bIsClientWorld)
+	{
+		// 서버에서만 태그로 스폰 포인트를 수집
+		TArray<AActor*> PlayerSpawnPoints;
+		TArray<AActor*> EnemySpawnPoints;
+		TArray<AActor*> ObjectiveSpawnPoints;
+		TArray<AActor*> HazardSpawnPoints;
+
+		UGameplayStatics::GetAllActorsWithTag(World, FName("PlayerSpawnPoint"), PlayerSpawnPoints);
+		UGameplayStatics::GetAllActorsWithTag(World, FName("EnemySpawnPoint"), EnemySpawnPoints);
+		UGameplayStatics::GetAllActorsWithTag(World, FName("ObjectiveSpawnPoint"), ObjectiveSpawnPoints);
+		UGameplayStatics::GetAllActorsWithTag(World, FName("HazardSpawnPoint"), HazardSpawnPoints);
+
+		// 서버만 캐시 유지 (Anchors/Gameplay processing only uses tags; player spawn now uses PlayerStart)
+		CachedGeneratedActors.Append(PlayerSpawnPoints);
+		CachedGeneratedActors.Append(EnemySpawnPoints);
+		CachedGeneratedActors.Append(ObjectiveSpawnPoints);
+		CachedGeneratedActors.Append(HazardSpawnPoints);
+
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Found spawn points - Player: %d, Enemy: %d, Objective: %d, Hazard: %d"),
+				PlayerSpawnPoints.Num(), EnemySpawnPoints.Num(), ObjectiveSpawnPoints.Num(), HazardSpawnPoints.Num());
+		}
+
+		OnPCGGenerationComplete.Broadcast();
+
+		// 클라이언트에게 PCG 생성 시작 신호
+		if (APickpackerGameState* GS = World->GetGameState<APickpackerGameState>())
+		{
+			GS->TriggerClientPCGRun();
+
+			// Start a failsafe finalize timer in case client RPCs never arrive
+			World->GetTimerManager().ClearTimer(ForceFinalizeHandle);
+			World->GetTimerManager().SetTimer(ForceFinalizeHandle, this, &UPCGDungeonSubSystem::ForceFinalizeAfterTimeout, 5.0f, false);
+
+			const int32 ExpectedClients = GS->GetExpectedClientCount();
+			if (ExpectedClients == 0)
+			{
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Expected clients = 0 right now; waiting briefly before finalizing"));
+				}
+				World->GetTimerManager().ClearTimer(FinalizeWaitHandle);
+				World->GetTimerManager().SetTimer(FinalizeWaitHandle, this, &UPCGDungeonSubSystem::MaybeFinalizeAfterWait, 0.5f, false);
+			}
+			else
+			{
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Server PCG complete - waiting for %d clients"), ExpectedClients);
+				}
+			}
+		}
+	}
+	else
+	{
+		// 클라이언트는 스폰 포인트 수집/스폰하지 않고 준비 완료만 보고
+		OnClientPCGComplete.Broadcast();
+		MarkClientPCGReady();
+
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Client PCG complete - reporting to server"));
+		}
+	}
+}
+
+void UPCGDungeonSubSystem::ForceFinalizeAfterTimeout()
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsPCGGenerationAllowed())
+	{
+		return;
+	}
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] Failsafe: forcing finalize after timeout"));
+	}
+
+	ServerFinalizePCG();
+}
+
+void UPCGDungeonSubSystem::MaybeFinalizeAfterWait()
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsPCGGenerationAllowed())
+	{
+		return;
+	}
+	if (APickpackerGameState* GS = World->GetGameState<APickpackerGameState>())
+	{
+		const int32 ExpectedClients = GS->GetExpectedClientCount();
+		if (ExpectedClients == 0)
+		{
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Still no clients after wait - finalizing now"));
+			}
+			ServerFinalizePCG();
+			GS->OnAllClientsPCGReady.Broadcast();
+		}
+		else if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Client(s) detected after wait - waiting for readiness reports (%d)"), ExpectedClients);
+		}
+	}
+}
+
+void UPCGDungeonSubSystem::ServerFinalizePCG()
+{
+	if (!IsPCGGenerationAllowed())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] ServerFinalizePCG called but not allowed (NetMode=%d)"), GetWorld() ? (int32)GetWorld()->GetNetMode() : -1);
+		return;
+	}
+	if (!bAwaitingClientsForFinalize)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[PCGDungeonSubSystem] ServerFinalizePCG ignored - not awaiting clients"));
+		// Still force gameplay start to unblock spawn, as PCG is already done
+		if (APickpackerGameMode* GM = GetWorld()->GetAuthGameMode<APickpackerGameMode>())
+		{
+			GM->StartGameplay();
+		}
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[PCGDungeonSubSystem] ServerFinalizePCG has no World"));
+		return;
+	}
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Server finalize - all clients ready, processing anchors"));
+	}
+
+	// 앵커 생성 (서버 전용)
 	TArray<FPCGAnchorData> GameplayAnchors = GeneratePCGAnchors(CurrentSeedSet);
 	
+	// 앵커 처리 및 게임플레이 액터 스폰
 	if (AnchorSystem && GameplayAnchors.Num() > 0)
 	{
 		AnchorSystem->ProcessAnchors(GameplayAnchors);
 	}
-}
 
-FVector UPCGDungeonSubSystem::FindSuitableRoomCenter() const
-{
-	// TODO: Implement actual room center finding logic
-	// This would involve:
-	// 1. Querying PCG generated rooms
-	// 2. Finding the largest/safest room
-	// 3. Returning its center point
-	
-	// For now, return a placeholder position
-	FVector RoomCenter = FVector(
-		FMath::RandRange(-500.0f, 500.0f),
-		FMath::RandRange(-500.0f, 500.0f),
-		FMath::RandRange(0.0f, 200.0f)
-	);
+	// 검증
+	if (bValidateGeneration)
+	{
+		ValidatePCGGeneration(GameplayAnchors);
+	}
+
+	// 결과 로그
+	LogPCGGenerationResults(GameplayAnchors);
+
+	bIsGenerating = false;
+	bGenerationComplete = true;
+	bAwaitingClientsForFinalize = false;
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[PCGDungeonSubSystem] Found suitable room center: %s"), *RoomCenter.ToString());
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Server finalize completed - gameplay spawn ready, players can spawn now"));
 	}
 
-	return RoomCenter;
+	// Ensure gameplay actually starts even if delegate binding is missing
+	if (APickpackerGameMode* GM = World->GetAuthGameMode<APickpackerGameMode>())
+	{
+		GM->StartGameplay();
+	}
 }
 
-TArray<FVector> UPCGDungeonSubSystem::FindEnemySpawnPoints() const
+void UPCGDungeonSubSystem::MarkClientPCGReady()
 {
-	TArray<FVector> SpawnPoints;
-	
-	// TODO: Implement actual enemy spawn point finding logic
-	// This would involve:
-	// 1. Querying PCG generated corridors and small rooms
-	// 2. Finding suitable hiding spots
-	// 3. Ensuring proper spacing between spawn points
-	
-	// For now, generate placeholder spawn points
-	int32 SpawnCount = FMath::RandRange(2, 5);
-	for (int32 i = 0; i < SpawnCount; ++i)
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() != NM_Client)
 	{
-		FVector SpawnPoint = FVector(
-			FMath::RandRange(-800.0f, 800.0f),
-			FMath::RandRange(-800.0f, 800.0f),
-			FMath::RandRange(0.0f, 300.0f)
-		);
-		SpawnPoints.Add(SpawnPoint);
+		return;
+	}
+
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		// Prefer PlayerState RPC (more robust ownership on client)
+		if (APlayerState* PS = PC->GetPlayerState<APlayerState>())
+		{
+			if(APickpackerPlayerController* PPC = Cast<APickpackerPlayerController>(PC))
+			{
+				PPC->ServerReportPCGReady();
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Ready Client ID: %s (via PlayerState)"), *PPC->GetName());
+				}
+			}
+		}
+
+		// Fallback to PlayerController RPC
+		if (APickpackerPlayerController* PPC = Cast<APickpackerPlayerController>(PC))
+		{
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Ready Client ID: %s"), *PPC->GetName());
+			}
+			PPC->ServerReportPCGReady();
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Reported readiness via PlayerController RPC (fallback)"));
+			}
+		}
+		else
+		{
+			// Retry shortly; controller class might not be swapped/possessed yet
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] PlayerController is %s (not APickpackerPlayerController). Retrying..."), *PC->GetClass()->GetName());
+			}
+			World->GetTimerManager().ClearTimer(ClientReadyRetryHandle);
+			World->GetTimerManager().SetTimer(ClientReadyRetryHandle, this, &UPCGDungeonSubSystem::TryReportClientReady, 0.5f, false);
+		}
+	}
+	else
+	{
+		// Retry if no PC yet
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] No local PlayerController found; retrying..."));
+		}
+		World->GetTimerManager().ClearTimer(ClientReadyRetryHandle);
+		World->GetTimerManager().SetTimer(ClientReadyRetryHandle, this, &UPCGDungeonSubSystem::TryReportClientReady, 0.5f, false);
+	}
+}
+
+void UPCGDungeonSubSystem::TryReportClientReady()
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsValid(World) || World->GetNetMode() != NM_Client)
+	{
+		return;
+	}
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		// First try PlayerState RPC
+		if (APlayerState* PS = PC->GetPlayerState<APlayerState>())
+		{
+			if (APickpackerPlayerState* PPS = Cast<APickpackerPlayerState>(PS))
+			{
+				PPS->ServerReportPCGReady();
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Reported readiness via PlayerState RPC (retry)"));
+				}
+				World->GetTimerManager().ClearTimer(ClientReadyRetryHandle);
+				return;
+			}
+		}
+
+		// Then try PlayerController RPC
+		if (APickpackerPlayerController* PPC = Cast<APickpackerPlayerController>(PC))
+		{
+			PPC->ServerReportPCGReady();
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Reported readiness via PlayerController RPC (retry)"));
+			}
+			World->GetTimerManager().ClearTimer(ClientReadyRetryHandle);
+			return;
+		}
+
+		// Keep retrying
+		World->GetTimerManager().SetTimer(ClientReadyRetryHandle, this, &UPCGDungeonSubSystem::TryReportClientReady, 0.5f, false);
+	}
+}
+
+bool UPCGDungeonSubSystem::IsPCGGenerationAllowed() const
+{
+	if (!GetWorld())
+	{
+		return false;
+	}
+	// Only allow gameplay spawning/processing on server. Clients still run local PCG elsewhere.
+	return GetWorld()->GetNetMode() == NM_DedicatedServer || GetWorld()->GetNetMode() == NM_ListenServer;
+}
+
+FSeedSet UPCGDungeonSubSystem::GetCurrentSeedSet() const
+{
+	return CurrentSeedSet;
+}
+
+void UPCGDungeonSubSystem::SetDataTables(UDataTable* ObjectivesTable, UDataTable* SpawnersTable)
+{
+	ObjectivesDataTable = ObjectivesTable;
+	SpawnersDataTable = SpawnersTable;
+
+	if (AnchorSystem)
+	{
+		AnchorSystem->SetDataTables(ObjectivesTable, SpawnersTable);
 	}
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[PCGDungeonSubSystem] Found %d enemy spawn points"), SpawnPoints.Num());
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Data tables set - Objectives: %s, Spawners: %s"),
+			ObjectivesTable ? *ObjectivesTable->GetName() : TEXT("None"),
+			SpawnersTable ? *SpawnersTable->GetName() : TEXT("None"));
 	}
-
-	return SpawnPoints;
 }
 
-TArray<FVector> UPCGDungeonSubSystem::FindHazardSpawnPoints() const
+bool UPCGDungeonSubSystem::LoadPCGLevel(const FString& LevelName)
 {
-	TArray<FVector> SpawnPoints;
-	
-	// TODO: Implement actual hazard spawn point finding logic
-	// This would involve:
-	// 1. Querying PCG generated floor areas
-	// 2. Finding strategic chokepoints
-	// 3. Ensuring hazards don't block objectives
-	
-	// For now, generate placeholder spawn points
-	int32 SpawnCount = FMath::RandRange(1, 3);
-	for (int32 i = 0; i < SpawnCount; ++i)
+	// Level streaming/loading should remain server-authoritative
+	if (!IsPCGGenerationAllowed())
 	{
-		FVector SpawnPoint = FVector(
-			FMath::RandRange(-600.0f, 600.0f),
-			FMath::RandRange(-600.0f, 600.0f),
-			0.0f // Hazards are typically on the floor
-		);
-		SpawnPoints.Add(SpawnPoint);
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[PCGDungeonSubSystem] Cannot load PCG level - not on server"));
+		}
+		return false;
 	}
 
+	// Load PCG level from plugin (stubbed)
+	const FString PCGLevelPath = FString::Printf(TEXT("/PCGDungeonGenerator/PCGDungeonGenerator/Content/Maps/%s"), *LevelName);
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[PCGDungeonSubSystem] Found %d hazard spawn points"), SpawnPoints.Num());
+		UE_LOG(LogTemp, Log, TEXT("[PCGDungeonSubSystem] Loading PCG level: %s"), *PCGLevelPath);
 	}
+	// TODO: Implement actual level loading/streaming
+	return true;
+}
 
-	return SpawnPoints;
+void UPCGDungeonSubSystem::GetSpawnPointsByTag(FName SpawnTag, TArray<AActor*>& OutActors) const
+{
+	OutActors.Reset();
+	for (const TWeakObjectPtr<AActor>& WeakActor : CachedGeneratedActors)
+	{
+		if (AActor* A = WeakActor.Get())
+		{
+			if (A->ActorHasTag(SpawnTag))
+			{
+				OutActors.Add(A);
+			}
+		}
+	}
 }

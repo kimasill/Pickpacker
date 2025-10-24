@@ -303,3 +303,5 @@ FText UParcelHUDWidget::GetParcelTypeText(EParcelType ParcelType) const
 		return FText::FromString(TEXT("Unknown"));
 	}
 }
+
+

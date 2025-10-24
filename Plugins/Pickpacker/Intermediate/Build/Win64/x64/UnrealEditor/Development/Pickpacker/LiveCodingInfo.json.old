@@ -1,0 +1,9 @@
+{
+	"RemapUnityFiles": 
+	{
+		"Module.Pickpacker.cpp.obj": [
+			"Pickpacker.cpp.obj",
+			"PerModuleInline.gen.cpp.obj"
+		]
+	}
+}
