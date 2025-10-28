@@ -111,6 +111,7 @@ Content/__ExternalActors__/*
 Content/__ExternalObjects__/*
 Content/Developers/*
 Content/Collections/*
+Content/References/*
 
 # OS junk
 .DS_Store
@@ -136,5 +137,5 @@ Saved/MaterialStatsDebug/*
 # Keep source, config, content, and plugin sources
 !Source/**
 !Config/**
-!Content/**
+!Content/Assets/**
 !Plugins/**
