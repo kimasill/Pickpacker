@@ -5,6 +5,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 
 UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -22,7 +23,7 @@ UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	bEnableDebugLogging = true;
 
 	// Initialize current state
-	CurrentParcelType = EParcelType::None;
+	CurrentParcelType = EParcelType::Unknown;
 	CurrentParcelState = FParcelState();
 }
 
@@ -282,7 +283,7 @@ UTexture2D* UParcelHUDWidget::GetParcelTypeIcon(EParcelType ParcelType) const
 		return FragileIcon;
 	case EParcelType::Heavy:
 		return HeavyIcon;
-	case EParcelType::Unstable:
+	case EParcelType::Contraband:
 		return UnstableIcon;
 	default:
 		return nullptr;
@@ -297,8 +298,8 @@ FText UParcelHUDWidget::GetParcelTypeText(EParcelType ParcelType) const
 		return FText::FromString(TEXT("Fragile"));
 	case EParcelType::Heavy:
 		return FText::FromString(TEXT("Heavy"));
-	case EParcelType::Unstable:
-		return FText::FromString(TEXT("Unstable"));
+	case EParcelType::Contraband:
+		return FText::FromString(TEXT("Contraband"));
 	default:
 		return FText::FromString(TEXT("Unknown"));
 	}

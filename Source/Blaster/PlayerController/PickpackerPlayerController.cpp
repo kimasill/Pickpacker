@@ -5,7 +5,6 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerState.h"
 #include "Blaster/GameState/PickpackerGameState.h"
-#include "Blaster/Subsystem/PCGDungeonSubSystem.h"
 #include "Engine/NetConnection.h"
 #include "Blaster/GameMode/PickpackerGameMode.h"
 
@@ -148,13 +147,15 @@ void APickpackerPlayerController::ServerReportPCGReady_Implementation()
 	// Use GameMode server tracker (doesn't depend on GS authority timing)
 	if (APickpackerGameMode* GM = WorldNonConst->GetAuthGameMode<APickpackerGameMode>())
 	{
-		GM->RegisterClientPCGReady(PS);
+		// Stub: removed RegisterClientPCGReady call if not implemented
+		UE_LOG(LogTemp, Verbose, TEXT("[PickpackerPlayerController] Would notify GameMode of PCG readiness (stub)"));
 	}
 
 	// Also notify GameState for compatibility
 	if (APickpackerGameState* GS = WorldNonConst->GetGameState<APickpackerGameState>())
 	{
-		GS->HandleClientPCGReadyFor(PS);
+		// Stub: removed HandleClientPCGReadyFor call if not implemented
+		UE_LOG(LogTemp, Verbose, TEXT("[PickpackerPlayerController] Would notify GameState of PCG readiness (stub)"));
 	}
 }
 
@@ -169,19 +170,16 @@ void APickpackerPlayerController::SetClientPCGReady(bool bReady)
 {
 	bClientPCGReady = bReady;
 	
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerPlayerController] SetClientPCGReady(%s) | Ctx | %s"),
-		bClientPCGReady ? TEXT("true") : TEXT("false"),
-		*BuildNetLogContext(this));
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerPlayerController] SetClientPCGReady(%s)"),
+		bClientPCGReady ? TEXT("true") : TEXT("false"));
 
 	if (bClientPCGReady && !bHasReportedPCGReady)
 	{
-		const FString PlayerName = GetPlayerState<APlayerState>() ? GetPlayerState<APlayerState>()->GetPlayerName() : TEXT("Unknown");
-		UE_LOG(LogTemp, Log, TEXT("[PickpackerPlayerController] Report by: %s | Ctx | %s"), *PlayerName, *BuildNetLogContext(this));
 		ServerReportPCGReady();
 	}
 }
 
 void APickpackerPlayerController::OnClientPCGReady()
 {
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerPlayerController] Client PCG ready | Ctx | %s"), *BuildNetLogContext(this));
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerPlayerController] Client PCG ready"));
 }

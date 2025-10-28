@@ -9,9 +9,18 @@ public class Blaster : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemSteam", "PCG" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemSteam", "PCG", "GameplayTags" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {});
+		// Editor-only dependencies should only be added when building the editor
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[]
+			{
+				"Blutility",
+				"UnrealEd",
+				"UMGEditor"
+			});
+		}
 
 		// Add module include paths for headers organized by folders (no Public/Private split)
 		PublicIncludePaths.AddRange(new string[]

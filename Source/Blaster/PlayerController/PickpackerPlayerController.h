@@ -6,6 +6,9 @@
 #include "GameFramework/PlayerController.h"
 #include "PickpackerPlayerController.generated.h"
 
+class APickpackerGameMode;
+class APickpackerGameState;
+
 UCLASS()
 class BLASTER_API APickpackerPlayerController : public APlayerController
 {

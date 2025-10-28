@@ -1,18 +1,21 @@
-// Copyright notice
+// Fill out your copyright notice in the Description page of Project Settings.
+
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameState.h"
+#include "GameFramework/GameStateBase.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "PickpackerGameState.generated.h"
 
-class UPCGDungeonSubSystem;
+class UAnchorRuntimeSubsystem;
 
 /**
- * Pickpacker Game State - Manages seed replication and dungeon state
+ * Pickpacker Game State - Manages warehouse simulation state
+ * Tracks suspicion levels, team performance, and game progression
  */
 UCLASS()
-class BLASTER_API APickpackerGameState : public AGameState
+class BLASTER_API APickpackerGameState : public AGameStateBase
 {
 	GENERATED_BODY()
 
@@ -22,102 +25,116 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
 
-	/** Set the seed set for dungeon generation (Server Only) */
+	/**
+	 * Set the level variant data (Server Only)
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
-	void SetSeedSet(const FSeedSet& NewSeedSet);
-
-	/** Get current seed set */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
-	const FSeedSet& GetSeedSet() const { return SeedSet; }
-
-	/** Check if dungeon has been generated */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
-	bool IsDungeonGenerated() const { return bDungeonGenerated; }
-
-	/** Get PCG Dungeon Subsystem */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
-	UPCGDungeonSubSystem* GetPCGDungeonSubSystem();
-
-	// Server: signal clients to run local PCG now (temporary dev flow)
-	UFUNCTION(BlueprintCallable, Category = "Pickpacker|PCG")
-	void TriggerClientPCGRun();
-
-	// Readiness helpers
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|PCG")
-	int32 GetClientsPCGReadyCount() const { return ClientsPCGReadyCount; }
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|PCG")
-	int32 GetExpectedClientCount() const;
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|PCG")
-	int32 GetExpectedClientCountSnapshot() const { return ExpectedClientCountSnapshot; }
+	void SetLevelVariant(UDA_LevelVariant* NewLevelVariant);
 
 	/**
-	 * Server-side: handle a client reporting PCG ready.
-	 * Increments count, finalizes PCG if all ready, and starts gameplay.
+	 * Get current level variant
 	 */
-	UFUNCTION()
-	void HandleClientPCGReadyFor(class APlayerState* ReportingPS);
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
+	UDA_LevelVariant* GetLevelVariant() const { return LevelVariant; }
 
-	// Backward-compatible path (deprecated): keep for callers not passing PS
-	UFUNCTION()
-	void HandleClientPCGReady();
+	/**
+	 * Set the random seed (Server Only)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
+	void SetRandomSeed(int32 NewSeed);
+
+	/**
+	 * Get current random seed
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
+	int32 GetRandomSeed() const { return RandomSeed; }
+
+	/**
+	 * Add suspicion points to the team
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Suspicion")
+	void AddTeamSuspicion(float SuspicionPoints);
+
+	/**
+	 * Get current team suspicion level
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Suspicion")
+	float GetTeamSuspicion() const { return TeamSuspicion; }
+
+	/**
+	 * Get suspicion level (0.0 - 1.0)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Suspicion")
+	float GetSuspicionLevel() const;
+
+	/**
+	 * Check if simulation is running
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
+	bool IsSimulationRunning() const { return bSimulationRunning; }
+
+	/**
+	 * Set simulation running state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
+	void SetSimulationRunning(bool bRunning);
+
+	/**
+	 * Get anchor runtime subsystem
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
+	UAnchorRuntimeSubsystem* GetAnchorSubsystem();
 
 public:
-	// Broadcast when all clients reported PCG ready (temporary dev flow)
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAllClientsPCGReady);
-	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|PCG")
-	FOnAllClientsPCGReady OnAllClientsPCGReady;
+	/** Broadcast when suspicion level changes */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSuspicionChanged, float, NewSuspicionLevel);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Suspicion")
+	FOnSuspicionChanged OnSuspicionChanged;
+
+	/** Broadcast when simulation state changes */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSimulationStateChanged, bool, bIsRunning);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Simulation")
+	FOnSimulationStateChanged OnSimulationStateChanged;
 
 protected:
-	/** Called when seed set is replicated to clients */
+	/** Called when level variant is replicated to clients */
 	UFUNCTION()
-	void OnRep_SeedSet();
+	void OnRep_LevelVariant();
 
-	/** Called when dungeon generation status changes */
+	/** Called when random seed is replicated to clients */
 	UFUNCTION()
-	void OnRep_DungeonGenerated();
+	void OnRep_RandomSeed();
 
-	// On clients: when PCG run counter changes, run local PCG once
+	/** Called when team suspicion changes */
 	UFUNCTION()
-	void OnRep_PCGRunCounter();
+	void OnRep_TeamSuspicion();
+
+	/** Called when simulation state changes */
+	UFUNCTION()
+	void OnRep_SimulationRunning();
 
 private:
-	/** Replicated seed set for dungeon generation */
-	UPROPERTY(ReplicatedUsing = OnRep_SeedSet)
-	FSeedSet SeedSet;
+	/** Replicated level variant data */
+	UPROPERTY(ReplicatedUsing = OnRep_LevelVariant)
+	UDA_LevelVariant* LevelVariant = nullptr;
 
-	/** Whether dungeon has been generated */
-	UPROPERTY(ReplicatedUsing = OnRep_DungeonGenerated)
-	bool bDungeonGenerated = false;
+	/** Replicated random seed */
+	UPROPERTY(ReplicatedUsing = OnRep_RandomSeed)
+	int32 RandomSeed = 0;
 
-	// Bumps each time server requests clients to run PCG
-	UPROPERTY(ReplicatedUsing = OnRep_PCGRunCounter)
-	int32 PCGRunCounter = 0;
+	/** Replicated team suspicion points */
+	UPROPERTY(ReplicatedUsing = OnRep_TeamSuspicion)
+	float TeamSuspicion = 0.0f;
 
-public:
-	// Server-side: number of clients reported ready (public for direct access in RPC)
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Pickpacker|PCG")
-	int32 ClientsPCGReadyCount = 0;
+	/** Replicated simulation running state */
+	UPROPERTY(ReplicatedUsing = OnRep_SimulationRunning)
+	bool bSimulationRunning = false;
 
-private:
+	/** Maximum suspicion before alert level increases */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Suspicion", meta = (AllowPrivateAccess = "true"))
+	float MaxSuspicion = 100.0f;
 
-	/** Cached PCG subsystem reference */
+	/** Cached anchor subsystem reference */
 	UPROPERTY()
-	UPCGDungeonSubSystem* PCGDungeonSubSystem = nullptr;
-
-	// Avoid double finalization/spawn
-	UPROPERTY()
-	bool bAllClientsPCGReadyTriggered = false;
-
-	// Track which players have reported, to avoid double counting
-	UPROPERTY(Transient)
-	TSet<TWeakObjectPtr<APlayerState>> ReadyPlayers;
-
-	// Snapshot of expected client count taken when triggering a PCG run on the server
-	UPROPERTY(Transient)
-	int32 ExpectedClientCountSnapshot = -1;
-
-	friend class APickpackerPlayerController;
-	friend class APickpackerPlayerState;
+	UAnchorRuntimeSubsystem* AnchorSubsystem = nullptr;
 };

@@ -4,6 +4,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 
 UParcelStateComponent::UParcelStateComponent()
 {
@@ -37,25 +38,23 @@ void UParcelStateComponent::BeginPlay()
 	Super::BeginPlay();
 
 	// Initialize with default config if not set
-	if (ParcelConfig.Type == EParcelType::None)
+	if (ParcelConfig.ParcelType == EParcelType::Unknown)
 	{
-		ParcelConfig.Type = EParcelType::Fragile;
+		ParcelConfig.ParcelType = EParcelType::Fragile;
 		ParcelConfig.BaseDurability = 100.0f;
 		ParcelConfig.BaseWeight = 1.0f;
-		ParcelConfig.BaseInstability = 0.0f;
-		ParcelConfig.ImpactThreshold = 50.0f;
-		ParcelConfig.InstabilityDecayRate = 1.0f;
+		ParcelConfig.InstabilityFactor = 0.0f;
 	}
 
 	// Set initial state
 	CurrentState.Durability = ParcelConfig.BaseDurability;
 	CurrentState.Weight = ParcelConfig.BaseWeight;
-	CurrentState.Instability = ParcelConfig.BaseInstability;
+	CurrentState.Instability = ParcelConfig.InstabilityFactor;
 
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Initialized - Type: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
-			*UEnum::GetValueAsString(ParcelConfig.Type),
+			*UEnum::GetValueAsString(ParcelConfig.ParcelType),
 			CurrentState.Durability, CurrentState.Weight, CurrentState.Instability);
 	}
 }
@@ -65,7 +64,7 @@ void UParcelStateComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	// Update instability for unstable parcels
-	if (ParcelConfig.Type == EParcelType::Unstable)
+	if (ParcelConfig.ParcelType == EParcelType::Contraband)
 	{
 		UpdateInstability(DeltaTime);
 	}
@@ -82,13 +81,13 @@ void UParcelStateComponent::InitializeParcel(const FParcelConfig& Config)
 	ParcelConfig = Config;
 	CurrentState.Durability = Config.BaseDurability;
 	CurrentState.Weight = Config.BaseWeight;
-	CurrentState.Instability = Config.BaseInstability;
+	CurrentState.Instability = Config.InstabilityFactor;
 
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Parcel initialized - Type: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
-			*UEnum::GetValueAsString(Config.Type),
-			Config.BaseDurability, Config.BaseWeight, Config.BaseInstability);
+			*UEnum::GetValueAsString(Config.ParcelType),
+			Config.BaseDurability, Config.BaseWeight, Config.InstabilityFactor);
 	}
 }
 
@@ -125,18 +124,18 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 	if (IsBroken())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[ParcelStateComponent] Parcel broken! Type: %s, Source: %s"),
-			*UEnum::GetValueAsString(ParcelConfig.Type), *DamageSource);
+			*UEnum::GetValueAsString(ParcelConfig.ParcelType), *DamageSource);
 	}
 }
 
 void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
 {
-	if (ParcelConfig.Type != EParcelType::Fragile)
+	if (ParcelConfig.ParcelType != EParcelType::Fragile)
 	{
 		if (bEnableDebugLogging)
 		{
 			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage ignored - Not fragile parcel. Type: %s"),
-				*UEnum::GetValueAsString(ParcelConfig.Type));
+				*UEnum::GetValueAsString(ParcelConfig.ParcelType));
 		}
 		return; // Only fragile parcels take impact damage
 	}
@@ -164,7 +163,7 @@ void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& 
 
 void UParcelStateComponent::UpdateInstability(float DeltaTime)
 {
-	if (ParcelConfig.Type != EParcelType::Unstable)
+	if (ParcelConfig.ParcelType != EParcelType::Contraband)
 	{
 		return;
 	}
@@ -247,7 +246,7 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 	float Multiplier = 1.0f;
 
 	// Apply type-specific damage multipliers
-	switch (ParcelConfig.Type)
+	switch (ParcelConfig.ParcelType)
 	{
 	case EParcelType::Fragile:
 		Multiplier = 2.0f; // Fragile parcels take double damage
@@ -255,8 +254,8 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 	case EParcelType::Heavy:
 		Multiplier = 0.5f; // Heavy parcels take half damage
 		break;
-	case EParcelType::Unstable:
-		Multiplier = 1.5f; // Unstable parcels take 1.5x damage
+	case EParcelType::Contraband:
+		Multiplier = 1.5f; // Contraband parcels take 1.5x damage
 		break;
 	default:
 		Multiplier = 1.0f;
@@ -268,7 +267,7 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 
 float UParcelStateComponent::GetMovementSpeedMultiplier() const
 {
-	if (ParcelConfig.Type == EParcelType::Heavy)
+	if (ParcelConfig.ParcelType == EParcelType::Heavy)
 	{
 		return HeavyMovementPenalty;
 	}
@@ -277,7 +276,7 @@ float UParcelStateComponent::GetMovementSpeedMultiplier() const
 
 bool UParcelStateComponent::CanJump() const
 {
-	if (ParcelConfig.Type == EParcelType::Heavy && bHeavyBlocksJump)
+	if (ParcelConfig.ParcelType == EParcelType::Heavy && bHeavyBlocksJump)
 	{
 		return false;
 	}
@@ -286,7 +285,7 @@ bool UParcelStateComponent::CanJump() const
 
 float UParcelStateComponent::GetInstabilityDecayRate() const
 {
-	if (ParcelConfig.Type == EParcelType::Unstable)
+	if (ParcelConfig.ParcelType == EParcelType::Contraband)
 	{
 		return UnstableDecayRate;
 	}

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -126,7 +127,7 @@ protected:
 	FParcelState CurrentParcelState;
 
 	UPROPERTY()
-	EParcelType CurrentParcelType = EParcelType::None;
+	EParcelType CurrentParcelType = EParcelType::Unknown;
 
 	// Color settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")

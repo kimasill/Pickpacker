@@ -43,10 +43,10 @@ struct BLASTER_API FParcelState
 };
 
 /**
- * Parcel types enum
+ * Parcel types enum (renamed to avoid conflict with DA_ParcelData.h)
  */
 UENUM(BlueprintType)
-enum class EParcelType : uint8
+enum class EPickpackerParcelType : uint8
 {
 	None,
 	Fragile,
@@ -55,15 +55,15 @@ enum class EParcelType : uint8
 };
 
 /**
- * Parcel configuration data
+ * Parcel configuration data (renamed to avoid conflict with DA_ParcelData.h)
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelConfig
+struct BLASTER_API FPickpackerParcelConfig
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
-	EParcelType Type = EParcelType::None;
+	EPickpackerParcelType Type = EPickpackerParcelType::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	float BaseDurability = 100.0f;
@@ -86,9 +86,10 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FString Description = TEXT("");
 
-	FParcelConfig()
+
+	FPickpackerParcelConfig()
 	{
-		Type = EParcelType::None;
+		Type = EPickpackerParcelType::None;
 		BaseDurability = 100.0f;
 		BaseWeight = 1.0f;
 		BaseInstability = 0.0f;

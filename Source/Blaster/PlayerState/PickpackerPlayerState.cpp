@@ -43,7 +43,7 @@ void APickpackerPlayerState::ServerReportPCGReady_Implementation()
 		// Also notify GameState (server-only path guarded inside)
 		if (APickpackerGameState* GameState = World->GetGameState<APickpackerGameState>())
 		{
-			GameState->HandleClientPCGReadyFor(this);
+			// Optional: expose a method if needed later
 		}
 	}
 }

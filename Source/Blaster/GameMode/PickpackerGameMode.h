@@ -3,17 +3,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameMode.h"
-#include "Blaster/Subsystem/PCGDungeonSubSystem.h"
+#include "GameFramework/GameModeBase.h"
+#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "PickpackerGameMode.generated.h"
 
-class APlayerController;
-class AActor;
-class APlayerStart;
+class UAnchorRuntimeSubsystem;
 class APlayerState;
 
+/**
+ * Pickpacker Game Mode - Manages the warehouse simulation game
+ * Players are robots working under "Mother" AI surveillance
+ */
 UCLASS()
-class BLASTER_API APickpackerGameMode : public AGameMode
+class BLASTER_API APickpackerGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
@@ -21,97 +24,84 @@ public:
 	APickpackerGameMode();
 
 	virtual void BeginPlay() override;
-	virtual void OnMatchStateSet() override;
-	virtual void PostLogin(APlayerController* NewPlayer) override;
-	virtual void RestartPlayer(AController* NewPlayer) override;
+	virtual void HandleMatchStart();
 
-	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
-	void HandleMatchStart();
+	/**
+	 * Initialize the level with variant data
+	 * @param LevelVariantData - Data asset containing level configuration
+	 * @param Seed - Random seed for deterministic generation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Level")
+	void InitializeLevel(UDA_LevelVariant* LevelVariantData, int32 Seed = 0);
 
-	UFUNCTION(BlueprintCallable, Category = "Pickpacker")
-	void SetMissionConfig(const FString& MissionId, int32 CustomSeed = 0);
+	/**
+	 * Start the warehouse simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
+	void StartWarehouseSimulation();
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
-	const FSeedSet& GetMissionConfig() const { return CurrentMissionConfig; }
+	/**
+	 * End the warehouse simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
+	void EndWarehouseSimulation();
 
-	// Expose gameplay start so subsystem can safely trigger it after finalize
-	UFUNCTION()
-	void StartGameplay();
+	/**
+	 * Get current level variant data
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Level")
+	UDA_LevelVariant* GetCurrentLevelVariant() const { return CurrentLevelVariant; }
 
-	// Server-only: called when GS triggers client PCG run; captures expected client count snapshot
-	void OnServerTriggerClientPCGRun(int32 ExpectedClients);
+	/**
+	 * Get current seed
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Level")
+	int32 GetCurrentSeed() const { return CurrentSeed; }
 
-	// Server-only: called when a client reports PCG ready
-	void RegisterClientPCGReady(APlayerState* ReportingPS);
+	/**
+	 * Check if simulation is running
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Gameplay")
+	bool IsSimulationRunning() const { return bSimulationRunning; }
+
+	/**
+	 * Called by clients' PlayerState to signal PCG readiness (Server Only)
+	 */
+	void RegisterClientPCGReady(APlayerState* PlayerState);
 
 protected:
-	UFUNCTION()
-	void OnPCGGenerationComplete();
+	/**
+	 * Called when level initialization is complete
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Level")
+	void OnLevelInitialized();
 
-	// Cache PCG-provided spawn points and transforms
-	void CachePCGPlayerStarts();
-	void CachePCGPlayerSpawnTransformsFromAnchors();
+	/**
+	 * Called when simulation starts
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Gameplay")
+	void OnSimulationStarted();
 
-	// Fallback: scan PlayerStart only when no PCG spawns available
-	void SelectRandomPlayerStarts();
+	/**
+	 * Called when simulation ends
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Gameplay")
+	void OnSimulationEnded();
 
 private:
+	/** Current level variant data */
 	UPROPERTY()
-	FSeedSet CurrentMissionConfig;
+	UDA_LevelVariant* CurrentLevelVariant = nullptr;
 
+	/** Current random seed */
 	UPROPERTY()
-	bool bPCGGenerationInProgress = false;
+	int32 CurrentSeed = 0;
 
+	/** Whether simulation is currently running */
 	UPROPERTY()
-	bool bPCGReady = false;
+	bool bSimulationRunning = false;
 
-	// Prevent double-start / double-spawn
-	UPROPERTY(Transient)
-	bool bGameplayStarted = false;
-
+	/** Anchor runtime subsystem reference */
 	UPROPERTY()
-	UPCGDungeonSubSystem* PCGDungeonSubsystem = nullptr;
-
-	UPROPERTY()
-	TArray<TWeakObjectPtr<APlayerController>> PendingSpawnControllers;
-
-	// AActor-based spawn points (from PCG tags)
-	UPROPERTY()
-	TArray<TWeakObjectPtr<AActor>> SelectedSpawnPoints;
-
-	// Transform-based spawn points from GeneratePCGAnchors
-	UPROPERTY()
-	TArray<FTransform> SelectedSpawnTransforms;
-
-	int32 NextSpawnIndex = 0;
-	int32 NextTransformIndex = 0;
-
-	// Client readiness tracking (server-only)
-	UPROPERTY(Transient)
-	int32 ClientsPCGReadyCount_Server = 0;
-
-	UPROPERTY(Transient)
-	int32 ExpectedClientCountSnapshot_Server = -1;
-
-	UPROPERTY(Transient)
-	bool bAllClientsPCGReadyTriggered_Server = false;
-
-	UPROPERTY(Transient)
-	TSet<TWeakObjectPtr<APlayerState>> ReadyPlayers_Server;
+	UAnchorRuntimeSubsystem* AnchorSubsystem = nullptr;
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

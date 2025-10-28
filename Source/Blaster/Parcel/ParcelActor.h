@@ -4,12 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Blaster/Components/ParcelStateComponent.h"
 #include "Blaster/Components/CarryPointsComponent.h"
 #include "Blaster/UI/ParcelHUDWidget.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
+#include "GameplayTagContainer.h"
 #include "ParcelActor.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelAttached, class ACharacter*, Carrier, FName, SocketId);
@@ -84,6 +85,30 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	UParcelStateComponent* GetParcelStateComponent() const { return ParcelStateComponent; }
+
+	/**
+	 * Get parcel tags
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	FGameplayTagContainer GetParcelTags() const { return ParcelTags; }
+
+	/**
+	 * Set parcel tags
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void SetParcelTags(const FGameplayTagContainer& NewTags) { ParcelTags = NewTags; }
+
+	/**
+	 * Add parcel tag
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void AddParcelTag(const FGameplayTag& Tag) { ParcelTags.AddTag(Tag); }
+
+	/**
+	 * Remove parcel tag
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void RemoveParcelTag(const FGameplayTag& Tag) { ParcelTags.RemoveTag(Tag); }
 
 protected:
 	/**
@@ -172,6 +197,10 @@ protected:
 	// Parcel configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FParcelConfig ParcelConfig;
+
+	// Parcel tags
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
+	FGameplayTagContainer ParcelTags;
 
 	// Physics settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")

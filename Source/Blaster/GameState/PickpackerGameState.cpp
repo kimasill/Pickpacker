@@ -1,209 +1,145 @@
-// Copyright notice
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "PickpackerGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
-#include "Blaster/Subsystem/PCGDungeonSubSystem.h"
-#include "GameFramework/GameModeBase.h"
-#include "EngineUtils.h"
-#include "GameFramework/PlayerState.h"
-#include "GameFramework/PlayerController.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
+#include "Blaster/Subsystem/AnchorRuntimeSubsystem.h"
 
 APickpackerGameState::APickpackerGameState()
 {
-	PrimaryActorTick.bCanEverTick = false;
-	SeedSet = FSeedSet();
+	LevelVariant = nullptr;
+	RandomSeed = 0;
+	TeamSuspicion = 0.0f;
+	bSimulationRunning = false;
+	MaxSuspicion = 100.0f;
+	AnchorSubsystem = nullptr;
 }
 
 void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(APickpackerGameState, SeedSet);
-	DOREPLIFETIME(APickpackerGameState, bDungeonGenerated);
-	DOREPLIFETIME(APickpackerGameState, PCGRunCounter);
-	DOREPLIFETIME(APickpackerGameState, ClientsPCGReadyCount);
+	DOREPLIFETIME(APickpackerGameState, LevelVariant);
+	DOREPLIFETIME(APickpackerGameState, RandomSeed);
+	DOREPLIFETIME(APickpackerGameState, TeamSuspicion);
+	DOREPLIFETIME(APickpackerGameState, bSimulationRunning);
 }
 
 void APickpackerGameState::BeginPlay()
 {
 	Super::BeginPlay();
-	PCGDungeonSubSystem = GetWorld()->GetSubsystem<UPCGDungeonSubSystem>();
-	bAllClientsPCGReadyTriggered = false;
-	ReadyPlayers.Reset();
-	ExpectedClientCountSnapshot = -1;
-}
 
-void APickpackerGameState::SetSeedSet(const FSeedSet& NewSeedSet)
-{
-	if (!HasAuthority())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] Only server can set seed set"));
-		return;
-	}
-	SeedSet = NewSeedSet;
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Seed set updated - Seed: %d, MissionId: %s"), SeedSet.Seed, *SeedSet.MissionId);
-}
-
-void APickpackerGameState::OnRep_SeedSet()
-{
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Seed set replicated to client - Seed: %d, MissionId: %s"), SeedSet.Seed, *SeedSet.MissionId);
-}
-
-void APickpackerGameState::OnRep_DungeonGenerated()
-{
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Dungeon generation status replicated - Generated: %s"), bDungeonGenerated ? TEXT("True") : TEXT("False"));
-}
-
-void APickpackerGameState::OnRep_PCGRunCounter()
-{
-	// Clients: run local PCG now with the current replicated seed
-	if (!HasAuthority())
-	{
-		if (!PCGDungeonSubSystem && GetWorld())
-		{
-			PCGDungeonSubSystem = GetWorld()->GetSubsystem<UPCGDungeonSubSystem>();
-		}
-		if (PCGDungeonSubSystem)
-		{
-			PCGDungeonSubSystem->GenerateDungeon(SeedSet);
-			UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Client PCG triggered by server (RunCounter=%d)"), PCGRunCounter);
-		}
-	}
-}
-
-void APickpackerGameState::TriggerClientPCGRun()
-{
-	if (!HasAuthority())
-	{
-		return;
-	}
-	// Take a snapshot of expected client count at the time we trigger
-	ExpectedClientCountSnapshot = GetExpectedClientCount();
-	++PCGRunCounter; // replicate bump -> clients run OnRep
-	ClientsPCGReadyCount = 0; // reset for new round
-	bAllClientsPCGReadyTriggered = false;
-	ReadyPlayers.Reset();
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Triggering client PCG run (RunCounter=%d), ExpectedClientsSnapshot=%d"), PCGRunCounter, ExpectedClientCountSnapshot);
-
-	// Inform GameMode so it can also track independently and force StartGameplay if needed
-	if (APickpackerGameMode* GM = GetWorld()->GetAuthGameMode<APickpackerGameMode>())
-	{
-		GM->OnServerTriggerClientPCGRun(ExpectedClientCountSnapshot);
-	}
-}
-
-int32 APickpackerGameState::GetExpectedClientCount() const
-{
+	// Get anchor subsystem reference
 	UWorld* World = GetWorld();
-	if (!World)
+	if (World)
 	{
-		return 0;
+		AnchorSubsystem = World->GetSubsystem<UAnchorRuntimeSubsystem>();
 	}
 
-	// Server-authoritative path: prefer NetDriver connection count for accuracy during early join
-	if (HasAuthority())
-	{
-		if (UNetDriver* NetDriver = World->GetNetDriver())
-		{
-			// Number of client connections to this server (listen/dedicated)
-			return NetDriver->ClientConnections.Num();
-		}
-
-		// Fallback to counting non-local PlayerControllers
-		int32 RemoteCount = 0;
-		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
-		{
-			const APlayerController* PC = It->Get();
-			if (PC && !PC->IsLocalController())
-			{
-				RemoteCount++;
-			}
-		}
-		return RemoteCount;
-	}
-
-	// Clients don't know how many other clients are expected from server perspective
-	return 0;
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] BeginPlay - Anchor subsystem: %s"), 
+		AnchorSubsystem ? TEXT("Found") : TEXT("Not Found"));
 }
 
-void APickpackerGameState::HandleClientPCGReadyFor(APlayerState* ReportingPS)
+void APickpackerGameState::SetLevelVariant(UDA_LevelVariant* NewLevelVariant)
 {
-	// Ensure this only runs on the server
 	if (!HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] HandleClientPCGReadyFor called on non-authority, ignoring (NetMode=%d)"), GetWorld() ? (int32)GetWorld()->GetNetMode() : -1);
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetLevelVariant called without authority"));
 		return;
 	}
 
-	bool bCounted = false;
-	if (IsValid(ReportingPS))
-	{
-		if (ReadyPlayers.Contains(ReportingPS))
-		{
-			UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameState] Client already reported: %s"), *ReportingPS->GetPlayerName());
-		}
-		else
-		{
-			ReadyPlayers.Add(ReportingPS);
-			ClientsPCGReadyCount++;
-			bCounted = true;
-		}
-	}
-	else
-	{
-		// Unknown reporter; still increment but warn
-		ClientsPCGReadyCount++;
-		bCounted = true;
-		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] Client PCG ready without PlayerState - counting anonymously"));
-	}
-
-	// Prefer snapshot when valid to avoid timing race returning 0
-	const int32 Expected = (ExpectedClientCountSnapshot >= 0) ? ExpectedClientCountSnapshot : GetExpectedClientCount();
-	if (bCounted)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Ready %d/%d (Snapshot=%d, Current=%d)"), ClientsPCGReadyCount, Expected, ExpectedClientCountSnapshot, GetExpectedClientCount());
-	}
-
-	// Also forward to GameMode to track on server
-	if (APickpackerGameMode* GM = GetWorld()->GetAuthGameMode<APickpackerGameMode>())
-	{
-		GM->RegisterClientPCGReady(ReportingPS);
-	}
-
-	if (!bAllClientsPCGReadyTriggered && (Expected == 0 || ClientsPCGReadyCount >= Expected))
-	{
-		bAllClientsPCGReadyTriggered = true;
-
-		UWorld* World = GetWorld();
-		if (!World)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[PickpackerGameState] World is null while finalizing"));
-			return;
-		}
-
-		// Finalize PCG on server
-		if (UPCGDungeonSubSystem* Subsys = World->GetSubsystem<UPCGDungeonSubSystem>())
-		{
-			Subsys->ServerFinalizePCG();
-		}
-
-		OnAllClientsPCGReady.Broadcast();
-	}
+	LevelVariant = NewLevelVariant;
+	
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Level variant set: %s"), 
+		LevelVariant ? *LevelVariant->LevelName : TEXT("None"));
 }
 
-void APickpackerGameState::HandleClientPCGReady()
+void APickpackerGameState::SetRandomSeed(int32 NewSeed)
 {
-	HandleClientPCGReadyFor(nullptr);
-}
-
-UPCGDungeonSubSystem* APickpackerGameState::GetPCGDungeonSubSystem()
-{
-	if (!PCGDungeonSubSystem && GetWorld())
+	if (!HasAuthority())
 	{
-		PCGDungeonSubSystem = GetWorld()->GetSubsystem<UPCGDungeonSubSystem>();
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetRandomSeed called without authority"));
+		return;
 	}
-	return PCGDungeonSubSystem;
+
+	RandomSeed = NewSeed;
+	
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Random seed set: %d"), RandomSeed);
 }
 
+void APickpackerGameState::AddTeamSuspicion(float SuspicionPoints)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] AddTeamSuspicion called without authority"));
+		return;
+	}
+
+	float OldSuspicion = TeamSuspicion;
+	TeamSuspicion = FMath::Clamp(TeamSuspicion + SuspicionPoints, 0.0f, MaxSuspicion);
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Team suspicion: %.2f -> %.2f (+%.2f)"), 
+		OldSuspicion, TeamSuspicion, SuspicionPoints);
+
+	// Broadcast suspicion change
+	OnSuspicionChanged.Broadcast(GetSuspicionLevel());
+}
+
+float APickpackerGameState::GetSuspicionLevel() const
+{
+	return FMath::Clamp(TeamSuspicion / MaxSuspicion, 0.0f, 1.0f);
+}
+
+void APickpackerGameState::SetSimulationRunning(bool bRunning)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetSimulationRunning called without authority"));
+		return;
+	}
+
+	bSimulationRunning = bRunning;
+	
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Simulation running: %s"), 
+		bRunning ? TEXT("True") : TEXT("False"));
+
+	// Broadcast simulation state change
+	OnSimulationStateChanged.Broadcast(bRunning);
+}
+
+UAnchorRuntimeSubsystem* APickpackerGameState::GetAnchorSubsystem()
+{
+	if (!AnchorSubsystem && GetWorld())
+	{
+		AnchorSubsystem = GetWorld()->GetSubsystem<UAnchorRuntimeSubsystem>();
+	}
+	return AnchorSubsystem;
+}
+
+void APickpackerGameState::OnRep_LevelVariant()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Level variant replicated: %s"), 
+		LevelVariant ? *LevelVariant->LevelName : TEXT("None"));
+}
+
+void APickpackerGameState::OnRep_RandomSeed()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Random seed replicated: %d"), RandomSeed);
+}
+
+void APickpackerGameState::OnRep_TeamSuspicion()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Team suspicion replicated: %.2f"), TeamSuspicion);
+	
+	// Broadcast suspicion change
+	OnSuspicionChanged.Broadcast(GetSuspicionLevel());
+}
+
+void APickpackerGameState::OnRep_SimulationRunning()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Simulation running replicated: %s"), 
+		bSimulationRunning ? TEXT("True") : TEXT("False"));
+
+	// Broadcast simulation state change
+	OnSimulationStateChanged.Broadcast(bSimulationRunning);
+}

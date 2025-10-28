@@ -9,6 +9,7 @@
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 
 AParcelActor::AParcelActor()
 {
@@ -54,17 +55,13 @@ void AParcelActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Initialize parcel with default config
-	if (ParcelConfig.Type == EParcelType::None)
+	// Initialize parcel with default config if unknown
+	if (ParcelConfig.ParcelType == EParcelType::Unknown)
 	{
-		ParcelConfig.Type = EParcelType::Fragile;
+		ParcelConfig.ParcelType = EParcelType::Fragile;
 		ParcelConfig.BaseDurability = 100.0f;
 		ParcelConfig.BaseWeight = 1.0f;
-		ParcelConfig.BaseInstability = 0.0f;
-		ParcelConfig.ImpactThreshold = 50.0f;
-		ParcelConfig.InstabilityDecayRate = 1.0f;
-		ParcelConfig.bIsPrimaryObjective = false;
-		ParcelConfig.Description = TEXT("Default Parcel");
+		ParcelConfig.InstabilityFactor = 0.0f;
 	}
 
 	// Initialize parcel state
@@ -95,7 +92,7 @@ void AParcelActor::BeginPlay()
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Initialized - Type: %s, Location: %s"),
-			*UEnum::GetValueAsString(ParcelConfig.Type), *GetActorLocation().ToString());
+			*UEnum::GetValueAsString(ParcelConfig.ParcelType), *GetActorLocation().ToString());
 	}
 }
 
@@ -124,8 +121,8 @@ void AParcelActor::InitializeParcel(const FParcelConfig& Config)
 
     if (bEnableDebugLogging)
     {
-        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Parcel initialized - Type: %s, Description: %s"),
-            *UEnum::GetValueAsString(Config.Type), *Config.Description);
+        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Parcel initialized - Type: %s, Name: %s"),
+            *UEnum::GetValueAsString(Config.ParcelType), *Config.ParcelName);
     }
 }
 
@@ -190,7 +187,7 @@ EParcelType AParcelActor::GetParcelType() const
     {
         return ParcelStateComponent->GetParcelType();
     }
-    return EParcelType::None;
+    return EParcelType::Unknown;
 }
 
 const FParcelState& AParcelActor::GetParcelState() const
@@ -345,7 +342,7 @@ void AParcelActor::OnParcelStateChanged(const FParcelState& NewState)
 void AParcelActor::HandleParcelBroken()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Parcel broken! Type: %s"),
-		*UEnum::GetValueAsString(ParcelConfig.Type));
+		*UEnum::GetValueAsString(ParcelConfig.ParcelType));
 
 	// Detach if attached
 	if (bIsAttached)

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "ParcelStateComponent.generated.h"
 
@@ -45,7 +46,7 @@ public:
 	void ApplyImpactDamage(float ImpactForce, const FString& ImpactSource = TEXT("Impact"));
 
 	/**
-	 * Update instability (for unstable parcels)
+	 * Update instability (for contraband parcels)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel State")
 	void UpdateInstability(float DeltaTime);
@@ -102,7 +103,7 @@ public:
 	 * Get parcel type
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel State")
-	EParcelType GetParcelType() const { return ParcelConfig.Type; }
+	EParcelType GetParcelType() const { return ParcelConfig.ParcelType; }
 
 	/**
 	 * Set parcel attached state
