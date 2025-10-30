@@ -26,7 +26,7 @@ struct FExplosiveInfo
     UPROPERTY()
     float Falloff = 1.f;
 
-    // ÇÊ¿äÇÏ´Ù¸é Ãß°¡ Á¤º¸µµ Æ÷ÇÔ °¡´É
+    // ï¿½Ê¿ï¿½ï¿½Ï´Ù¸ï¿½ ï¿½ß°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 };
 
 // This class does not need to be modified.

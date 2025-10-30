@@ -47,8 +47,13 @@
 			"Enabled": true
 		},
 		{
-			 "Name": "EditorScriptingUtilities", 
-			"Enabled": true 
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		},
+		{
+			"Name": "SplineMeshEditor",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/270efe7731fc4f3c84c91f21898d9b3a"
 		}
 	],
 	"AdditionalPluginDirectories": [

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameStateBase.h"
+#include "GameFramework/GameState.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "PickpackerGameState.generated.h"
@@ -15,7 +15,7 @@ class UAnchorRuntimeSubsystem;
  * Tracks suspicion levels, team performance, and game progression
  */
 UCLASS()
-class BLASTER_API APickpackerGameState : public AGameStateBase
+class BLASTER_API APickpackerGameState : public AGameState
 {
 	GENERATED_BODY()
 

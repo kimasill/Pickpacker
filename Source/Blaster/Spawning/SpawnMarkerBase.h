@@ -54,6 +54,18 @@ protected:
 
     /** Called after successful spawn (override in derived). */
     virtual void OnSpawned(AActor* SpawnedActor) {}
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline Conveyor")
+	TObjectPtr<class USplineComponent> SplineConveyor = nullptr; 
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline Conveyor")
+	bool bAutoAttachToSpline = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline Conveyor", meta=(EditCondition = "bAutoAttachToSpline"))
+    float SplineMovementSpeed = 100.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spline Conveyor", meta = (EditCondition = "bAutoAttachToSpline"))
+	bool bSplineLoop = true;
 };
 
 

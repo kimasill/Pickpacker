@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameMode.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "PickpackerGameMode.generated.h"
@@ -16,7 +16,7 @@ class APlayerState;
  * Players are robots working under "Mother" AI surveillance
  */
 UCLASS()
-class BLASTER_API APickpackerGameMode : public AGameModeBase
+class BLASTER_API APickpackerGameMode : public AGameMode
 {
 	GENERATED_BODY()
 

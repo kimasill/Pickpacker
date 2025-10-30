@@ -42,6 +42,8 @@ void AParcelSpawnMarker::OnSpawned(AActor* SpawnedActor)
     }
     SpawnedActors.Add(SpawnedActor);
     SpawnedActor->OnDestroyed.AddDynamic(this, &AParcelSpawnMarker::HandleSpawnedDestroyed);
+
+
 }
 
 void AParcelSpawnMarker::HandleSpawnedDestroyed(AActor* DestroyedActor)
