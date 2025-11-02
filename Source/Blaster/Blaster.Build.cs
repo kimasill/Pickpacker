@@ -18,8 +18,9 @@ public class Blaster : ModuleRules
 			{
 				"Blutility",
 				"UnrealEd",
-				"UMGEditor"
-			});
+				"UMGEditor",
+                "GameplayTags"
+            });
 		}
 
 		// Add module include paths for headers organized by folders (no Public/Private split)

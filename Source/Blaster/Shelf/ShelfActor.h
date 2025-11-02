@@ -8,6 +8,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "GameplayTagContainer.h"
 #include "ShelfActor.generated.h"
 
 class AParcelActor;
@@ -35,7 +36,7 @@ struct FYShelfSlot
     FTransform SlotTransform;
 
     /** 예상되는 Parcel 태그 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf")
     FGameplayTagContainer ExpectedTags;
 
     /** 슬롯이 비어있는지 확인 */
@@ -118,8 +119,8 @@ public:
     TArray<FYShelfSlot> Slots;
 
     /** 최대 슬롯 수 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf Settings")
-    int32 MaxSlots = 6;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Shelf Settings")
+    int32 MaxSlots = 0;
 
     /** 상호작용 거리 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf Settings")
@@ -135,7 +136,7 @@ public:
 
     /** 슬롯 간격 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf Settings")
-    float SlotSpacing = 100.0f;
+    float SlotSpacing = 100.0f;    
 
 public:
     /** Parcel 배치 성공 시 이벤트 */
@@ -152,6 +153,14 @@ public:
     DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAllCorrect);
     UPROPERTY(BlueprintAssignable, Category = "Shelf|Events")
     FOnAllCorrect OnAllCorrect;
+
+	virtual void OnConstruction(const FTransform& Transform) override;
+
+    UPROPERTY(EditAnywhere, Category = "Shelf|Markers")
+    bool bAutoGatherSlotMarkers = true;
+
+    UPROPERTY(EditAnywhere, Category = "Shelf|Markers")
+    FName SlotMarkerPrefix = "SlotMarker_";
 
 protected:
     /**

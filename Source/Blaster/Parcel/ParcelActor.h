@@ -110,6 +110,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Parcel")
 	void RemoveParcelTag(const FGameplayTag& Tag) { ParcelTags.RemoveTag(Tag); }
 
+	/**
+	 * Overlap notification for interaction
+	 */
+
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void NotifyBeginOverlap(AActor* OverlappedActor, AActor* OtherActor);
+
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void NotifyEndOverlap(AActor* OverlappedActor, AActor* OtherActor);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void BP_OnBeginFocus(AActor* OtherActor);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void BP_OnEndFocus(AActor* OtherActor);
+
+
 protected:
 	/**
 	 * Server RPC for attach request
@@ -194,6 +211,8 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UWidgetComponent* HUDWidgetComponent;
 
+	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
+	class UWidgetComponent* PickupWidget;
 	// Parcel configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FParcelConfig ParcelConfig;

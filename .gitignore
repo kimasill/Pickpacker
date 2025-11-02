@@ -139,3 +139,6 @@ Saved/MaterialStatsDebug/*
 !Config/**
 !Content/Assets/**
 !Plugins/**
+
+# engineer files
+*.md

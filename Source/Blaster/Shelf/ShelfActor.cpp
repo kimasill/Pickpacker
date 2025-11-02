@@ -26,7 +26,7 @@ AShelfActor::AShelfActor()
     InteractionArea->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Overlap);
 
     // 기본 설정
-    MaxSlots = 6;
+    MaxSlots = 0;
     InteractionDistance = 150.0f;
     AutoAlignDistance = 50.0f;
     AlignAnimationTime = 0.5f;
@@ -47,10 +47,14 @@ void AShelfActor::BeginPlay()
 void AShelfActor::InitializeSlots()
 {
     Slots.Empty();
+	const int32 MarkerCount = SlotMarkers.Num();
+	const bool bHasMarkers = MarkerCount > 0;
+	MaxSlots = bHasMarkers ? MarkerCount : MaxSlots;
+
     Slots.SetNum(MaxSlots);
 
     // SlotMarkers를 기반으로 슬롯 위치 설정
-    if (SlotMarkers.Num() > 0 && SlotMarkers.Num() >= MaxSlots)
+    if (bHasMarkers)
     {
         for (int32 i = 0; i < MaxSlots; ++i)
         {
@@ -60,7 +64,7 @@ void AShelfActor::InitializeSlots()
             }
             else
             {
-                // 마커가 없으면 자동 계산
+                // 마커가 없으면 자동 계산(삭제 예정: 선반 형태 여러개 존재)
                 FVector Offset = FVector(0.0f, i * SlotSpacing - (MaxSlots - 1) * SlotSpacing / 2.0f, 0.0f);
                 Slots[i].SlotTransform = FTransform(GetActorRotation(), GetActorLocation() + Offset);
             }
@@ -246,6 +250,45 @@ bool AShelfActor::CanInteractAtLocation(const FVector& Location, int32& OutSlotI
 
     float Distance = FVector::Dist(Location, Slots[OutSlotIndex].SlotTransform.GetLocation());
     return Distance <= InteractionDistance;
+}
+
+void AShelfActor::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    if (bAutoGatherSlotMarkers)
+    {
+        SlotMarkers.Empty();
+        TArray<USceneComponent*> ChildComponents;
+        GetComponents<USceneComponent>(ChildComponents);
+
+        const FString MarkerPrefix = SlotMarkerPrefix.ToString();
+
+        struct FEntry { int32 Index;  USceneComponent* Comp; };
+        TArray<FEntry> MarkerEntries;
+
+        for (USceneComponent* Comp : ChildComponents)
+        {
+            if (!Comp || Comp == RootComponent) continue;
+
+            const FString CompName = Comp->GetName();
+            if (!CompName.StartsWith(MarkerPrefix)) continue;
+
+            const FString Suffix = CompName.Mid(MarkerPrefix.Len());
+            int32 ParsedIndex = 0;
+            if (Suffix.IsNumeric())
+            {
+                ParsedIndex = FCString::Atoi(*Suffix);
+            }
+            MarkerEntries.Add({ ParsedIndex, Comp });
+        }
+
+        MarkerEntries.Sort([](const FEntry& A, const FEntry& B) {return A.Index < B.Index; });
+        
+        for (const FEntry& Entry : MarkerEntries)
+        {
+            SlotMarkers.Add(Entry.Comp);
+		}
+    }
 }
 
 int32 AShelfActor::FindEmptySlot() const

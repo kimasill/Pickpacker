@@ -33,6 +33,11 @@ AParcelActor::AParcelActor()
 	HUDWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
 	HUDWidgetComponent->SetDrawAtDesiredSize(true);
 
+	PickupWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("PickupWidget"));
+	PickupWidget->SetupAttachment(RootComponent);
+	PickupWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	PickupWidget->SetDrawAtDesiredSize(true);
+
 	// Initialize state
 	bIsAttached = false;
 	CurrentSocketId = NAME_None;
@@ -140,7 +145,7 @@ void AParcelActor::RequestAttach(ACharacter* Carrier, const FName& SocketId)
         return;
     }
 
-    Server_RequestAttach(Carrier, SocketId);
+    (Carrier, SocketId);
 }
 
 void AParcelActor::RequestDrop(const FVector& Impulse)
@@ -152,6 +157,103 @@ void AParcelActor::RequestDrop(const FVector& Impulse)
     }
 
     Server_RequestDrop(Impulse);
+}
+void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FName SocketId)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (!Carrier || !CanBeAttached())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server attach request failed - Invalid carrier or cannot attach"));
+		return;
+	}
+
+	// Try to attach to carry points
+	if (CarryPointsComponent && CarryPointsComponent->TryAttachToSocket(Carrier, SocketId))
+	{
+		bIsAttached = true;
+		CurrentSocketId = SocketId;
+		CurrentCarrier = Carrier;
+
+		// Update parcel state
+		if (ParcelStateComponent)
+		{
+			ParcelStateComponent->SetAttachedState(true, SocketId);
+
+			// Check if this is two-person carry
+			bool bIsTwoPersonCarry = CarryPointsComponent && CarryPointsComponent->IsTwoPersonCarry();
+			ParcelStateComponent->ApplyTwoPersonCarryBonuses(bIsTwoPersonCarry);
+		}
+
+		// Configure physics for attachment
+		if (MeshComponent)
+		{
+			MeshComponent->SetSimulatePhysics(false);
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		}
+
+		// Broadcast attach event
+		Multicast_ParcelAttached(Carrier, SocketId);
+
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server attach successful - Carrier: %s, Socket: %s"),
+				*Carrier->GetName(), *SocketId.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server attach failed - Socket not available"));
+	}
+}
+
+void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (!bIsAttached)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server drop request failed - Not attached"));
+		return;
+	}
+
+	FVector DropLocation = GetActorLocation();
+
+	// Detach from carry points
+	if (CarryPointsComponent && CurrentCarrier)
+	{
+		CarryPointsComponent->DetachFromSocket(CurrentCarrier, CurrentSocketId);
+	}
+
+	// Update parcel state
+	if (ParcelStateComponent)
+	{
+		ParcelStateComponent->SetAttachedState(false, NAME_None);
+		ParcelStateComponent->ApplyTwoPersonCarryBonuses(false); // No longer two-person carry
+	}
+
+	// Reset attachment state
+	bIsAttached = false;
+	CurrentSocketId = NAME_None;
+	CurrentCarrier = nullptr;
+
+	// Configure physics for drop
+	ConfigureDropPhysics(Impulse);
+
+	// Broadcast drop event
+	Multicast_ParcelDropped(DropLocation);
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server drop successful - Location: %s"),
+			*DropLocation.ToString());
+	}
 }
 
 bool AParcelActor::CanBeAttached() const
@@ -201,103 +303,6 @@ const FParcelState& AParcelActor::GetParcelState() const
     return EmptyState;
 }
 
-void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FName SocketId)
-{
-    if (!HasAuthority())
-    {
-        return;
-    }
-
-    if (!Carrier || !CanBeAttached())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server attach request failed - Invalid carrier or cannot attach"));
-        return;
-    }
-
-    // Try to attach to carry points
-    if (CarryPointsComponent && CarryPointsComponent->TryAttachToSocket(Carrier, SocketId))
-    {
-        bIsAttached = true;
-        CurrentSocketId = SocketId;
-        CurrentCarrier = Carrier;
-
-        // Update parcel state
-        if (ParcelStateComponent)
-        {
-            ParcelStateComponent->SetAttachedState(true, SocketId);
-            
-            // Check if this is two-person carry
-            bool bIsTwoPersonCarry = CarryPointsComponent && CarryPointsComponent->IsTwoPersonCarry();
-            ParcelStateComponent->ApplyTwoPersonCarryBonuses(bIsTwoPersonCarry);
-        }
-
-        // Configure physics for attachment
-        if (MeshComponent)
-        {
-            MeshComponent->SetSimulatePhysics(false);
-            MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-        }
-
-        // Broadcast attach event
-        Multicast_ParcelAttached(Carrier, SocketId);
-
-        if (bEnableDebugLogging)
-        {
-            UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server attach successful - Carrier: %s, Socket: %s"),
-                *Carrier->GetName(), *SocketId.ToString());
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server attach failed - Socket not available"));
-    }
-}
-
-void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
-{
-    if (!HasAuthority())
-    {
-        return;
-    }
-
-    if (!bIsAttached)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Server drop request failed - Not attached"));
-        return;
-    }
-
-    FVector DropLocation = GetActorLocation();
-
-    // Detach from carry points
-    if (CarryPointsComponent && CurrentCarrier)
-    {
-        CarryPointsComponent->DetachFromSocket(CurrentCarrier, CurrentSocketId);
-    }
-
-    // Update parcel state
-    if (ParcelStateComponent)
-    {
-        ParcelStateComponent->SetAttachedState(false, NAME_None);
-        ParcelStateComponent->ApplyTwoPersonCarryBonuses(false); // No longer two-person carry
-    }
-
-    // Reset attachment state
-    bIsAttached = false;
-    CurrentSocketId = NAME_None;
-    CurrentCarrier = nullptr;
-
-    // Configure physics for drop
-    ConfigureDropPhysics(Impulse);
-
-    // Broadcast drop event
-    Multicast_ParcelDropped(DropLocation);
-
-    if (bEnableDebugLogging)
-    {
-        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server drop successful - Location: %s"),
-            *DropLocation.ToString());
-    }
-}
 
 void AParcelActor::Multicast_ParcelAttached_Implementation(ACharacter* Carrier, FName SocketId)
 {
@@ -319,6 +324,14 @@ void AParcelActor::Multicast_ParcelDropped_Implementation(FVector DropLocation)
         UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast drop - Location: %s"),
             *DropLocation.ToString());
     }
+}
+
+void AParcelActor::NotifyBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
+{
+}
+
+void AParcelActor::NotifyEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
+{
 }
 
 void AParcelActor::OnParcelStateChanged(const FParcelState& NewState)
