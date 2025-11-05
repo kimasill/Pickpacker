@@ -2,12 +2,16 @@
 
 #include "ShelfActor.h"
 #include "Blaster/Parcel/ParcelActor.h"
+#include "Blaster/Character/BlasterCharacter.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/Engine.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "EngineUtils.h"
+#include "GameFramework/Character.h"
+#include "Materials/MaterialInterface.h"
 
 AShelfActor::AShelfActor()
 {
@@ -26,7 +30,7 @@ AShelfActor::AShelfActor()
     InteractionArea->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Overlap);
 
     // 기본 설정
-    MaxSlots = 0;
+    MaxSlots = 6;
     InteractionDistance = 150.0f;
     AutoAlignDistance = 50.0f;
     AlignAnimationTime = 0.5f;
@@ -37,6 +41,15 @@ AShelfActor::AShelfActor()
 void AShelfActor::BeginPlay()
 {
     Super::BeginPlay();
+
+    // Setup overlap events (기존 Weapon 패턴)
+    if (AreaSphere)
+    {
+        AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        AreaSphere->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Overlap);
+        AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AShelfActor::OnSphereOverlap);
+        AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AShelfActor::OnSphereEndOverlap);
+    }
 
     // 슬롯 초기화
     InitializeSlots();
@@ -356,5 +369,116 @@ void AShelfActor::AlignParcelToSlot(AParcelActor* Parcel, int32 SlotIndex)
         UE_LOG(LogTemp, Log, TEXT("[ShelfActor] Aligned parcel to slot %d: %s"),
             SlotIndex, *SlotTransform.GetLocation().ToString());
     }
+}
+
+// InteractableInterface Implementation
+bool AShelfActor::OnInteract_Implementation(ACharacter* Interactor)
+{
+    if (!Interactor)
+    {
+        return false;
+    }
+
+    // 캐릭터가 들고 있는 Parcel 찾기
+    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Interactor);
+    if (!BlasterCharacter)
+    {
+        return false;
+    }
+
+    // InteractionComponent에서 현재 타겟이 이 선반인지 확인
+    if (BlasterCharacter->GetInteractionComponent())
+    {
+        AActor* Target = BlasterCharacter->GetInteractionComponent()->GetCurrentTarget();
+        if (Target != this)
+        {
+            return false;
+        }
+    }
+
+    // 실제 Parcel 배치는 블루프린트에서 처리하도록 함
+    // 또는 여기서 직접 처리 가능:
+    // 블루프린트에서 CarriedParcel 변수를 확인하고 TryPlaceParcel 호출
+    
+    return CanInteract_Implementation(Interactor);
+}
+
+bool AShelfActor::CanInteract_Implementation(ACharacter* Interactor) const
+{
+    if (!Interactor)
+    {
+        return false;
+    }
+
+    // 캐릭터가 Parcel을 들고 있고 선반이 가득 차지 않았으면 상호작용 가능
+    // 실제 구현은 블루프린트나 캐릭터 컴포넌트에서 처리
+    return !IsFull();
+}
+
+FText AShelfActor::GetInteractText_Implementation() const
+{
+    if (IsFull())
+    {
+        return FText::FromString(TEXT("Shelf is Full"));
+    }
+    return FText::FromString(TEXT("Press E to Place Parcel"));
+}
+
+void AShelfActor::StartHighlight_Implementation()
+{
+    if (!ShelfMesh)
+    {
+        return;
+    }
+
+    // Custom Depth 사용 (간단한 하이라이트)
+    ShelfMesh->SetRenderCustomDepth(true);
+    ShelfMesh->SetCustomDepthStencilValue(252);
+}
+
+void AShelfActor::EndHighlight_Implementation()
+{
+    if (!ShelfMesh)
+    {
+        return;
+    }
+
+    ShelfMesh->SetRenderCustomDepth(false);
+}
+
+void AShelfActor::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, 
+                                  UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, 
+                                  bool bFromSweep, const FHitResult& SweepResult)
+{
+    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor);
+    if (BlasterCharacter)
+    {
+        // 캐릭터에 오버랩 상태 설정 (기존 Weapon 패턴)
+        if (BlasterCharacter->GetInteractionComponent())
+        {
+            BlasterCharacter->GetInteractionComponent()->AddOverlappingActor(this);
+        }
+    }
+}
+
+void AShelfActor::OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, 
+                                     UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor);
+    if (BlasterCharacter)
+    {
+        // 캐릭터에서 오버랩 상태 제거
+        if (BlasterCharacter->GetInteractionComponent())
+        {
+            BlasterCharacter->GetInteractionComponent()->RemoveOverlappingActor(this);
+        }
+    }
+}
+
+void AShelfActor::ShowInteractionWidget(bool bShowWidget)
+{
+    // 위젯 컴포넌트가 있다면 표시/숨김 처리
+    // 필요시 위젯 컴포넌트 추가 가능
+    UE_LOG(LogTemp, Verbose, TEXT("[ShelfActor] ShowInteractionWidget: %s"), bShowWidget ? TEXT("True") : TEXT("False"));
 }
 

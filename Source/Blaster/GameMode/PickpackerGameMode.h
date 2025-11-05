@@ -5,11 +5,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
-#include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "PickpackerGameMode.generated.h"
 
 class UAnchorRuntimeSubsystem;
 class APlayerState;
+class APickpackerGameState;
+class UPCGDungeonSubSystem; // forward declaration
 
 /**
  * Pickpacker Game Mode - Manages the warehouse simulation game
@@ -32,7 +33,7 @@ public:
 	 * @param Seed - Random seed for deterministic generation
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Level")
-	void InitializeLevel(UDA_LevelVariant* LevelVariantData, int32 Seed = 0);
+	void InitializeLevel(class UDA_LevelVariant* LevelVariantData, int32 Seed = 0);
 
 	/**
 	 * Start the warehouse simulation
@@ -50,7 +51,7 @@ public:
 	 * Get current level variant data
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Level")
-	UDA_LevelVariant* GetCurrentLevelVariant() const { return CurrentLevelVariant; }
+	class UDA_LevelVariant* GetCurrentLevelVariant() const { return CurrentLevelVariant; }
 
 	/**
 	 * Get current seed
@@ -69,29 +70,34 @@ public:
 	 */
 	void RegisterClientPCGReady(APlayerState* PlayerState);
 
+	/**
+	 * Set mission configuration
+	 * @param MissionId - The ID of the mission
+	 * @param CustomSeed - Custom seed for the mission (optional)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
+	void SetMissionConfig(const FString& MissionId, int32 CustomSeed = 0);
+
 protected:
 	/**
-	 * Called when level initialization is complete
+	 * Called when match state is set
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Level")
-	void OnLevelInitialized();
+	virtual void OnMatchStateSet() override;
 
 	/**
-	 * Called when simulation starts
+	 * Called when PCG generation is complete
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Gameplay")
-	void OnSimulationStarted();
+	void OnPCGGenerationComplete(bool bSuccess);
 
 	/**
-	 * Called when simulation ends
+	 * Start gameplay after initialization
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Gameplay")
-	void OnSimulationEnded();
+	void StartGameplay();
 
 private:
 	/** Current level variant data */
 	UPROPERTY()
-	UDA_LevelVariant* CurrentLevelVariant = nullptr;
+	class UDA_LevelVariant* CurrentLevelVariant = nullptr;
 
 	/** Current random seed */
 	UPROPERTY()
@@ -104,4 +110,18 @@ private:
 	/** Anchor runtime subsystem reference */
 	UPROPERTY()
 	UAnchorRuntimeSubsystem* AnchorSubsystem = nullptr;
+
+	// Mission settings
+	UPROPERTY()
+	FSeedSet CurrentMissionConfig;
+
+	// PCG subsystem (not reflected)
+	UPCGDungeonSubSystem* PCGDungeonSubsystem = nullptr;
+
+	// Cached game state
+	UPROPERTY()
+	APickpackerGameState* PickpackerGameState = nullptr;
+
+	// Generation flag
+	bool bPCGGenerationInProgress = false;
 };

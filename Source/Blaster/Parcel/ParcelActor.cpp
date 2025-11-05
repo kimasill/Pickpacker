@@ -3,13 +3,19 @@
 #include "ParcelActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "Engine/SkeletalMeshSocket.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameFramework/Character.h"
+#include "Blaster/Character/BlasterCharacter.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 AParcelActor::AParcelActor()
 {
@@ -37,6 +43,7 @@ AParcelActor::AParcelActor()
 	PickupWidget->SetupAttachment(RootComponent);
 	PickupWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	PickupWidget->SetDrawAtDesiredSize(true);
+	
 
 	// Initialize state
 	bIsAttached = false;
@@ -87,11 +94,17 @@ void AParcelActor::BeginPlay()
 			}
 	}
 
+	if (PickupWidget)
+	{
+		PickupWidget->SetVisibility(false); // Hidden by default
+	}
+
 	// Configure physics
 	if (MeshComponent)
 	{
 		MeshComponent->SetSimulatePhysics(true);
 		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComponent->SetRenderCustomDepth(false);
 	}
 
 	if (bEnableDebugLogging)
@@ -145,7 +158,7 @@ void AParcelActor::RequestAttach(ACharacter* Carrier, const FName& SocketId)
         return;
     }
 
-    (Carrier, SocketId);
+    Server_RequestAttach(Carrier, SocketId);
 }
 
 void AParcelActor::RequestDrop(const FVector& Impulse)
@@ -195,6 +208,21 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		}
 
+		// Attach Parcel to character mesh socket
+		USkeletalMeshComponent* CharacterMesh = Carrier->GetMesh();
+		if (CharacterMesh)
+		{
+			const USkeletalMeshSocket* CarrySocket = CharacterMesh->GetSocketByName(SocketId);
+			if (CarrySocket)
+			{
+				CarrySocket->AttachActor(this, CharacterMesh);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Socket not found: %s"), *SocketId.ToString());
+			}
+		}
+
 		// Broadcast attach event
 		Multicast_ParcelAttached(Carrier, SocketId);
 
@@ -224,6 +252,16 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 	}
 
 	FVector DropLocation = GetActorLocation();
+
+	// Detach from character mesh
+	if (CurrentCarrier)
+	{
+		USkeletalMeshComponent* CharacterMesh = CurrentCarrier->GetMesh();
+		if (CharacterMesh)
+		{
+			DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		}
+	}
 
 	// Detach from carry points
 	if (CarryPointsComponent && CurrentCarrier)
@@ -328,10 +366,26 @@ void AParcelActor::Multicast_ParcelDropped_Implementation(FVector DropLocation)
 
 void AParcelActor::NotifyBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
+	// 캐릭터 캡슐에서 발생한 Overlap을 캐릭터 BP가 넘겨줍니다.
+    const APawn* Pawn = Cast<APawn>(OtherActor);
+    if (!Pawn) return;
+
+    // 로컬 클라만 위젯 토글
+    if (Pawn->IsLocallyControlled() && PickupWidget)
+    {        
+        PickupWidget->SetVisibility(true);
+    }
 }
 
 void AParcelActor::NotifyEndOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
+	const APawn* Pawn = Cast<APawn>(OtherActor);
+	if (!Pawn) return;
+
+	if (Pawn->IsLocallyControlled() && PickupWidget)
+	{
+		PickupWidget->SetVisibility(false);
+	}
 }
 
 void AParcelActor::OnParcelStateChanged(const FParcelState& NewState)
@@ -458,5 +512,64 @@ void AParcelActor::StabilizePhysics()
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Physics stabilized"));
+	}
+}
+
+// InteractableInterface Implementation
+bool AParcelActor::OnInteract_Implementation(ACharacter* Interactor)
+{
+	if (!Interactor || !CanBeAttached())
+	{
+		return false;
+	}
+
+	// RequestAttach 호출
+	RequestAttach(Interactor, FName("CarrySocket"));
+	return true;
+}
+
+bool AParcelActor::CanInteract_Implementation(ACharacter* Interactor) const
+{
+	if (!Interactor)
+	{
+		return false;
+	}
+
+	return CanBeAttached();
+}
+
+FText AParcelActor::GetInteractText_Implementation() const
+{
+	if (CanBeAttached())
+	{
+		return FText::FromString(TEXT("Press E to Pickup"));
+	}
+	return FText::GetEmpty();
+}
+
+void AParcelActor::StartHighlight_Implementation()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+	MeshComponent->SetRenderCustomDepth(true);
+	MeshComponent->SetCustomDepthStencilValue(252);
+}
+
+void AParcelActor::EndHighlight_Implementation()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+	MeshComponent->SetRenderCustomDepth(false);
+}
+
+void AParcelActor::ShowPickupWidget(bool bShowWidget)
+{
+	if (PickupWidget)
+	{
+		PickupWidget->SetVisibility(bShowWidget);
 	}
 }

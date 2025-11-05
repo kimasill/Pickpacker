@@ -9,6 +9,7 @@
 #include "Components/SceneComponent.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "GameplayTagContainer.h"
+#include "Blaster/Components/InteractionComponent.h"
 #include "ShelfActor.generated.h"
 
 class AParcelActor;
@@ -50,7 +51,7 @@ struct FYShelfSlot
  * 선반 액터 - Parcel을 배치할 수 있는 선반
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AShelfActor : public AActor
+class BLASTER_API AShelfActor : public AActor, public IInteractableInterface
 {
     GENERATED_BODY()
 
@@ -105,6 +106,10 @@ public:
     /** 선반 메시 */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     UStaticMeshComponent* ShelfMesh;
+
+    /** 오버랩 감지 영역 (기존 Weapon 패턴) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+    class USphereComponent* AreaSphere;
 
     /** 상호작용 영역 */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -192,8 +197,54 @@ protected:
      */
     void InitializeSlots();
 
+    /**
+     * Called when character overlaps with this shelf
+     */
+    UFUNCTION()
+    void OnSphereOverlap(
+        UPrimitiveComponent* OverlappedComponent,
+        AActor* OtherActor,
+        UPrimitiveComponent* OtherComp,
+        int32 OtherBodyIndex,
+        bool bFromSweep,
+        const FHitResult& SweepResult
+    );
+
+    /**
+     * Called when character ends overlap with this shelf
+     */
+    UFUNCTION()
+    void OnSphereEndOverlap(
+        UPrimitiveComponent* OverlappedComponent,
+        AActor* OtherActor,
+        UPrimitiveComponent* OtherComp,
+        int32 OtherBodyIndex
+    );
+
+    /**
+     * Show/hide interaction widget
+     */
+    UFUNCTION(BlueprintCallable, Category = "Shelf")
+    void ShowInteractionWidget(bool bShowWidget);
+
     /** 디버그 설정 */
     UPROPERTY(EditAnywhere, Category = "Debug")
     bool bEnableDebugLogging = true;
+
+    // InteractableInterface Implementation
+    virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
+    virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
+    virtual FText GetInteractText_Implementation() const override;
+    virtual void StartHighlight_Implementation() override;
+    virtual void EndHighlight_Implementation() override;
+
+private:
+    /** 하이라이트를 위한 원본 머티리얼 저장 */
+    UPROPERTY()
+    TArray<UMaterialInterface*> OriginalMaterials;
+
+    /** 하이라이트 머티리얼 */
+    UPROPERTY(EditAnywhere, Category = "Interaction")
+    UMaterialInterface* HighlightMaterial = nullptr;
 };
 

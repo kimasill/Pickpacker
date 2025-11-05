@@ -11,6 +11,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameplayTagContainer.h"
+#include "Blaster/Components/InteractionComponent.h"
 #include "ParcelActor.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelAttached, class ACharacter*, Carrier, FName, SocketId);
@@ -21,7 +22,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelBroken, class AParcelActor*
  * Parcel Actor - Represents a package that can be carried by players
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AParcelActor : public AActor
+class BLASTER_API AParcelActor : public AActor, public IInteractableInterface
 {
 	GENERATED_BODY()
 
@@ -126,7 +127,6 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void BP_OnEndFocus(AActor* OtherActor);
 
-
 protected:
 	/**
 	 * Server RPC for attach request
@@ -211,8 +211,8 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UWidgetComponent* HUDWidgetComponent;
 
-	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
-	class UWidgetComponent* PickupWidget;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UWidgetComponent* PickupWidget;
 	// Parcel configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FParcelConfig ParcelConfig;
@@ -249,7 +249,29 @@ protected:
 	UPROPERTY()
 	UParcelHUDWidget* HUDWidget = nullptr;
 
+	/**
+	 * Show/hide pickup widget
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void ShowPickupWidget(bool bShowWidget);
+
 	// Debug settings
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bEnableDebugLogging = true;
+
+	// InteractableInterface Implementation
+	virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
+	virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
+	virtual FText GetInteractText_Implementation() const override;
+	virtual void StartHighlight_Implementation() override;
+	virtual void EndHighlight_Implementation() override;
+
+private:
+	/** 하이라이트를 위한 원본 머티리얼 저장 */
+	UPROPERTY()
+	TArray<UMaterialInterface*> OriginalMaterials;
+
+	/** 하이라이트 머티리얼 */
+	UPROPERTY(EditAnywhere, Category = "Interaction")
+	UMaterialInterface* HighlightMaterial = nullptr;
 };

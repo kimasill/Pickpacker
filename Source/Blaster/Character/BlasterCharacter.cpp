@@ -28,22 +28,33 @@
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Blaster/PlayerStart/TeamPlayerStart.h"
+#include "Blaster/Components/InteractionComponent.h"
+#include "Blaster/Components/CarryIKComponent.h"
 
 ABlasterCharacter::ABlasterCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(GetMesh());
-	CameraBoom->TargetArmLength = 600.f;
+	//CameraBoom->SetupAttachment(GetMesh());
+	CameraBoom->SetupAttachment(GetCapsuleComponent());
+	CameraBoom->TargetArmLength = 0.f;
 	CameraBoom->bUsePawnControlRotation = true;
+
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	FollowCamera->bUsePawnControlRotation = false;
 
-	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->bOrientRotationToMovement = true;
+	// 3rd person view
+	//FollowCamera->bUsePawnControlRotation = false;
+
+	// 1st person view
+	FollowCamera->bUsePawnControlRotation = true;
+
+
+	bUseControllerRotationYaw = true;
+
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	OverHeadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverHeadWidget"));
 	OverHeadWidget->SetupAttachment(RootComponent);
@@ -55,6 +66,9 @@ ABlasterCharacter::ABlasterCharacter()
 	Buff->SetIsReplicated(true);
 
 	LagCompensation = CreateDefaultSubobject<ULagCompensationComponent>(TEXT("LagCompensation"));
+
+	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+	CarryIKComponent = CreateDefaultSubobject<UCarryIKComponent>(TEXT("CarryIKComponent"));
 
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
@@ -426,6 +440,9 @@ void ABlasterCharacter::BeginPlay()
 	{
 		AttachedGrenade->SetVisibility(false);
 	}
+
+	if (PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson) ToggleHeadMesh(true);
+	
 }
 
 void ABlasterCharacter::Tick(float DeltaTime)
@@ -910,6 +927,8 @@ void ABlasterCharacter::TurnInPlace(float DeltaTime)
 void ABlasterCharacter::HideCameraIfCharacterClose()
 {
 	if (!IsLocallyControlled()) return;
+	if (PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson) return;
+
 	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
 	{
 		GetMesh()->SetVisibility(false);
@@ -935,6 +954,50 @@ void ABlasterCharacter::HideCameraIfCharacterClose()
 		}
 	}
 }
+
+void ABlasterCharacter::ToggleHeadMesh(bool bHideHeadMesh)
+{	
+	if (IsLocallyControlled())
+	{
+		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+		{
+			if (bHideHeadMesh) {
+				auto HideIfExists = [SkeletalMesh](FName BoneName)
+					{
+						if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+						{
+							// hide rendering of the bone
+							SkeletalMesh->HideBoneByName(BoneName, EPhysBodyOp::PBO_None);
+						}
+					};
+				HideIfExists(FName("head"));
+				HideIfExists(FName("hair_front"));
+				HideIfExists(FName("hair_back"));
+				HideIfExists(FName("neck_01"));
+
+				SkeletalMesh->SetCastHiddenShadow(true);
+			}
+			else if (!bHideHeadMesh)
+			{
+				auto UnhideIfExists = [SkeletalMesh](FName BoneName)
+					{
+						if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+						{
+							// unhide rendering of the bone
+							SkeletalMesh->UnHideBoneByName(BoneName);
+						}
+					};
+				UnhideIfExists(FName("head"));
+				UnhideIfExists(FName("hair_front"));
+				UnhideIfExists(FName("hair_back"));
+				UnhideIfExists(FName("neck_01"));
+				SkeletalMesh->SetCastHiddenShadow(false);
+			}
+		}
+	}
+}
+
+
 
 void ABlasterCharacter::OnRep_Health(float LastHealth)
 {

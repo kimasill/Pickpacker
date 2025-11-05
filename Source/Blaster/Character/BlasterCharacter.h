@@ -13,6 +13,21 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
 
+UENUM(BlueprintType)
+enum class EPerspective : uint8 {
+	EPT_FirstPerson UMETA(DisplayName = "FirstPerson"),
+	EPT_ThirdPerson UMETA(DisplayName = "ThirdPerson")
+};
+
+USTRUCT(BlueprintType)
+struct FPerspectiveSettings {
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	EPerspective Perspective = EPerspective::EPT_FirstPerson;
+};
+
 UCLASS()
 class BLASTER_API ABlasterCharacter : public ACharacter, public IInteractWithCrosshairInterface
 {
@@ -71,6 +86,9 @@ public:
 
 	void SetTeamColor(ETeam Team);
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FPerspectiveSettings PerspectiveSettings;
+
 protected:
 	virtual void BeginPlay() override;
 	void MoveForward(float Value);
@@ -101,6 +119,13 @@ protected:
 	// Poll for any relevant classes and initialize our HUD
 	void PollInit();
 	void RotateInPlace(float DeltaTime);
+
+	// Expose these to BP (not private) to satisfy UHT001
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
+	class UInteractionComponent* InteractionComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Carry IK")
+	class UCarryIKComponent* CarryIKComponent;
 
 #pragma region Hit box
 	/**
@@ -167,8 +192,8 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 	class UCameraComponent* FollowCamera;
-
-	UPROPERTY(EditAnywhere, BluePrintReadOnly, meta = (AllowPrivateAccess = "true"))
+		
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UWidgetComponent* OverHeadWidget;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
@@ -218,8 +243,11 @@ private:
 
 	void HideCameraIfCharacterClose();
 
+	void ToggleHeadMesh(bool bHideHeadMesh);
+
 	UPROPERTY(EditAnywhere)
 	float CameraThreshold = 200.f; // Distance to hide camera when character is close
+
 
 	bool bRotateRootBone;
 	float TurnThreshold = 0.5f; // Threshold to start turning in place
@@ -356,6 +384,8 @@ public:
 	AWeapon* GetEquippedWeapon();
 	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
 	FVector GetHitTarget() const;
+	FORCEINLINE class UInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
+	FORCEINLINE class UCarryIKComponent* GetCarryIKComponent() const { return CarryIKComponent; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
 	FORCEINLINE bool IsElimmed() const { return bElimmed; }
