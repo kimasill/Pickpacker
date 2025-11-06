@@ -10,6 +10,7 @@
 #include "Components/WidgetComponent.h"
 #include "GameFramework/Character.h"
 #include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/Components/CarryIKComponent.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
@@ -344,13 +345,13 @@ const FParcelState& AParcelActor::GetParcelState() const
 
 void AParcelActor::Multicast_ParcelAttached_Implementation(ACharacter* Carrier, FName SocketId)
 {
-    OnParcelAttached.Broadcast(Carrier, SocketId);
+	OnParcelAttached.Broadcast(Carrier, SocketId);
 
-    if (bEnableDebugLogging)
-    {
-        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast attach - Carrier: %s, Socket: %s"),
-            Carrier ? *Carrier->GetName() : TEXT("None"), *SocketId.ToString());
-    }
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast attach - Carrier: %s, Socket: %s"),
+			Carrier ? *Carrier->GetName() : TEXT("None"), *SocketId.ToString());
+	}
 }
 
 void AParcelActor::Multicast_ParcelDropped_Implementation(FVector DropLocation)
@@ -555,6 +556,7 @@ void AParcelActor::StartHighlight_Implementation()
 	}
 	MeshComponent->SetRenderCustomDepth(true);
 	MeshComponent->SetCustomDepthStencilValue(252);
+	ShowPickupWidget(true);
 }
 
 void AParcelActor::EndHighlight_Implementation()
@@ -564,6 +566,7 @@ void AParcelActor::EndHighlight_Implementation()
 		return;
 	}
 	MeshComponent->SetRenderCustomDepth(false);
+	ShowPickupWidget(false);
 }
 
 void AParcelActor::ShowPickupWidget(bool bShowWidget)

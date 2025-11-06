@@ -4,6 +4,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Blaster/Weapon/Weapon.h"
 #include "Blaster/BlasterTypes/CombatState.h"
+#include "Blaster/Components/CarryIKComponent.h"
 
 void UBlasterAnimInstance::NativeInitializeAnimation()
 {
@@ -37,6 +38,7 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	bRotateRootBone = BlasterCharacter->ShouldRotateRootBone(); // Check if the root bone should rotate
 	bElimmed = BlasterCharacter->IsElimmed(); // Check if the character is eliminated
 	bHoldingTheFlag = BlasterCharacter->IsHoldingTheFlag(); // Check if the character is holding the flag
+	
 
 	FRotator AimRotation = BlasterCharacter->GetBaseAimRotation();
 	FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(BlasterCharacter->GetVelocity());
@@ -62,7 +64,6 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		BlasterCharacter->GetMesh()->TransformToBoneSpace(FName("hand_r"), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
 		LeftHandTransform.SetLocation(OutPosition);
 		LeftHandTransform.SetRotation(FQuat(OutRotation)); // Set the left hand transform based on the weapon's socket
-
 		if (BlasterCharacter->IsLocallyControlled()) {
 			bLocallyControlled = true; // Check if the character is locally controlled
 			FTransform RightHandTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("hand_r"), ERelativeTransformSpace::RTS_World);
@@ -75,6 +76,25 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		FVector MuzzleX(FRotationMatrix(MuzzleTipTransform.GetRotation().Rotator()).GetUnitAxis(EAxis::X));
 		DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), MuzzleTipTransform.GetLocation() + MuzzleX * 1000.0f, FColor::Red, false, -1.0f, 0, 2.0f);
 		DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), BlasterCharacter->GetHitTarget(), FColor::Orange);
+	}
+	UCarryIKComponent* CarryIKComp = BlasterCharacter->GetCarryIKComponent();
+	if (CarryIKComp)
+	{
+		bEnableIK = CarryIKComp->IsIKEnabled();
+		if (bEnableIK)
+		{
+			LeftHandLocation = CarryIKComp->GetLeftHandIKLocation();
+			RightHandLocation = CarryIKComp->GetRightHandIKLocation();
+			LeftHandLocationInBoneSpace = CarryIKComp->GetLeftHandIKLocationInBoneSpace();
+			RightHandLocationInBoneSpace = CarryIKComp->GetRightHandIKLocationInBoneSpace();
+		}
+		else
+		{
+			LeftHandLocation = FVector::ZeroVector;
+			RightHandLocation = FVector::ZeroVector;
+			LeftHandLocationInBoneSpace = FVector::ZeroVector;
+			RightHandLocationInBoneSpace = FVector::ZeroVector;
+		}
 	}
 
 	// Update animation flags based on character state

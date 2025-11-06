@@ -42,6 +42,15 @@ void UCarryPointsComponent::BeginPlay()
 
 void UCarryPointsComponent::InitializeCarrySockets()
 {
+	if (CarrySockets.Num() > 0)
+	{
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CarryPointsComponent] Using %d sockets from BP/instance"), CarrySockets.Num());
+		}
+		return;
+	}
+
 	CarrySockets.Empty();
 
 	// Create left handle socket
@@ -80,6 +89,30 @@ bool UCarryPointsComponent::TryAttachToSocket(ACharacter* Character, const FName
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CarryPointsComponent] Invalid character"));
 		return false;
+	}
+
+	const bool bAny =
+		SocketName.IsNone() ||
+		SocketName == FName(TEXT("CarrySocket"));
+
+	if (bAny) {
+		for (FCarrySocket& S : CarrySockets)
+		{
+			if(!S.bIsOccupied)
+			{
+				S.bIsOccupied = true;
+				S.OccupyingCharacter = Character;
+
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[CarryPointsComponent] Character %s attached to auto-picked socket %s"),
+						*Character->GetName(), *S.SocketName.ToString());
+				}
+
+				OnSocketOccupied.Broadcast(S.SocketName, Character);
+				return true;
+			}
+		}
 	}
 
 	int32 SocketIndex = FindSocketIndex(SocketName);

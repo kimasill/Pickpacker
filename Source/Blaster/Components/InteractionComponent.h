@@ -74,6 +74,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Interaction")
     void Interact();
 
+    UFUNCTION(Server, Reliable)
+	void Server_Interact(AActor* Target);
+
     /**
      * 현재 타겟 액터 가져오기
      */
@@ -176,5 +179,7 @@ private:
     /** 오버랩된 액터 목록 (오버랩 이벤트로 관리) */
     UPROPERTY()
     TArray<TWeakObjectPtr<AActor>> OverlappingActors;
+
+	bool PerformInteract(AActor* Target, class ACharacter* OwnerCharacter);
 };
 

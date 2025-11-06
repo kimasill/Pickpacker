@@ -19,6 +19,8 @@ UInteractionComponent::UInteractionComponent()
     TraceChannel = ECC_Visibility;
     bRequireInteractableInterface = true;
     bDrawDebugTrace = false;
+
+    SetIsReplicatedByDefault(true);
 }
 
 void UInteractionComponent::BeginPlay()
@@ -321,28 +323,34 @@ bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
 
 void UInteractionComponent::Interact()
 {
-    if (!CanInteract())
-    {
-        return;
-    }
+    if (!CanInteract()) return;
 
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
-    {
-        return;
-    }
+    if (!OwnerCharacter) return;
 
-    if (CurrentTarget.IsValid())
+	AActor* Target = CurrentTarget.Get();
+	if (!Target) return;
+
+    if (OwnerCharacter->HasAuthority())
     {
-        if (IInteractableInterface* Interface = Cast<IInteractableInterface>(CurrentTarget.Get()))
+		const bool bSuccess = PerformInteract(Target, OwnerCharacter);
+        if (bSuccess)
         {
-            bool bSuccess = Interface->Execute_OnInteract(CurrentTarget.Get(), OwnerCharacter);
-            if (bSuccess)
-            {
-                OnInteractSuccess.Broadcast(CurrentTarget.Get());
-            }
+			OnInteractSuccess.Broadcast(Target);
         }
     }
+    else
+    {
+        Server_Interact(Target);
+    }
+}
+
+void UInteractionComponent::Server_Interact_Implementation(AActor* Target)
+{
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    if (!OwnerCharacter) return;
+
+	PerformInteract(Target, OwnerCharacter);
 }
 
 bool UInteractionComponent::CanInteract() const
@@ -364,5 +372,13 @@ bool UInteractionComponent::CanInteract() const
     }
 
     return false;
+}
+
+bool UInteractionComponent::PerformInteract(AActor* Target, ACharacter* OwnerCharacter)
+{
+    if (!Target || !OwnerCharacter) return false;
+    if (!Target->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass())) return false;
+     
+    return IInteractableInterface::Execute_OnInteract(Target, OwnerCharacter);
 }
 

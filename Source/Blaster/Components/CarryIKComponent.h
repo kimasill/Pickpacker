@@ -20,6 +20,7 @@ public:
     
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     /**
      * IK 활성화
@@ -58,9 +59,6 @@ public:
     FVector GetTargetIKLocation() const { return TargetIKLocation; }
 
 public:
-    /** IK 활성화 여부 */
-    UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
-    bool bIKEnabled = false;
 
     /** 왼손 IK 위치 */
     UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
@@ -86,6 +84,24 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     float IKInterpSpeed = 10.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
+    bool bUseParcelCarryPoints = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
+    FName LeftHandleName = FName("CarryPoint_Left");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
+    FName RightHandleName = FName("CarryPoint_Right");
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
+    FVector GetLeftHandIKLocationInBoneSpace() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
+	FVector GetRightHandIKLocationInBoneSpace() const;
+
+	UFUNCTION()
+    void OnRep_IKState();
+
 protected:
     /**
      * IK 위치 업데이트
@@ -94,11 +110,15 @@ protected:
 
 private:
     /** 현재 부착된 Parcel */
-    UPROPERTY()
-    TWeakObjectPtr<AParcelActor> AttachedParcel;
+    UPROPERTY(ReplicatedUsing = OnRep_IKState)
+    TObjectPtr<AParcelActor> AttachedParcel;
+
+        /** IK 활성화 여부 */
+    UPROPERTY(ReplicatedUsing = OnRep_IKState)
+    bool bIKEnabled = false;
 
     /** 현재 소켓 이름 */
-    UPROPERTY()
+    UPROPERTY(ReplicatedUsing=OnRep_IKState)
     FName CurrentSocketName;
 
     /** 목표 IK 위치 (보간용) */
