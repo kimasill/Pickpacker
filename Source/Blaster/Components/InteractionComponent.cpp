@@ -159,14 +159,31 @@ void UInteractionComponent::UpdateTarget()
     // 타겟 변경 확인 및 하이라이트 업데이트
     PreviousTarget = CurrentTarget;
 
+    // 새로운 타겟이 전혀 없으면, 기존 하이라이트를 해제하고 타겟을 비웁니다.
+    if (NewTarget == nullptr)
+    {
+        if (CurrentTarget.IsValid())
+        {
+            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+            {
+                IInteractableInterface::Execute_EndHighlight(CurrentTarget.Get());
+            }
+
+            OnTargetChanged.Broadcast(PreviousTarget.Get(), nullptr);
+        }
+
+        CurrentTarget = nullptr;
+        return;
+    }
+
     if (CurrentTarget.Get() != NewTarget)
     {
         // 이전 타겟 하이라이트 해제
         if (CurrentTarget.IsValid())
         {
-            if (IInteractableInterface* OldInterface = Cast<IInteractableInterface>(CurrentTarget.Get()))
+            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
             {
-                OldInterface->Execute_EndHighlight(CurrentTarget.Get());
+                IInteractableInterface::Execute_EndHighlight(CurrentTarget.Get());
             }
         }
 
@@ -176,9 +193,9 @@ void UInteractionComponent::UpdateTarget()
         // 새 타겟 하이라이트
         if (CurrentTarget.IsValid())
         {
-            if (IInteractableInterface* NewInterface = Cast<IInteractableInterface>(CurrentTarget.Get()))
+            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
             {
-                NewInterface->Execute_StartHighlight(CurrentTarget.Get());
+                IInteractableInterface::Execute_StartHighlight(CurrentTarget.Get());
             }
         }
 
@@ -328,15 +345,15 @@ void UInteractionComponent::Interact()
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
 
-	AActor* Target = CurrentTarget.Get();
-	if (!Target) return;
+    AActor* Target = CurrentTarget.Get();
+    if (!Target) return;
 
     if (OwnerCharacter->HasAuthority())
     {
-		const bool bSuccess = PerformInteract(Target, OwnerCharacter);
+        const bool bSuccess = PerformInteract(Target, OwnerCharacter);
         if (bSuccess)
         {
-			OnInteractSuccess.Broadcast(Target);
+            OnInteractSuccess.Broadcast(Target);
         }
     }
     else
@@ -350,7 +367,7 @@ void UInteractionComponent::Server_Interact_Implementation(AActor* Target)
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
 
-	PerformInteract(Target, OwnerCharacter);
+    PerformInteract(Target, OwnerCharacter);
 }
 
 bool UInteractionComponent::CanInteract() const
