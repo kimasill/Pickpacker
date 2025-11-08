@@ -11,6 +11,7 @@
 #include "GameFramework/Character.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/CarryIKComponent.h"
+#include "Blaster/Components/InteractionComponent.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
@@ -31,6 +32,7 @@ AParcelActor::AParcelActor()
 	MeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_WorldDynamic);
 	MeshComponent->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	MeshComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	MeshComponent->SetIsReplicated(true);
 
 	ParcelStateComponent = CreateDefaultSubobject<UParcelStateComponent>(TEXT("ParcelStateComponent"));
 	CarryPointsComponent = CreateDefaultSubobject<UCarryPointsComponent>(TEXT("CarryPointsComponent"));
@@ -103,8 +105,19 @@ void AParcelActor::BeginPlay()
 	// Configure physics
 	if (MeshComponent)
 	{
-		MeshComponent->SetSimulatePhysics(true);
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		if (HasAuthority())
+		{
+			if (!bIsAttached)
+			{
+				MeshComponent->SetSimulatePhysics(true);
+				MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			}
+		}
+		else
+		{
+			MeshComponent->SetSimulatePhysics(false);
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		}
 		MeshComponent->SetRenderCustomDepth(false);
 	}
 
@@ -191,6 +204,7 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 		bIsAttached = true;
 		CurrentSocketId = SocketId;
 		CurrentCarrier = Carrier;
+		SetOwner(Carrier);
 
 		// Update parcel state
 		if (ParcelStateComponent)
@@ -200,6 +214,19 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 			// Check if this is two-person carry
 			bool bIsTwoPersonCarry = CarryPointsComponent && CarryPointsComponent->IsTwoPersonCarry();
 			ParcelStateComponent->ApplyTwoPersonCarryBonuses(bIsTwoPersonCarry);
+		}
+
+		if (ABlasterCharacter* BlasterCarrier = Cast<ABlasterCharacter>(Carrier))
+		{
+			if (UInteractionComponent* InteractionComponent = BlasterCarrier->GetInteractionComponent())
+			{
+				InteractionComponent->SetCarriedParcel(this);
+			}
+
+			if (UCarryIKComponent* CarryIKComponent = BlasterCarrier->GetCarryIKComponent())
+			{
+				CarryIKComponent->EnableIK(this, SocketId);
+			}
 		}
 
 		// Configure physics for attachment
@@ -253,11 +280,13 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 	}
 
 	FVector DropLocation = GetActorLocation();
+	ACharacter* DroppingCarrier = CurrentCarrier;
+	const FName DroppingSocket = CurrentSocketId;
 
 	// Detach from character mesh
-	if (CurrentCarrier)
+	if (DroppingCarrier)
 	{
-		USkeletalMeshComponent* CharacterMesh = CurrentCarrier->GetMesh();
+		USkeletalMeshComponent* CharacterMesh = DroppingCarrier->GetMesh();
 		if (CharacterMesh)
 		{
 			DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
@@ -265,9 +294,9 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 	}
 
 	// Detach from carry points
-	if (CarryPointsComponent && CurrentCarrier)
+	if (CarryPointsComponent && DroppingCarrier)
 	{
-		CarryPointsComponent->DetachFromSocket(CurrentCarrier, CurrentSocketId);
+		CarryPointsComponent->DetachFromSocket(DroppingCarrier, DroppingSocket);
 	}
 
 	// Update parcel state
@@ -277,20 +306,42 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 		ParcelStateComponent->ApplyTwoPersonCarryBonuses(false); // No longer two-person carry
 	}
 
-	// Reset attachment state
-	bIsAttached = false;
-	CurrentSocketId = NAME_None;
-	CurrentCarrier = nullptr;
+	if (MeshComponent)
+	{
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComponent->SetSimulatePhysics(true);
+	}
+
 
 	// Configure physics for drop
 	ConfigureDropPhysics(Impulse);
 
 	// Broadcast drop event
-	Multicast_ParcelDropped(DropLocation);
+	Multicast_ParcelDropped(DroppingCarrier, DropLocation);
+
+	if (ABlasterCharacter* BlasterCarrier = Cast<ABlasterCharacter>(DroppingCarrier))
+	{
+		if (UInteractionComponent* InteractionComponent = BlasterCarrier->GetInteractionComponent())
+		{
+			InteractionComponent->SetCarriedParcel(nullptr);
+		}
+
+		if (UCarryIKComponent* CarryIKComponent = BlasterCarrier->GetCarryIKComponent())
+		{
+			CarryIKComponent->DisableIK();
+		}
+	}
+
+	// Reset attachment state
+	bIsAttached = false;
+	CurrentSocketId = NAME_None;
+	CurrentCarrier = nullptr;
+	SetOwner(nullptr);
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server drop successful - Location: %s"),
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server drop successful - Carrier: %s, Location: %s"),
+			DroppingCarrier ? *DroppingCarrier->GetName() : TEXT("None"),
 			*DropLocation.ToString());
 	}
 }
@@ -346,7 +397,18 @@ const FParcelState& AParcelActor::GetParcelState() const
 void AParcelActor::Multicast_ParcelAttached_Implementation(ACharacter* Carrier, FName SocketId)
 {
 	OnParcelAttached.Broadcast(Carrier, SocketId);
-
+	if (Carrier)
+	{
+		USkeletalMeshComponent* CharacterMesh = Carrier->GetMesh();
+		if (CharacterMesh)
+		{
+			const USkeletalMeshSocket* CarrySocket = CharacterMesh->GetSocketByName(SocketId);
+			if (CarrySocket)
+			{
+				CarrySocket->AttachActor(this, CharacterMesh);
+			}
+		}
+	}
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast attach - Carrier: %s, Socket: %s"),
@@ -354,13 +416,17 @@ void AParcelActor::Multicast_ParcelAttached_Implementation(ACharacter* Carrier, 
 	}
 }
 
-void AParcelActor::Multicast_ParcelDropped_Implementation(FVector DropLocation)
+void AParcelActor::Multicast_ParcelDropped_Implementation(ACharacter* Carrier, FVector DropLocation)
 {
     OnParcelDropped.Broadcast(DropLocation);
-
+	if (Carrier)
+	{
+		DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	}
     if (bEnableDebugLogging)
     {
-        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast drop - Location: %s"),
+        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Multicast drop - Carrier: %s, Location: %s"),
+            Carrier ? *Carrier->GetName() : TEXT("None"),
             *DropLocation.ToString());
     }
 }

@@ -41,36 +41,26 @@ public:
     bool IsIKEnabled() const { return bIKEnabled; }
 
     /**
-     * 왼손 IK 위치 가져오기
-     */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
-    FVector GetLeftHandIKLocation() const { return LeftHandIKLocation; }
+     IK 타겟 위치 (Parcel의 소켓 위치)*/
 
-    /**
-     * 오른손 IK 위치 가져오기
-     */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
-    FVector GetRightHandIKLocation() const { return RightHandIKLocation; }
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
+	FTransform GetLeftHandIKTransform() const { return LeftHandIKTransform; }
 
-    /**
-     * IK 타겟 위치 가져오기 (Parcel의 소켓 위치)
-     */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
-    FVector GetTargetIKLocation() const { return TargetIKLocation; }
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
+	FTransform GetRightHandIKTransform() const { return RightHandIKTransform; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
+	FTransform GetTargetCenterTransform() const { return TargetCenterTransform; }
 
 public:
+    
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
+	FTransform LeftHandIKTransform;
 
-    /** 왼손 IK 위치 */
-    UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
-    FVector LeftHandIKLocation = FVector::ZeroVector;
-
-    /** 오른손 IK 위치 */
-    UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
-    FVector RightHandIKLocation = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
+	FTransform RightHandIKTransform;
 
     /** IK 타겟 위치 (Parcel 소켓) */
-    UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
-    FVector TargetIKLocation = FVector::ZeroVector;
 
     /** 왼손 오프셋 (소켓로부터) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
@@ -80,6 +70,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     FVector RightHandOffset = FVector(20.0f, 0.0f, 0.0f);
 
+	/** 타겟 중심 위치 오프셋 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
+    FTransform TargetCenterTransform;
+
     /** IK 보간 속도 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     float IKInterpSpeed = 10.0f;
@@ -87,17 +81,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     bool bUseParcelCarryPoints = true;
 
+    /** 핸들 소켓 
+    */
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
+	FName CenterHandleName = FName("CarryPoint_Center");
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     FName LeftHandleName = FName("CarryPoint_Left");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     FName RightHandleName = FName("CarryPoint_Right");
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
-    FVector GetLeftHandIKLocationInBoneSpace() const;
-
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
-	FVector GetRightHandIKLocationInBoneSpace() const;
 
 	UFUNCTION()
     void OnRep_IKState();
@@ -120,14 +115,6 @@ private:
     /** 현재 소켓 이름 */
     UPROPERTY(ReplicatedUsing=OnRep_IKState)
     FName CurrentSocketName;
-
-    /** 목표 IK 위치 (보간용) */
-    UPROPERTY()
-    FVector TargetLeftHandLocation;
-
-    /** 목표 IK 위치 (보간용) */
-    UPROPERTY()
-    FVector TargetRightHandLocation;
 };
 
 

@@ -89,6 +89,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FPerspectiveSettings PerspectiveSettings;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Socket")
+	FName CarrySocketName = FName("CarrySocket");
+
 protected:
 	virtual void BeginPlay() override;
 	void MoveForward(float Value);
@@ -394,6 +397,7 @@ public:
 	FORCEINLINE float GetShield() const { return Shield; }
 	FORCEINLINE float SetShield(float Amount) { return Shield = Amount; }
 	FORCEINLINE float GetMaxShield() const { return MaxShield; }
+	FORCEINLINE FName GetCarrySocketName() const { return CarrySocketName; }
 	ECombatState GetCombatState() const;
 	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
 	FORCEINLINE bool GetDisableGameplay() const { return bDisableGameplay; }

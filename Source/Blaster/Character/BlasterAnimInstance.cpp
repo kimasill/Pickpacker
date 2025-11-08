@@ -58,7 +58,6 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 
 	if (bWeaponEquipped && EquippedWeapon && EquippedWeapon->GetWeaponMesh() && BlasterCharacter->GetMesh()) 
 	{
-		LeftHandTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("LeftHandSocket"), ERelativeTransformSpace::RTS_World);
 		FVector OutPosition;
 		FRotator OutRotation;
 		BlasterCharacter->GetMesh()->TransformToBoneSpace(FName("hand_r"), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
@@ -82,19 +81,19 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	{
 		bEnableIK = CarryIKComp->IsIKEnabled();
 		if (bEnableIK)
-		{
-			LeftHandLocation = CarryIKComp->GetLeftHandIKLocation();
-			RightHandLocation = CarryIKComp->GetRightHandIKLocation();
-			LeftHandLocationInBoneSpace = CarryIKComp->GetLeftHandIKLocationInBoneSpace();
-			RightHandLocationInBoneSpace = CarryIKComp->GetRightHandIKLocationInBoneSpace();
+		{			
+			ParcelLeftHandIKTransform = CarryIKComp->GetLeftHandIKTransform();
+			ParcelRightHandIKTransform = CarryIKComp->GetRightHandIKTransform();
 		}
 		else
 		{
-			LeftHandLocation = FVector::ZeroVector;
-			RightHandLocation = FVector::ZeroVector;
-			LeftHandLocationInBoneSpace = FVector::ZeroVector;
-			RightHandLocationInBoneSpace = FVector::ZeroVector;
+			ParcelLeftHandIKTransform = FTransform::Identity;
+			ParcelRightHandIKTransform = FTransform::Identity;
 		}
+	}
+	else
+	{
+		bEnableIK = false;
 	}
 
 	// Update animation flags based on character state

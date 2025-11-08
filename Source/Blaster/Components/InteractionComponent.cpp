@@ -10,6 +10,7 @@
 #include "DrawDebugHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/PrimitiveComponent.h"
+#include "Net/UnrealNetwork.h"
 
 UInteractionComponent::UInteractionComponent()
 {
@@ -21,6 +22,12 @@ UInteractionComponent::UInteractionComponent()
     bDrawDebugTrace = false;
 
     SetIsReplicatedByDefault(true);
+}
+
+void UInteractionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(UInteractionComponent, CarriedParcel, COND_OwnerOnly);
 }
 
 void UInteractionComponent::BeginPlay()
@@ -291,6 +298,36 @@ TArray<AActor*> UInteractionComponent::GetOverlappingActors() const
     return Result;
 }
 
+void UInteractionComponent::SetCarriedParcel(AParcelActor* NewParcel)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	if (CarriedParcel == NewParcel)
+	{
+		return;
+	}
+
+	AParcelActor* LastParcel = CarriedParcel;
+	CarriedParcel = NewParcel;
+	HandleCarriedParcelChanged(LastParcel);
+}
+
+void UInteractionComponent::OnRep_CarriedParcel(AParcelActor* LastParcel)
+{
+	HandleCarriedParcelChanged(LastParcel);
+}
+
+void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
+{
+	const FString LastName = LastParcel ? LastParcel->GetName() : TEXT("None");
+	const FString NewName = CarriedParcel ? CarriedParcel->GetName() : TEXT("None");
+	UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Carried parcel changed %s -> %s"),
+		*LastName, *NewName);
+}
+
 bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
 {
     if (!Actor)
@@ -340,10 +377,52 @@ bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
 
 void UInteractionComponent::Interact()
 {
-    if (!CanInteract()) return;
-
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
+
+    // 들고 있는 Parcel이 있으면 Drop 로직 실행
+    if (IsValid(CarriedParcel))
+    {
+        AParcelActor* Parcel = CarriedParcel;
+        
+        // ShelfActor가 타겟이면 선반에 배치
+        if (CurrentTarget.IsValid())
+        {
+            if (AShelfActor* Shelf = Cast<AShelfActor>(CurrentTarget.Get()))
+            {
+                // 선반에 배치 시도
+                if (OwnerCharacter->HasAuthority())
+                {
+                    if (Shelf->TryPlaceParcel(Parcel))
+                    {
+                        SetCarriedParcel(nullptr);
+                        OnInteractSuccess.Broadcast(Shelf);
+                        return;
+                    }
+                }
+                else
+                {
+                    Server_Interact(Shelf);
+                    return;
+                }
+            }
+        }
+
+        // 일반 Drop
+        if (Parcel)
+        {
+            FVector Pulse = OwnerCharacter->GetActorForwardVector() * DropImpulse;
+            Parcel->RequestDrop(Pulse);
+			if (OwnerCharacter->HasAuthority())
+			{
+				SetCarriedParcel(nullptr);
+			}
+        }
+        return;
+    }
+
+    // Parcel을 들고 있지 않으면 Pickup 로직 실행
+    if (!CanInteract()) return;
 
     AActor* Target = CurrentTarget.Get();
     if (!Target) return;
@@ -353,6 +432,14 @@ void UInteractionComponent::Interact()
         const bool bSuccess = PerformInteract(Target, OwnerCharacter);
         if (bSuccess)
         {
+            // Parcel을 집었으면 추적
+        if (AParcelActor* Parcel = Cast<AParcelActor>(Target))
+        {
+            if (Parcel->IsAttached())
+            {
+                SetCarriedParcel(Parcel);
+            }
+        }
             OnInteractSuccess.Broadcast(Target);
         }
     }
@@ -367,7 +454,32 @@ void UInteractionComponent::Server_Interact_Implementation(AActor* Target)
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
 
-    PerformInteract(Target, OwnerCharacter);
+    // ShelfActor에 배치하는 경우
+    if (IsValid(CarriedParcel))
+    {
+        if (AShelfActor* Shelf = Cast<AShelfActor>(Target))
+        {
+            AParcelActor* Parcel = CarriedParcel;
+            if (Shelf->TryPlaceParcel(Parcel))
+            {
+                SetCarriedParcel(nullptr);
+            }
+            return;
+        }
+    }
+
+    const bool bSuccess = PerformInteract(Target, OwnerCharacter);
+    if (bSuccess)
+    {
+        // Parcel을 집었으면 추적
+        if (AParcelActor* Parcel = Cast<AParcelActor>(Target))
+        {
+            if (Parcel->IsAttached() && OwnerCharacter->HasAuthority())
+            {
+                SetCarriedParcel(Parcel);
+            }
+        }
+    }
 }
 
 bool UInteractionComponent::CanInteract() const

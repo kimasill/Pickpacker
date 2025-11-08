@@ -150,7 +150,7 @@ protected:
 	 * Multicast RPC for drop event
 	 */
 	UFUNCTION(NetMulticast, Unreliable, Category = "Parcel")
-	void Multicast_ParcelDropped(FVector DropLocation);
+	void Multicast_ParcelDropped(ACharacter* Carrier, FVector DropLocation);
 
 	/**
 	 * Handle parcel state changes
@@ -274,4 +274,10 @@ private:
 	/** 하이라이트 머티리얼 */
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	UMaterialInterface* HighlightMaterial = nullptr;
+
+	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
+	USkeletalMeshComponent* ParcelMesh;
+
+public:
+	FORCEINLINE UStaticMeshComponent* GetParcelMesh() const { return MeshComponent; }
 };

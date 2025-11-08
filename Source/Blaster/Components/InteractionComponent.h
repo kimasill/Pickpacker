@@ -67,6 +67,7 @@ public:
     
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     /**
      * 상호작용 시작
@@ -107,10 +108,25 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
     TArray<AActor*> GetOverlappingActors() const;
 
+    /**
+     * 서버에서 Parcel 보유 상태 동기화
+     */
+    void SetCarriedParcel(class AParcelActor* NewParcel);
+
+    /**
+     * 현재 들고 있는 Parcel 가져오기
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
+    class AParcelActor* GetCarriedParcel() const { return CarriedParcel; }
+
+
 public:
     /** 상호작용 거리 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Settings")
     float InteractionDistance = 300.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Settings")
+	float DropImpulse = 300.0f;
 
     /** Line Trace 시작 오프셋 (캐릭터 앞) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Settings")
@@ -146,6 +162,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Interaction|Events")
     FOnTargetChanged OnTargetChanged;
 
+
 protected:
     /**
      * Line Trace 수행
@@ -167,6 +184,12 @@ protected:
      */
     AActor* SelectBestTargetFromOverlap(const TArray<AActor*>& InActors) const;
 
+    /**
+     * Parcel을 들고 있는지 확인
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
+    bool IsCarryingParcel() const { return CarriedParcel != nullptr; }
+
 private:
     /** 현재 타겟 액터 */
     UPROPERTY()
@@ -179,6 +202,15 @@ private:
     /** 오버랩된 액터 목록 (오버랩 이벤트로 관리) */
     UPROPERTY()
     TArray<TWeakObjectPtr<AActor>> OverlappingActors;
+
+    /** 현재 들고 있는 Parcel */
+    UPROPERTY(ReplicatedUsing = OnRep_CarriedParcel)
+    TObjectPtr<class AParcelActor> CarriedParcel = nullptr;
+
+	UFUNCTION()
+	void OnRep_CarriedParcel(class AParcelActor* LastParcel);
+
+	void HandleCarriedParcelChanged(class AParcelActor* LastParcel);
 
 	bool PerformInteract(AActor* Target, class ACharacter* OwnerCharacter);
 };
