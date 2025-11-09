@@ -136,10 +136,6 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
                 UE_LOG(LogTemp, Warning, TEXT("[CarryIK] Right handle socket '%s' not found on Parcel '%s'"),
                     *RightHandleName.ToString(), *Parcel->GetName());
             }
-            if (ParcelMesh->DoesSocketExist(CenterHandleName))
-            {
-				CenterTransform = ParcelMesh->GetSocketTransform(CenterHandleName, ERelativeTransformSpace::RTS_World);
-            }
 
             if (bLeftOk || bRightOk)
             {

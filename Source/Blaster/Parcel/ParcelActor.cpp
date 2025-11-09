@@ -11,6 +11,7 @@
 #include "GameFramework/Character.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/CarryIKComponent.h"
+#include "Blaster/Shelf/ShelfActor.h"
 #include "Blaster/Components/InteractionComponent.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -205,6 +206,10 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 		CurrentSocketId = SocketId;
 		CurrentCarrier = Carrier;
 		SetOwner(Carrier);
+		if (AShelfActor* Shelf = OccupyingShelf.Get())
+		{
+			Shelf->RemoveParcel(this);
+		}
 
 		// Update parcel state
 		if (ParcelStateComponent)
@@ -641,4 +646,31 @@ void AParcelActor::ShowPickupWidget(bool bShowWidget)
 	{
 		PickupWidget->SetVisibility(bShowWidget);
 	}
+}
+
+void AParcelActor::AssignToShelf(AShelfActor* Shelf, int32 SlotIndex)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    OccupyingShelf = Shelf;
+    OccupyingShelfSlotIndex = SlotIndex;
+}
+
+void AParcelActor::ClearShelfAssignment(AShelfActor* Shelf)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (Shelf && OccupyingShelf.Get() != Shelf)
+    {
+        return;
+    }
+
+    OccupyingShelf = nullptr;
+    OccupyingShelfSlotIndex = INDEX_NONE;
 }

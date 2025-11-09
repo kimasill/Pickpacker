@@ -85,9 +85,6 @@ public:
     */
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
-	FName CenterHandleName = FName("CarryPoint_Center");
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     FName LeftHandleName = FName("CarryPoint_Left");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")

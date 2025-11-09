@@ -14,6 +14,9 @@
 #include "Blaster/Components/InteractionComponent.h"
 #include "ParcelActor.generated.h"
 
+class UCarryPointsComponent;
+class AShelfActor;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelAttached, class ACharacter*, Carrier, FName, SocketId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelDropped, FVector, DropLocation);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelBroken, class AParcelActor*, Parcel);
@@ -278,6 +281,16 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Weapon Properties")
 	USkeletalMeshComponent* ParcelMesh;
 
+	UPROPERTY()
+	TWeakObjectPtr<AShelfActor> OccupyingShelf;
+
+	UPROPERTY()
+	int32 OccupyingShelfSlotIndex = INDEX_NONE;
+
 public:
 	FORCEINLINE UStaticMeshComponent* GetParcelMesh() const { return MeshComponent; }
+	AShelfActor* GetOccupyingShelf() const { return OccupyingShelf.Get(); }
+	int32 GetOccupyingShelfSlot() const { return OccupyingShelfSlotIndex; }
+	void AssignToShelf(AShelfActor* Shelf, int32 SlotIndex);
+	void ClearShelfAssignment(AShelfActor* Shelf);
 };

@@ -111,6 +111,12 @@ bool AShelfActor::TryPlaceParcel(AParcelActor* Parcel)
         return false;
     }
 
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] TryPlaceParcel must run on the server"));
+		return false;
+	}
+
     // 이미 배치된 Parcel인지 확인
     for (const FYShelfSlot& Slot : Slots)
     {
@@ -132,8 +138,15 @@ bool AShelfActor::TryPlaceParcel(AParcelActor* Parcel)
         return false;
     }
 
+	// 선반에 올리기 전에 들고 있는 플레이어와의 연결 해제
+	if (Parcel->IsAttached())
+	{
+		Parcel->RequestDrop(FVector::ZeroVector);
+	}
+
     // Parcel을 슬롯에 배치
     Slots[SlotIndex].PlacedParcel = Parcel;
+    Parcel->AssignToShelf(this, SlotIndex);
     Slots[SlotIndex].bIsCorrect = ValidateSlot(SlotIndex, Parcel);
 
     // Parcel 물리 및 충돌 설정
@@ -191,6 +204,12 @@ void AShelfActor::RemoveParcel(AParcelActor* Parcel)
         return;
     }
 
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] RemoveParcel must run on the server"));
+        return;
+    }
+
     for (int32 i = 0; i < Slots.Num(); ++i)
     {
         if (Slots[i].PlacedParcel.Get() == Parcel)
@@ -204,6 +223,7 @@ void AShelfActor::RemoveParcel(AParcelActor* Parcel)
 
             Slots[i].PlacedParcel = nullptr;
             Slots[i].bIsCorrect = false;
+            Parcel->ClearShelfAssignment(this);
 
             OnParcelRemoved.Broadcast(Parcel);
 
