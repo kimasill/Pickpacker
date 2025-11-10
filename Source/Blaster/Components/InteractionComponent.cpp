@@ -169,6 +169,8 @@ void UInteractionComponent::UpdateTarget()
     // 새로운 타겟이 전혀 없으면, 기존 하이라이트를 해제
     if (NewTarget == nullptr)
     {
+        ClearShelfSlotFocus();
+
         if (CurrentTarget.IsValid())
         {
             if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
@@ -208,6 +210,15 @@ void UInteractionComponent::UpdateTarget()
 
         // 이벤트 브로드캐스트
         OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
+    }
+
+    if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get()))
+    {
+        UpdateShelfSlotFocus(ShelfTarget);
+    }
+    else
+    {
+        ClearShelfSlotFocus();
     }
 }
 
@@ -375,6 +386,64 @@ bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
     return true;
 }
 
+void UInteractionComponent::UpdateShelfSlotFocus(AShelfActor* Shelf)
+{
+    if (!Shelf)
+    {
+        return;
+    }
+
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    if (!OwnerCharacter)
+    {
+        return;
+    }
+
+    if (!OwnerCharacter->IsLocallyControlled())
+    {
+        return;
+    }
+
+    if (!FocusedShelf.IsValid() || FocusedShelf.Get() != Shelf)
+    {
+        ClearShelfSlotFocus(FocusedShelf.Get());
+        FocusedShelf = Shelf;
+    }
+
+    FVector ViewLocation = OwnerCharacter->GetActorLocation();
+    FVector ViewDirection = OwnerCharacter->GetActorForwardVector();
+
+    if (UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>())
+    {
+        ViewLocation = Camera->GetComponentLocation();
+        ViewDirection = Camera->GetForwardVector();
+    }
+    else
+    {
+        ViewLocation += OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
+    }
+
+    const int32 CandidateSlot = Shelf->FindBestSlotForView(ViewLocation, ViewDirection, InteractionDistance);
+    Shelf->SetFocusedSlot(CandidateSlot);
+    FocusedSlotIndex = CandidateSlot;
+}
+
+void UInteractionComponent::ClearShelfSlotFocus(AShelfActor* ShelfToClear)
+{
+    if (ShelfToClear == nullptr && FocusedShelf.IsValid())
+    {
+        ShelfToClear = FocusedShelf.Get();
+    }
+
+    if (ShelfToClear)
+    {
+        ShelfToClear->SetFocusedSlot(INDEX_NONE);
+    }
+
+    FocusedShelf = nullptr;
+    FocusedSlotIndex = INDEX_NONE;
+}
+
 void UInteractionComponent::Interact()
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
@@ -391,9 +460,10 @@ void UInteractionComponent::Interact()
             if (AShelfActor* Shelf = Cast<AShelfActor>(CurrentTarget.Get()))
             {
                 // 선반에 배치 시도
+				const int32 TargetSlot = FocusedSlotIndex;
                 if (OwnerCharacter->HasAuthority())
                 {
-                    if (Shelf->TryPlaceParcel(Parcel))
+                    if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlot))
                     {
                         SetCarriedParcel(nullptr);
                         OnInteractSuccess.Broadcast(Shelf);
@@ -402,7 +472,7 @@ void UInteractionComponent::Interact()
                 }
                 else
                 {
-                    Server_Interact(Shelf);
+                    Server_Interact(Shelf, TargetSlot);
                     return;
                 }
             }
@@ -445,11 +515,11 @@ void UInteractionComponent::Interact()
     }
     else
     {
-        Server_Interact(Target);
+        Server_Interact(Target, INDEX_NONE);
     }
 }
 
-void UInteractionComponent::Server_Interact_Implementation(AActor* Target)
+void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32 TargetSlotIndex)
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) return;
@@ -460,7 +530,7 @@ void UInteractionComponent::Server_Interact_Implementation(AActor* Target)
         if (AShelfActor* Shelf = Cast<AShelfActor>(Target))
         {
             AParcelActor* Parcel = CarriedParcel;
-            if (Shelf->TryPlaceParcel(Parcel))
+            if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlotIndex))
             {
                 SetCarriedParcel(nullptr);
             }

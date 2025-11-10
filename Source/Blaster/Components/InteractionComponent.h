@@ -8,6 +8,7 @@
 
 class AActor;
 class UPrimitiveComponent;
+class AShelfActor;
 
 /**
  * 상호작용 가능한 액터 인터페이스
@@ -76,7 +77,7 @@ public:
     void Interact();
 
     UFUNCTION(Server, Reliable)
-	void Server_Interact(AActor* Target);
+	void Server_Interact(AActor* Target, int32 TargetSlotIndex);
 
     /**
      * 현재 타겟 액터 가져오기
@@ -118,6 +119,12 @@ public:
      */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
     class AParcelActor* GetCarriedParcel() const { return CarriedParcel; }
+
+    /**
+     * 현재 포커스된 슬롯 인덱스
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
+    int32 GetFocusedSlotIndex() const { return FocusedSlotIndex; }
 
 
 public:
@@ -213,5 +220,13 @@ private:
 	void HandleCarriedParcelChanged(class AParcelActor* LastParcel);
 
 	bool PerformInteract(AActor* Target, class ACharacter* OwnerCharacter);
+
+	void UpdateShelfSlotFocus(AShelfActor* Shelf);
+	void ClearShelfSlotFocus(AShelfActor* ShelfToClear = nullptr);
+
+	UPROPERTY()
+	TWeakObjectPtr<AShelfActor> FocusedShelf;
+
+	int32 FocusedSlotIndex = INDEX_NONE;
 };
 

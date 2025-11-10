@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "GameplayTagContainer.h"
 #include "Blaster/Components/InteractionComponent.h"
@@ -32,9 +33,17 @@ struct FYShelfSlot
     UPROPERTY()
     TWeakObjectPtr<AParcelActor> PlacedParcel;
 
+    /** 슬롯을 나타내는 마커 컴포넌트 */
+    UPROPERTY()
+    TWeakObjectPtr<USceneComponent> SlotMarker;
+
     /** 슬롯 위치 (월드 좌표) */
     UPROPERTY()
     FTransform SlotTransform;
+
+    /** 슬롯 크기 (가로, 세로, 높이) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf")
+    FVector SlotDimensions = FVector(80.0f, 80.0f, 80.0f);
 
     /** 예상되는 Parcel 태그 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shelf")
@@ -69,6 +78,12 @@ public:
     bool TryPlaceParcel(AParcelActor* Parcel);
 
     /**
+     * 특정 슬롯에 Parcel 배치 시도
+     */
+    UFUNCTION(BlueprintCallable, Category = "Shelf")
+    bool TryPlaceParcelAtSlot(AParcelActor* Parcel, int32 SlotIndex);
+
+    /**
      * Parcel을 선반에서 제거
      * @param Parcel 제거할 Parcel
      */
@@ -101,6 +116,48 @@ public:
      */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
     bool CanInteractAtLocation(const FVector& Location, int32& OutSlotIndex) const;
+
+    /**
+     * 현재 포커스된 슬롯 인덱스
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
+    int32 GetFocusedSlotIndex() const { return FocusedSlotIndex; }
+
+    /**
+     * 뷰 방향으로 가장 잘 맞는 슬롯 찾기
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
+    int32 FindBestSlotForView(const FVector& ViewLocation, const FVector& ViewDirection, float MaxDistance) const;
+
+    /**
+     * 슬롯 하이라이트 업데이트
+     */
+    UFUNCTION(BlueprintCallable, Category = "Shelf")
+    void SetFocusedSlot(int32 NewSlotIndex);
+
+    /**
+     * 슬롯 하이라이트 리셋
+     */
+    UFUNCTION(BlueprintCallable, Category = "Shelf")
+    void ClearSlotHighlights();
+
+    /**
+     * 슬롯 수 반환
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
+    int32 GetSlotCount() const { return Slots.Num(); }
+
+    /**
+     * 슬롯 위치 반환
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
+    FVector GetSlotLocation(int32 SlotIndex) const;
+
+    /**
+     * 해당 슬롯에 Parcel 배치 가능 여부 확인
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Shelf")
+    bool CanPlaceParcelAtSlot(AParcelActor* Parcel, int32 SlotIndex, FString& OutFailureReason) const;
 
 public:
     /** 선반 메시 */
@@ -239,6 +296,21 @@ protected:
     virtual void EndHighlight_Implementation() override;
 
 private:
+    /** 슬롯 인덱스 유효성 검사 */
+    bool IsValidSlotIndex(int32 SlotIndex) const;
+
+    /** 슬롯 크기 검사 */
+    bool CheckSlotSize(AParcelActor* Parcel, int32 SlotIndex, FString* OutFailureReason = nullptr) const;
+
+    /** 슬롯 겹침 검사 */
+    bool CheckSlotOverlap(AParcelActor* Parcel, int32 SlotIndex, FString* OutFailureReason = nullptr) const;
+
+    /** 슬롯 하이라이트 적용 */
+    void UpdateSlotHighlight(int32 SlotIndex, bool bEnable);
+
+    /** 포커스 슬롯 내부 업데이트 */
+    void UpdateFocusedSlotInternal(int32 NewSlotIndex);
+
     /** 하이라이트를 위한 원본 머티리얼 저장 */
     UPROPERTY()
     TArray<UMaterialInterface*> OriginalMaterials;
@@ -246,5 +318,41 @@ private:
     /** 하이라이트 머티리얼 */
     UPROPERTY(EditAnywhere, Category = "Interaction")
     UMaterialInterface* HighlightMaterial = nullptr;
+
+    /** 슬롯 하이라이트용 프리미티브 */
+    UPROPERTY()
+    TArray<TWeakObjectPtr<UPrimitiveComponent>> SlotHighlightPrimitives;
+
+    /** 현재 포커스된 슬롯 인덱스 */
+    UPROPERTY()
+    int32 FocusedSlotIndex = INDEX_NONE;
+
+    /** 슬롯 선택 최소 Dot 임계값 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    float SlotSelectionDotThreshold = 0.75f;
+
+    /** 슬롯 선택 최대 거리 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    float SlotSelectionMaxDistance = 250.0f;
+
+    /** 비어있는 슬롯 가중치 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    float EmptySlotScoreBonus = 0.05f;
+
+    /** 기본 슬롯 크기 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    FVector DefaultSlotDimensions = FVector(80.0f, 80.0f, 80.0f);
+
+    /** 슬롯 허용 패딩 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    float SlotSizePadding = 2.5f;
+
+    /** 슬롯 겹침 허용 오차 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    float SlotOverlapTolerance = 2.0f;
+
+    /** 슬롯 하이라이트 스텐실 값 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
+    int32 SlotHighlightStencilValue = 253;
 };
 

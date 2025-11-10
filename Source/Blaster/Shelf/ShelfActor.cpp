@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "ShelfActor.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/Character/BlasterCharacter.h"
@@ -7,11 +5,127 @@
 #include "Components/SphereComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/EngineTypes.h"
+#include "Engine/ActorInstanceHandle.h"
+#include "Engine/OverlapResult.h"
+#include "WorldCollision.h" 
+#include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInterface.h"
+#include "CollisionShape.h"
+#include "CollisionQueryParams.h"
+
+bool AShelfActor::TryPlaceParcelAtSlot(AParcelActor* Parcel, int32 SlotIndex)
+{
+    if (!Parcel)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Invalid parcel"));
+        return false;
+    }
+
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] TryPlaceParcelAtSlot must run on the server"));
+        return false;
+    }
+
+    // 이미 배치된 Parcel인지 확인
+    for (const FYShelfSlot& Slot : Slots)
+    {
+        if (Slot.PlacedParcel.Get() == Parcel)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Parcel already placed"));
+            return false;
+        }
+    }
+
+    const bool bSlotRequested = SlotIndex != INDEX_NONE;
+    if (!bSlotRequested)
+    {
+        SlotIndex = FindEmptySlot();
+        if (SlotIndex == INDEX_NONE)
+        {
+            if (bEnableDebugLogging)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] No empty slot available"));
+            }
+            return false;
+        }
+    }
+
+    if (!IsValidSlotIndex(SlotIndex))
+    {
+        if (bEnableDebugLogging)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Invalid slot index (%d)"), SlotIndex);
+        }
+        return false;
+    }
+
+    if (!Slots[SlotIndex].IsEmpty())
+    {
+        if (bEnableDebugLogging)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Slot %d already occupied"), SlotIndex);
+        }
+        return false;
+    }
+
+    // 먼저 캐리어로부터 분리하여 캐리어가 Overlap 테스트에 잡히지 않도록 함
+    if (Parcel->IsAttached())
+    {
+        Parcel->RequestDrop(FVector::ZeroVector);
+    }
+
+    FString FailureReason;
+    if (!CanPlaceParcelAtSlot(Parcel, SlotIndex, FailureReason))
+    {
+        if (bEnableDebugLogging)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Cannot place parcel into slot %d: %s"), SlotIndex, *FailureReason);
+        }
+        return false;
+    }
+
+    // Parcel을 슬롯에 배치
+    FYShelfSlot& TargetSlot = Slots[SlotIndex];
+    TargetSlot.PlacedParcel = Parcel;
+    Parcel->AssignToShelf(this, SlotIndex);
+    TargetSlot.bIsCorrect = ValidateSlot(SlotIndex, Parcel);
+
+    // Parcel 물리 및 충돌 설정
+    if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(Parcel->GetRootComponent()))
+    {
+        RootPrim->SetSimulatePhysics(false);
+        RootPrim->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    }
+
+    // 슬롯 위치로 정렬
+    AlignParcelToSlot(Parcel, SlotIndex);
+
+    // 이벤트 브로드캐스트
+    OnParcelPlaced.Broadcast(Parcel, TargetSlot.bIsCorrect);
+
+    if (bEnableDebugLogging)
+    {
+        UE_LOG(LogTemp, Log, TEXT("[ShelfActor] Parcel placed in slot %d: %s (Correct: %s)"),
+            SlotIndex, *Parcel->GetName(), TargetSlot.bIsCorrect ? TEXT("Yes") : TEXT("No"));
+    }
+
+    // 모든 슬롯이 올바르게 배치되었는지 확인
+    if (IsAllCorrect())
+    {
+        OnAllCorrect.Broadcast();
+        UE_LOG(LogTemp, Log, TEXT("[ShelfActor] All parcels correctly placed!"));
+    }
+
+    return true;
+}
+// Fill out your copyright notice in the Description page of Project Settings.
 
 AShelfActor::AShelfActor()
 {
@@ -65,11 +179,13 @@ void AShelfActor::BeginPlay()
 void AShelfActor::InitializeSlots()
 {
     Slots.Empty();
-	const int32 MarkerCount = SlotMarkers.Num();
-	const bool bHasMarkers = MarkerCount > 0;
-	MaxSlots = bHasMarkers ? MarkerCount : MaxSlots;
+    SlotHighlightPrimitives.Empty();
+    const int32 MarkerCount = SlotMarkers.Num();
+    const bool bHasMarkers = MarkerCount > 0;
+    MaxSlots = bHasMarkers ? MarkerCount : MaxSlots;
 
     Slots.SetNum(MaxSlots);
+    SlotHighlightPrimitives.SetNum(MaxSlots);
 
     // SlotMarkers를 기반으로 슬롯 위치 설정
     if (bHasMarkers)
@@ -79,12 +195,80 @@ void AShelfActor::InitializeSlots()
             if (SlotMarkers[i])
             {
                 Slots[i].SlotTransform = SlotMarkers[i]->GetComponentTransform();
+                Slots[i].SlotMarker = SlotMarkers[i];
+
+                /**
+				* SlotMarker : USceneComponent, Location 기준
+				* SlotMarker 자식: UPrimitiveComponent (Box Collision 또는 Static Mesh)
+                */ 
+                UPrimitiveComponent* FoundPrimitive = nullptr;
+                TArray<USceneComponent*> ChildComponents;
+                SlotMarkers[i]->GetChildrenComponents(false, ChildComponents);
+
+                // Box Collision 또는 Static Mesh
+                for (USceneComponent* Child : ChildComponents)
+                {
+                    if (UPrimitiveComponent* PrimitiveChild = Cast<UPrimitiveComponent>(Child))
+                    {
+                        FoundPrimitive = PrimitiveChild;
+                        break; // 첫 번째 UPrimitiveComponent 사용
+                    }
+                }
+
+                // 하이라이트 설정
+                if (FoundPrimitive)
+                {
+                    SlotHighlightPrimitives[i] = FoundPrimitive;
+                    FoundPrimitive->SetRenderCustomDepth(false);
+                    FoundPrimitive->SetCustomDepthStencilValue(SlotHighlightStencilValue);
+                    FoundPrimitive->SetHiddenInGame(true); // 게임에서 숨기기
+
+                    // 크기 정보 가져오기
+                    if (UBoxComponent* BoxChild = Cast<UBoxComponent>(FoundPrimitive))
+                    {
+                        Slots[i].SlotDimensions = BoxChild->GetScaledBoxExtent() * 2.0f;
+                    }
+                    else if (UStaticMeshComponent* MeshChild = Cast<UStaticMeshComponent>(FoundPrimitive))
+                    {
+                        if(UStaticMesh* StaticMesh = MeshChild->GetStaticMesh())
+                        {
+                            const FBoxSphereBounds MeshBounds = StaticMesh->GetBoundingBox();
+							FVector Scale = MeshChild->GetComponentScale();
+							FVector ScaledExtent = MeshBounds.BoxExtent * Scale;
+							Slots[i].SlotDimensions = ScaledExtent * 2.0f;
+						}
+                        else
+                        {
+                            // Static Mesh가 없으면 CalcBounds 사용 (폴백)
+                            const FBoxSphereBounds Bounds = MeshChild->CalcBounds(MeshChild->GetComponentTransform());
+                            Slots[i].SlotDimensions = Bounds.BoxExtent * 2.0f;
+                        }
+                    }
+                    else
+                    {
+                        // 일반 PrimitiveComponent의 경우 바운드로 크기 계산
+                        const FBoxSphereBounds Bounds = FoundPrimitive->CalcBounds(FoundPrimitive->GetComponentTransform());
+                        Slots[i].SlotDimensions = Bounds.BoxExtent * 2.0f;
+                    }
+                }
+                else
+                {
+                    SlotHighlightPrimitives[i] = nullptr;
+                    Slots[i].SlotDimensions = DefaultSlotDimensions;
+                    if (bEnableDebugLogging)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] SlotMarker %d has no UPrimitiveComponent child. Highlight and size detection will not work. Add a Box Collision or Static Mesh as a child component."), i);
+                    }
+                }
             }
             else
             {
-                // 마커가 없으면 자동 계산(삭제 예정: 선반 형태 여러개 존재)
+                // 마커가 없으면 자동 계산
                 FVector Offset = FVector(0.0f, i * SlotSpacing - (MaxSlots - 1) * SlotSpacing / 2.0f, 0.0f);
                 Slots[i].SlotTransform = FTransform(GetActorRotation(), GetActorLocation() + Offset);
+                Slots[i].SlotMarker = nullptr;
+                Slots[i].SlotDimensions = DefaultSlotDimensions;
+                SlotHighlightPrimitives[i] = nullptr;
             }
         }
     }
@@ -96,8 +280,13 @@ void AShelfActor::InitializeSlots()
             FVector LocalOffset = FVector(0.0f, i * SlotSpacing - (MaxSlots - 1) * SlotSpacing / 2.0f, 100.0f);
             FVector WorldOffset = GetActorTransform().TransformVector(LocalOffset);
             Slots[i].SlotTransform = FTransform(GetActorRotation(), GetActorLocation() + WorldOffset);
+            Slots[i].SlotMarker = nullptr;
+            Slots[i].SlotDimensions = DefaultSlotDimensions;
+            SlotHighlightPrimitives[i] = nullptr;
         }
     }
+
+    FocusedSlotIndex = INDEX_NONE;
 
     if (bEnableDebugLogging)
     {
@@ -110,96 +299,7 @@ void AShelfActor::InitializeSlots()
 
 bool AShelfActor::TryPlaceParcel(AParcelActor* Parcel)
 {
-    if (!Parcel)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Invalid parcel"));
-        return false;
-    }
-
-	if (!HasAuthority())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] TryPlaceParcel must run on the server"));
-		return false;
-	}
-
-    // 이미 배치된 Parcel인지 확인
-    for (const FYShelfSlot& Slot : Slots)
-    {
-        if (Slot.PlacedParcel.Get() == Parcel)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] Parcel already placed"));
-            return false;
-        }
-    }
-
-    // 빈 슬롯 찾기
-    int32 SlotIndex = FindEmptySlot();
-    if (SlotIndex == INDEX_NONE)
-    {
-        if (bEnableDebugLogging)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[ShelfActor] No empty slot available"));
-        }
-        return false;
-    }
-
-	// 선반에 올리기 전에 들고 있는 플레이어와의 연결 해제
-	if (Parcel->IsAttached())
-	{
-		Parcel->RequestDrop(FVector::ZeroVector);
-	}
-
-    // Parcel을 슬롯에 배치
-    Slots[SlotIndex].PlacedParcel = Parcel;
-    Parcel->AssignToShelf(this, SlotIndex);
-    Slots[SlotIndex].bIsCorrect = ValidateSlot(SlotIndex, Parcel);
-
-    // Parcel 물리 및 충돌 설정
-    if (UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(Parcel->GetRootComponent()))
-    {
-        RootPrim->SetSimulatePhysics(false);
-        RootPrim->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    }
-
-    // 컨베이어에서 제거 (컨베이어 시스템 구현 시 활성화)
-    // USplineMovementComponent* SplineMovement = Parcel->FindComponentByClass<USplineMovementComponent>();
-    // if (SplineMovement)
-    // {
-    //     UWorld* World = GetWorld();
-    //     if (World)
-    //     {
-    //         for (TActorIterator<AConveyorBeltActor> It(World); It; ++It)
-    //         {
-    //             AConveyorBeltActor* Conveyor = *It;
-    //             if (Conveyor)
-    //             {
-    //                 Conveyor->DetachActorFromConveyor(Parcel);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // 슬롯 위치로 정렬
-    AlignParcelToSlot(Parcel, SlotIndex);
-
-    // 이벤트 브로드캐스트
-    OnParcelPlaced.Broadcast(Parcel, Slots[SlotIndex].bIsCorrect);
-
-    if (bEnableDebugLogging)
-    {
-        UE_LOG(LogTemp, Log, TEXT("[ShelfActor] Parcel placed in slot %d: %s (Correct: %s)"),
-            SlotIndex, *Parcel->GetName(), Slots[SlotIndex].bIsCorrect ? TEXT("Yes") : TEXT("No"));
-    }
-
-    // 모든 슬롯이 올바르게 배치되었는지 확인
-    if (IsAllCorrect())
-    {
-        OnAllCorrect.Broadcast();
-        UE_LOG(LogTemp, Log, TEXT("[ShelfActor] All parcels correctly placed!"));
-    }
-
-    return true;
+    return TryPlaceParcelAtSlot(Parcel, INDEX_NONE);
 }
 
 void AShelfActor::RemoveParcel(AParcelActor* Parcel)
@@ -290,6 +390,11 @@ bool AShelfActor::CanInteractAtLocation(const FVector& Location, int32& OutSlotI
     return Distance <= InteractionDistance;
 }
 
+bool AShelfActor::IsValidSlotIndex(int32 SlotIndex) const
+{
+    return Slots.IsValidIndex(SlotIndex);
+}
+
 void AShelfActor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
@@ -325,7 +430,7 @@ void AShelfActor::OnConstruction(const FTransform& Transform)
         for (const FEntry& Entry : MarkerEntries)
         {
             SlotMarkers.Add(Entry.Comp);
-		}
+        }
     }
 }
 
@@ -396,6 +501,318 @@ void AShelfActor::AlignParcelToSlot(AParcelActor* Parcel, int32 SlotIndex)
     }
 }
 
+bool AShelfActor::CheckSlotSize(AParcelActor* Parcel, int32 SlotIndex, FString* OutFailureReason) const
+{
+    if (!Parcel || !IsValidSlotIndex(SlotIndex))
+    {
+        return false;
+    }
+
+    const USceneComponent* RootParcel = Parcel->GetRootComponent();
+    const UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(RootParcel);
+    if (!RootPrim)
+    {
+        return true;
+    }
+
+    const FYShelfSlot& Slot = Slots[SlotIndex];
+
+    // Use the parcel's root component, not this actor's RootComponent
+    const FTransform ComponentRelativeTransform = RootParcel->GetRelativeTransform();
+    const FTransform DesiredComponentTransform = ComponentRelativeTransform * Slot.SlotTransform;
+
+    const FBoxSphereBounds DesiredBounds = RootPrim->CalcBounds(DesiredComponentTransform);
+    const FVector ParcelHalfSize = DesiredBounds.BoxExtent;
+    FVector AllowedHalfSize = Slot.SlotDimensions * 0.5f - FVector(SlotSizePadding);
+    AllowedHalfSize = AllowedHalfSize.ComponentMax(FVector::ZeroVector);
+
+    const bool bFits =
+        ParcelHalfSize.X <= AllowedHalfSize.X &&
+        ParcelHalfSize.Y <= AllowedHalfSize.Y &&
+        ParcelHalfSize.Z <= AllowedHalfSize.Z;
+
+    if (!bFits && OutFailureReason)
+    {
+        *OutFailureReason = FString::Printf(
+            TEXT("Parcel size %s exceeds slot allowance %s"),
+            *ParcelHalfSize.ToString(),
+            *AllowedHalfSize.ToString());
+    }
+
+    return bFits;
+}
+
+bool AShelfActor::CheckSlotOverlap(AParcelActor* Parcel, int32 SlotIndex, FString* OutFailureReason) const
+{
+    if (!Parcel || !IsValidSlotIndex(SlotIndex))
+    {
+        return false;
+    }
+
+    const USceneComponent* RootParcel = Parcel->GetRootComponent();
+    const UPrimitiveComponent* RootPrim = Cast<UPrimitiveComponent>(RootParcel);
+    if (!RootPrim)
+    {
+        return true; // 루트가 프리미티브가 아니면 Overlap 검사 불필요
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        if (OutFailureReason)
+        {
+            *OutFailureReason = TEXT("World unavailable");
+        }
+        return false;
+    }
+
+    const FYShelfSlot& Slot = Slots[SlotIndex];
+    const FTransform ComponentRelativeTransform = RootParcel->GetRelativeTransform();
+    const FTransform DesiredComponentTransform = ComponentRelativeTransform * Slot.SlotTransform;
+    const FBoxSphereBounds DesiredBounds = RootPrim->CalcBounds(DesiredComponentTransform);
+    const FVector HalfExtent = DesiredBounds.BoxExtent + FVector(SlotOverlapTolerance);
+
+    if (HalfExtent.IsNearlyZero())
+    {
+        return true;
+    }
+
+    FCollisionShape CollisionShape = FCollisionShape::MakeBox(HalfExtent);
+
+    FCollisionObjectQueryParams ObjectQueryParams;
+    ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+    ObjectQueryParams.AddObjectTypesToQuery(ECC_PhysicsBody);
+    ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+    ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ShelfSlotOverlap), false);
+    QueryParams.AddIgnoredActor(this);       // 선반 자체 무시
+    QueryParams.AddIgnoredActor(Parcel);     // 검사 중인 Parcel 무시
+
+    // 캐리어(아직 붙어 있을 가능성) 무시
+    if (AActor* Parent = Parcel->GetAttachParentActor())
+    {
+        QueryParams.AddIgnoredActor(Parent);
+    }
+
+    TArray<FOverlapResult> OverlapResults;
+    const bool bHasOverlap = World->OverlapMultiByObjectType(
+        OverlapResults,
+        DesiredBounds.Origin,
+        DesiredComponentTransform.GetRotation(),
+        ObjectQueryParams,
+        CollisionShape,
+        QueryParams);
+
+    if (!bHasOverlap)
+    {
+        return true; // 아무 것도 겹치지 않음
+    }
+
+    for (const FOverlapResult& Res : OverlapResults)
+    {
+        AActor* OverlapActor = Res.GetActor();
+        if (!OverlapActor)
+        {
+            continue;
+        }
+
+        // 이미 무시 설정한 것들 또는 자기 자신/검사 대상 Parcel은 continue
+        if (OverlapActor == this || OverlapActor == Parcel)
+        {
+            continue;
+        }
+
+        // 캐리어(드롭 전 단계에서 남아있는 경우)도 허용
+        if (OverlapActor == Parcel->GetAttachParentActor())
+        {
+            continue;
+        }
+
+        // 슬롯에 배치된 다른 Parcel과의 충돌만 실패 처리
+        bool bIsPlacedParcel = false;
+        for (const FYShelfSlot& ExistingSlot : Slots)
+        {
+            if (ExistingSlot.PlacedParcel.IsValid() && ExistingSlot.PlacedParcel.Get() == OverlapActor)
+            {
+                bIsPlacedParcel = true;
+                break;
+            }
+        }
+
+        if (!bIsPlacedParcel)
+        {
+            // 선반 주변의 다른 오브젝트(캐릭터, 환경 등)는 무시 (원치 않는 false 판정 방지)
+            continue;
+        }
+
+        if (OutFailureReason)
+        {
+            *OutFailureReason = FString::Printf(TEXT("Overlaps placed parcel: %s"), *OverlapActor->GetName());
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool AShelfActor::CanPlaceParcelAtSlot(AParcelActor* Parcel, int32 SlotIndex, FString& OutFailureReason) const
+{
+    OutFailureReason.Reset();
+
+    if (!Parcel)
+    {
+        OutFailureReason = TEXT("Parcel is invalid");
+        return false;
+    }
+
+    if (!IsValidSlotIndex(SlotIndex))
+    {
+        OutFailureReason = TEXT("Invalid slot index");
+        return false;
+    }
+
+    if (!Slots[SlotIndex].IsEmpty())
+    {
+        OutFailureReason = TEXT("Slot already occupied");
+        return false;
+    }
+
+    if (!CheckSlotSize(Parcel, SlotIndex, &OutFailureReason))
+    {
+        if (OutFailureReason.IsEmpty())
+        {
+            OutFailureReason = TEXT("Parcel is too large for the slot");
+        }
+        return false;
+    }
+
+    if (!CheckSlotOverlap(Parcel, SlotIndex, &OutFailureReason))
+    {
+        if (OutFailureReason.IsEmpty())
+        {
+            OutFailureReason = TEXT("Parcel overlaps other objects");
+        }
+        return false;
+    }
+
+    return true;
+}
+
+FVector AShelfActor::GetSlotLocation(int32 SlotIndex) const
+{
+    if (!IsValidSlotIndex(SlotIndex))
+    {
+        return FVector::ZeroVector;
+    }
+
+    return Slots[SlotIndex].SlotTransform.GetLocation();
+}
+
+int32 AShelfActor::FindBestSlotForView(const FVector& ViewLocation, const FVector& ViewDirection, float MaxDistance) const
+{
+    if (Slots.Num() == 0)
+    {
+        return INDEX_NONE;
+    }
+
+    const float EffectiveMaxDistance = MaxDistance > 0.0f
+        ? FMath::Min(MaxDistance, SlotSelectionMaxDistance)
+        : SlotSelectionMaxDistance;
+    int32 BestIndex = INDEX_NONE;
+    float BestScore = SlotSelectionDotThreshold;
+
+    for (int32 i = 0; i < Slots.Num(); ++i)
+    {
+        const FVector SlotLocation = Slots[i].SlotTransform.GetLocation();
+        const FVector ToSlot = SlotLocation - ViewLocation;
+        const float Distance = ToSlot.Size();
+
+        if (Distance > EffectiveMaxDistance || Distance <= KINDA_SMALL_NUMBER)
+        {
+            continue;
+        }
+
+        const FVector DirectionToSlot = ToSlot / Distance;
+        const float Dot = FVector::DotProduct(ViewDirection.GetSafeNormal(), DirectionToSlot);
+
+        if (Dot < SlotSelectionDotThreshold)
+        {
+            continue;
+        }
+
+        float Score = Dot;
+        if (Slots[i].IsEmpty())
+        {
+            Score += EmptySlotScoreBonus;
+        }
+
+        if (Score > BestScore)
+        {
+            BestScore = Score;
+            BestIndex = i;
+        }
+    }
+
+    return BestIndex;
+}
+
+void AShelfActor::UpdateSlotHighlight(int32 SlotIndex, bool bEnable)
+{
+    if (!IsValidSlotIndex(SlotIndex))
+    {
+        return;
+    }
+
+    if (UPrimitiveComponent* HighlightComp = SlotHighlightPrimitives[SlotIndex].Get())
+    {
+        HighlightComp->SetRenderCustomDepth(bEnable);
+        HighlightComp->SetCustomDepthStencilValue(SlotHighlightStencilValue);
+    }
+}
+
+void AShelfActor::UpdateFocusedSlotInternal(int32 NewSlotIndex)
+{
+    if (FocusedSlotIndex == NewSlotIndex)
+    {
+        return;
+    }
+
+    if (IsValidSlotIndex(FocusedSlotIndex))
+    {
+        UpdateSlotHighlight(FocusedSlotIndex, false);
+    }
+
+    FocusedSlotIndex = NewSlotIndex;
+
+    if (IsValidSlotIndex(FocusedSlotIndex))
+    {
+        UpdateSlotHighlight(FocusedSlotIndex, true);
+    }
+}
+
+void AShelfActor::SetFocusedSlot(int32 NewSlotIndex)
+{
+    if (NewSlotIndex != INDEX_NONE && !IsValidSlotIndex(NewSlotIndex))
+    {
+        return;
+    }
+
+    UpdateFocusedSlotInternal(NewSlotIndex);
+}
+
+void AShelfActor::ClearSlotHighlights()
+{
+    for (int32 i = 0; i < SlotHighlightPrimitives.Num(); ++i)
+    {
+        if (UPrimitiveComponent* HighlightComp = SlotHighlightPrimitives[i].Get())
+        {
+            HighlightComp->SetRenderCustomDepth(false);
+        }
+    }
+    FocusedSlotIndex = INDEX_NONE;
+}
+
 // InteractableInterface Implementation
 bool AShelfActor::OnInteract_Implementation(ACharacter* Interactor)
 {
@@ -459,6 +876,11 @@ void AShelfActor::StartHighlight_Implementation()
     // Custom Depth 사용 (간단한 하이라이트)
     ShelfMesh->SetRenderCustomDepth(true);
     ShelfMesh->SetCustomDepthStencilValue(252);
+
+    if (IsValidSlotIndex(FocusedSlotIndex))
+    {
+        UpdateSlotHighlight(FocusedSlotIndex, true);
+    }
 }
 
 void AShelfActor::EndHighlight_Implementation()
@@ -469,6 +891,7 @@ void AShelfActor::EndHighlight_Implementation()
     }
 
     ShelfMesh->SetRenderCustomDepth(false);
+    ClearSlotHighlights();
 }
 
 void AShelfActor::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, 
