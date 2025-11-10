@@ -54,6 +54,11 @@ void AShelfActor::BeginPlay()
     // 슬롯 초기화
     InitializeSlots();
 
+    if (ShelfMesh)
+    {
+        ShelfMesh->SetRenderCustomDepth(false);
+    }
+
     UE_LOG(LogTemp, Log, TEXT("[ShelfActor] Shelf initialized with %d slots"), MaxSlots);
 }
 

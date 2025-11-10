@@ -166,7 +166,7 @@ void UInteractionComponent::UpdateTarget()
     // 타겟 변경 확인 및 하이라이트 업데이트
     PreviousTarget = CurrentTarget;
 
-    // 새로운 타겟이 전혀 없으면, 기존 하이라이트를 해제하고 타겟을 비웁니다.
+    // 새로운 타겟이 전혀 없으면, 기존 하이라이트를 해제
     if (NewTarget == nullptr)
     {
         if (CurrentTarget.IsValid())
