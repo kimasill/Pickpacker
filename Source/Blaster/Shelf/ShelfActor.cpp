@@ -742,7 +742,7 @@ int32 AShelfActor::FindBestSlotForView(const FVector& ViewLocation, const FVecto
         }
 
         float Score = Dot;
-        if (Slots[i].IsEmpty())
+        if (!Slots[i].PlacedParcel.IsValid())
         {
             Score += EmptySlotScoreBonus;
         }
@@ -766,6 +766,7 @@ void AShelfActor::UpdateSlotHighlight(int32 SlotIndex, bool bEnable)
 
     if (UPrimitiveComponent* HighlightComp = SlotHighlightPrimitives[SlotIndex].Get())
     {
+		HighlightComp->SetHiddenInGame(!bEnable);
         HighlightComp->SetRenderCustomDepth(bEnable);
         HighlightComp->SetCustomDepthStencilValue(SlotHighlightStencilValue);
     }
@@ -837,10 +838,6 @@ bool AShelfActor::OnInteract_Implementation(ACharacter* Interactor)
             return false;
         }
     }
-
-    // 실제 Parcel 배치는 블루프린트에서 처리하도록 함
-    // 또는 여기서 직접 처리 가능:
-    // 블루프린트에서 CarriedParcel 변수를 확인하고 TryPlaceParcel 호출
     
     return CanInteract_Implementation(Interactor);
 }
@@ -851,9 +848,6 @@ bool AShelfActor::CanInteract_Implementation(ACharacter* Interactor) const
     {
         return false;
     }
-
-    // 캐릭터가 Parcel을 들고 있고 선반이 가득 차지 않았으면 상호작용 가능
-    // 실제 구현은 블루프린트나 캐릭터 컴포넌트에서 처리
     return !IsFull();
 }
 

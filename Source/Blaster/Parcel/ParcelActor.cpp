@@ -65,6 +65,7 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, bIsAttached);
 	DOREPLIFETIME(AParcelActor, CurrentSocketId);
 	DOREPLIFETIME(AParcelActor, CurrentCarrier);
+	DOREPLIFETIME(AParcelActor, bIsPackaged);
 }
 
 void AParcelActor::BeginPlay()
@@ -438,11 +439,9 @@ void AParcelActor::Multicast_ParcelDropped_Implementation(ACharacter* Carrier, F
 
 void AParcelActor::NotifyBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
-	// 캐릭터 캡슐에서 발생한 Overlap을 캐릭터 BP가 넘겨줍니다.
     const APawn* Pawn = Cast<APawn>(OtherActor);
     if (!Pawn) return;
 
-    // 로컬 클라만 위젯 토글
     if (Pawn->IsLocallyControlled() && PickupWidget)
     {        
         PickupWidget->SetVisibility(true);
@@ -657,6 +656,62 @@ void AParcelActor::AssignToShelf(AShelfActor* Shelf, int32 SlotIndex)
 
     OccupyingShelf = Shelf;
     OccupyingShelfSlotIndex = SlotIndex;
+}
+
+void AParcelActor::SetPackaged(bool bPackaged)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (bIsPackaged == bPackaged)
+	{
+		return; // 이미 같은 상태
+	}
+
+	bIsPackaged = bPackaged;
+
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	// 원본 메시 저장 (첫 포장 시)
+	if (bPackaged && !OriginalMesh)
+	{
+		OriginalMesh = MeshComponent->GetStaticMesh();
+	}
+
+	// 메시 변경
+	if (bPackaged)
+	{
+		// 포장 메시로 변경
+		if (PackagedMesh)
+		{
+			MeshComponent->SetStaticMesh(PackagedMesh);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] PackagedMesh not set, cannot package"));
+			bIsPackaged = false;
+			return;
+		}
+	}
+	else
+	{
+		// 원본 메시로 복원
+		if (OriginalMesh)
+		{
+			MeshComponent->SetStaticMesh(OriginalMesh);
+		}
+	}
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Packaging state changed to: %s"), 
+			bPackaged ? TEXT("Packaged") : TEXT("Unpackaged"));
+	}
 }
 
 void AParcelActor::ClearShelfAssignment(AShelfActor* Shelf)

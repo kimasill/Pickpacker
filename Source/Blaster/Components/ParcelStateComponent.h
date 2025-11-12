@@ -106,10 +106,22 @@ public:
 	EParcelType GetParcelType() const { return ParcelConfig.ParcelType; }
 
 	/**
+	 * Get parcel configuration
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel State")
+	const FParcelConfig& GetParcelConfig() const { return ParcelConfig; }
+
+	/**
 	 * Set parcel attached state
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel State")
 	void SetAttachedState(bool bAttached, const FName& SocketId = NAME_None);
+
+	/**
+	 * Set parcel state (for restoring from packaged box)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel State")
+	void SetParcelState(const FParcelState& NewState);
 
 protected:
 	/**

@@ -325,3 +325,23 @@ float UParcelStateComponent::GetEffectiveMovementSpeedMultiplier() const
 
 	return BaseMultiplier;
 }
+
+void UParcelStateComponent::SetParcelState(const FParcelState& NewState)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelStateComponent] Only server can set parcel state"));
+		return;
+	}
+
+	CurrentState = NewState;
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Parcel state set - Durability: %.2f, Weight: %.2f, Instability: %.2f"),
+			CurrentState.Durability, CurrentState.Weight, CurrentState.Instability);
+	}
+
+	// Broadcast state change
+	OnParcelStateChanged.Broadcast(CurrentState);
+}

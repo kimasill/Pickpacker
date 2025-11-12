@@ -337,7 +337,7 @@ private:
 
     /** 비어있는 슬롯 가중치 */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))
-    float EmptySlotScoreBonus = 0.05f;
+    float EmptySlotScoreBonus = 0.5f;
 
     /** 기본 슬롯 크기 */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shelf|Interaction", meta = (AllowPrivateAccess = "true"))

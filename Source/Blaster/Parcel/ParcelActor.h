@@ -115,6 +115,24 @@ public:
 	void RemoveParcelTag(const FGameplayTag& Tag) { ParcelTags.RemoveTag(Tag); }
 
 	/**
+	 * Check if parcel is packaged
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	bool IsPackaged() const { return bIsPackaged; }
+
+	/**
+	 * Set packaged state and update mesh
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void SetPackaged(bool bPackaged);
+
+	/**
+	 * Get original mesh (before packaging)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	UStaticMesh* GetOriginalMesh() const { return OriginalMesh; }
+
+	/**
 	 * Overlap notification for interaction
 	 */
 
@@ -240,6 +258,18 @@ protected:
 
 	UPROPERTY(Replicated)
 	class ACharacter* CurrentCarrier = nullptr;
+
+	// Packaging state
+	UPROPERTY(Replicated)
+	bool bIsPackaged = false;
+
+	/** 포장된 상태의 메시 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging")
+	UStaticMesh* PackagedMesh = nullptr;
+
+	/** 원본 메시 저장 (포장 해제용) */
+	UPROPERTY()
+	UStaticMesh* OriginalMesh = nullptr;
 
 	// Physics stabilization
 	UPROPERTY()
