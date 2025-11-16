@@ -4,36 +4,28 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
-#include "BTTask_WaitAtPatrolPoint.generated.h"
+#include "BTTask_MotherWaitAtLocation.generated.h"
 
 /**
- * Wait at Patrol Point Task
+ * Wait at a location for specified duration (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_WaitAtPatrolPoint : public UBTTaskNode
+class BLASTER_API UBTTask_MotherWaitAtLocation : public UBTTaskNode
 {
 	GENERATED_BODY()
 
 public:
-	UBTTask_WaitAtPatrolPoint();
+	UBTTask_MotherWaitAtLocation();
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 
-protected:
-	/** Wait time in seconds */
-	UPROPERTY(EditAnywhere, Category = "Wait")
-	float WaitTime = 2.0f;
-
-	/** Use wait time from patrol point */
-	UPROPERTY(EditAnywhere, Category = "Wait")
-	bool bUsePatrolPointWaitTime = true;
+	/** Wait duration in seconds */
+	UPROPERTY(EditAnywhere, Category = "Wait", meta = (ClampMin = "0.0"))
+	float WaitDuration = 30.0f;
 
 private:
 	/** Elapsed time */
-	float ElapsedTime;
+	float ElapsedTime = 0.0f;
 };
-
-
-
 

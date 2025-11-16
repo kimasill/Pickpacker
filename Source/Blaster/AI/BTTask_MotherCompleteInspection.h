@@ -4,22 +4,19 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
-#include "BTTask_MoveToNextPatrolPoint.generated.h"
+#include "BTTask_MotherCompleteInspection.generated.h"
 
 /**
- * Move to Next Patrol Point Task
+ * Complete inspection task (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_MoveToNextPatrolPoint : public UBTTaskNode
+class BLASTER_API UBTTask_MotherCompleteInspection : public UBTTaskNode
 {
 	GENERATED_BODY()
 
 public:
-	UBTTask_MoveToNextPatrolPoint();
+	UBTTask_MotherCompleteInspection();
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 };
-
-
-
 

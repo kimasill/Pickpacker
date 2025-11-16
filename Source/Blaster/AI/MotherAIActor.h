@@ -17,17 +17,21 @@ class UWidgetComponent;
 UENUM(BlueprintType)
 enum class EMotherAIState : uint8
 {
-	Normal		UMETA(DisplayName = "Normal"),
-	Alert		UMETA(DisplayName = "Alert"),
-	Aggressive	UMETA(DisplayName = "Aggressive"),
-	RestPeriod	UMETA(DisplayName = "Rest Period")
+	Normal			UMETA(DisplayName = "Normal"),
+	Alert			UMETA(DisplayName = "Alert"),
+	Aggressive		UMETA(DisplayName = "Aggressive"),
+	RestPeriod		UMETA(DisplayName = "Rest Period"),
+	AtControlTower	UMETA(DisplayName = "At Control Tower"),
+	Inspecting		UMETA(DisplayName = "Inspecting Facilities"),
+	ChasingPlayer	UMETA(DisplayName = "Chasing Player")
 };
 
 /**
  * Mother AI Actor - Controls the entire surveillance system
+ * Uses Behavior Tree for AI logic
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AMotherAIActor : public AActor
+class BLASTER_API AMotherAIActor : public APawn
 {
 	GENERATED_BODY()
 
@@ -104,6 +108,59 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mother AI")
 	void RequestPunishment(class ACharacter* Player);
 
+	/**
+	 * SuspicionManager 이벤트 핸들러 (즉시 처벌)
+	 */
+	UFUNCTION()
+	void OnSuspicionEventReceived(const struct FSuspicionEventData& EventData);
+
+	/**
+	 * 시설 점검 시작
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mother AI")
+	void StartInspection();
+
+	/**
+	 * 시설 점검 완료
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mother AI")
+	void CompleteInspection();
+
+	/**
+	 * 통제 타워로 복귀
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mother AI")
+	void ReturnToControlTower();
+
+	/**
+	 * Getter functions for Behavior Tree
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	const TArray<FVector>& GetInspectionLocations() const { return InspectionLocations; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	FVector GetCurrentInspectionLocation() const { return CurrentInspectionLocation; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	float GetInspectionDuration() const { return InspectionDuration; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	FVector GetControlTowerLocation() const { return ControlTowerLocation; }
+
+
+	/** 특정 위치로 이동 (유틸리티 함수) */
+	void MoveToLocation(const FVector& TargetLocation, float Speed);
+
+	/** 플레이어를 볼 수 있는지 확인 */
+	bool CanSeePlayer(class ACharacter* Player) const;
+
+	/** 현재 위치가 목표 위치에 도달했는지 확인 */
+	bool HasReachedLocation(const FVector& TargetLocation, float Tolerance = 100.0f) const;
+
+
+	/** 플레이어에게 제제 실행 */
+	void ExecutePunishment(class ACharacter* Player);
+
 public:
 	/** Rest period duration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Rest Period")
@@ -132,6 +189,34 @@ public:
 	/** Drone class to spawn */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Drones")
 	TSubclassOf<ADroneActor> DroneClass;
+
+	/** 중앙 통제 타워 위치 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Control Tower")
+	FVector ControlTowerLocation = FVector::ZeroVector;
+
+	/** 시설 점검 위치 목록 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
+	TArray<FVector> InspectionLocations;
+
+	/** 시설 점검 시간 (게임시간 기준, 하루에 두번) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
+	TArray<float> InspectionTimes = { 6.0f, 18.0f }; // 오전 6시, 오후 6시
+
+	/** 시설 점검 소요 시간 (초) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
+	float InspectionDuration = 30.0f;
+
+	/** 이동 속도 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Movement")
+	float MovementSpeed = 400.0f;
+
+	/** 감지 범위 (플레이어 의심 행위 감지) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Detection")
+	float DetectionRange = 2000.0f;
+
+	/** 감지 각도 (도) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Detection")
+	float DetectionAngle = 120.0f;
 
 	/** Events */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStateChanged, EMotherAIState, NewState);
@@ -222,14 +307,52 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	float PunishmentDistance = 200.0f;
 
-	/** 접근 중 업데이트 */
+	/** 접근 중 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
+	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
 	void UpdateApproach(float DeltaTime);
 
-	/** 플레이어에게 제제 실행 */
-	void ExecutePunishment(class ACharacter* Player);
+	/** 시설 점검 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
+	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
+	void UpdateInspection(float DeltaTime);
+
+	/** 통제 타워로 이동 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
+	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
+	void UpdateReturnToTower(float DeltaTime);
+
+	/** 플레이어 감지 및 즉시 처벌 체크 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
+	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
+	void CheckForSuspiciousPlayers(float DeltaTime);
 
 	/** Replication callback */
 	UFUNCTION()
 	void OnRep_State(EMotherAIState OldState);
+
+private:
+	/** 현재 시설 점검 인덱스 */
+	UPROPERTY()
+	int32 CurrentInspectionIndex = 0;
+
+	/** 현재 점검 중인 시설 위치 */
+	UPROPERTY()
+	FVector CurrentInspectionLocation = FVector::ZeroVector;
+
+	/** 점검 시작 시간 */
+	UPROPERTY()
+	float InspectionStartTime = 0.0f;
+
+	/** 다음 점검 시간 계산 */
+	void ScheduleNextInspection();
+
+	/** 점검 타이머 핸들 */
+	UPROPERTY()
+	FTimerHandle InspectionTimerHandle;
+
+	/** 플레이어 감지 체크 타이머 */
+	UPROPERTY()
+	float LastDetectionCheckTime = 0.0f;
+
+	/** 감지 체크 간격 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Detection", meta = (AllowPrivateAccess = "true"))
+	float DetectionCheckInterval = 0.5f;
 };
 
