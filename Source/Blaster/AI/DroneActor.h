@@ -283,13 +283,7 @@ protected:
 	UFUNCTION()
 	void OnDetectionSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
-	/**
-	 * Check if player is suspicious
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Drone")
-	bool IsPlayerSuspicious(class ACharacter* Player) const;
-
-	/**
+		/**
 	 * Check if player can be seen (line of sight check)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Drone")

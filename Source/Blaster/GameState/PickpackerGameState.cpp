@@ -13,6 +13,10 @@ APickpackerGameState::APickpackerGameState()
 	bSimulationRunning = false;
 	MaxSuspicion = 100.0f;
 	AnchorSubsystem = nullptr;
+	GameStartTime = 0.0f;
+	GameTimeSpeed = 1.0f;
+	DayLengthInSeconds = 1440.0f; // 24분 = 하루
+	PrimaryActorTick.bCanEverTick = true; // 게임 시간 업데이트를 위해 Tick 활성화
 }
 
 void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -34,10 +38,12 @@ void APickpackerGameState::BeginPlay()
 	if (World)
 	{
 		AnchorSubsystem = World->GetSubsystem<UAnchorRuntimeSubsystem>();
+		// 게임 시작 시간 기록
+		GameStartTime = World->GetTimeSeconds();
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] BeginPlay - Anchor subsystem: %s"), 
-		AnchorSubsystem ? TEXT("Found") : TEXT("Not Found"));
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] BeginPlay - Anchor subsystem: %s, GameStartTime: %.2f"), 
+		AnchorSubsystem ? TEXT("Found") : TEXT("Not Found"), GameStartTime);
 }
 
 void APickpackerGameState::SetLevelVariant(UDA_LevelVariant* NewLevelVariant)
@@ -142,4 +148,63 @@ void APickpackerGameState::OnRep_SimulationRunning()
 
 	// Broadcast simulation state change
 	OnSimulationStateChanged.Broadcast(bSimulationRunning);
+}
+
+float APickpackerGameState::GetCurrentGameHour() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.0f;
+	}
+
+	float ElapsedRealSeconds = (World->GetTimeSeconds() - GameStartTime) * GameTimeSpeed;
+	float ElapsedGameDays = ElapsedRealSeconds / DayLengthInSeconds;
+	float CurrentGameHour = FMath::Fmod(ElapsedGameDays * 24.0f, 24.0f);
+	
+	return CurrentGameHour;
+}
+
+float APickpackerGameState::ConvertGameHoursToRealSeconds(float GameHours) const
+{
+	// 게임 시간 1시간 = 실제 시간 (DayLengthInSeconds / 24.0) 초
+	return GameHours * (DayLengthInSeconds / 24.0f) / GameTimeSpeed;
+}
+
+float APickpackerGameState::ConvertRealSecondsToGameHours(float RealSeconds) const
+{
+	// 실제 시간을 게임 시간으로 변환
+	return (RealSeconds * GameTimeSpeed) / (DayLengthInSeconds / 24.0f);
+}
+
+void APickpackerGameState::SetGameTimeSpeed(float Speed)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetGameTimeSpeed called without authority"));
+		return;
+	}
+
+	GameTimeSpeed = FMath::Max(0.0f, Speed);
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Game time speed set to %.2f"), GameTimeSpeed);
+}
+
+void APickpackerGameState::SetDayLengthInSeconds(float Seconds)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetDayLengthInSeconds called without authority"));
+		return;
+	}
+
+	DayLengthInSeconds = FMath::Max(1.0f, Seconds);
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Day length set to %.2f seconds"), DayLengthInSeconds);
+}
+
+void APickpackerGameState::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// 현재 시스템은 World TimeSeconds와 GameStartTime을 사용하므로
+	// 매 틱마다 별도 갱신할 데이터는 없음. 필요한 로직이 생기면 여기에 추가.
 }

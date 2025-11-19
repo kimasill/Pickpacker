@@ -496,45 +496,6 @@ void ADroneActor::OnDetectionSphereOverlap(UPrimitiveComponent* OverlappedCompon
     }
 }
 
-bool ADroneActor::IsPlayerSuspicious(ACharacter* Player) const
-{
-    if (!Player)
-    {
-        return false;
-    }
-
-    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Player);
-    if (!BlasterCharacter)
-    {
-        return false;
-    }
-
-    // Check if player has items in inventory (suspicious)
-    if (UPlayerInventoryComponent* InventoryComponent = BlasterCharacter->GetPlayerInventoryComponent())
-    {
-        if (InventoryComponent->GetInventoryCount() > 0)
-        {
-            return true;
-        }
-    }
-
-    // Check if player is carrying a parcel (suspicious if it's an item)
-    if (UInteractionComponent* InteractionComponent = BlasterCharacter->GetInteractionComponent())
-    {
-        if (AParcelActor* CarriedParcel = InteractionComponent->GetCarriedParcel())
-        {
-            if (CarriedParcel->IsItem())
-            {
-                return true;
-            }
-        }
-    }
-
-    // Add more suspicion checks here (running, hiding, etc.)
-
-    return false;
-}
-
 void ADroneActor::AddSuspicion(float Points)
 {
     if (GameState)
@@ -871,6 +832,7 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
     if (CurrentTime - LastSuspiciousBehaviorCheckTime < SuspiciousBehaviorCheckInterval)
     {
         return;
+
     }
     LastSuspiciousBehaviorCheckTime = CurrentTime;
 

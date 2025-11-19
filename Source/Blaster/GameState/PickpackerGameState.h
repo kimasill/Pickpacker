@@ -24,6 +24,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 
 	/**
 	 * Set the level variant data (Server Only)
@@ -85,6 +86,38 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker")
 	UAnchorRuntimeSubsystem* GetAnchorSubsystem();
 
+	/**
+	 * 게임 시간 시스템
+	 */
+	
+	/** 현재 게임 시간(시간) 가져오기 (0.0 ~ 24.0) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
+	float GetCurrentGameHour() const;
+
+	/** 게임 시간(시간)을 실제 시간(초)로 변환 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
+	float ConvertGameHoursToRealSeconds(float GameHours) const;
+
+	/** 실제 시간(초)을 게임 시간(시간)으로 변환 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
+	float ConvertRealSecondsToGameHours(float RealSeconds) const;
+
+	/** 게임 시간 속도 설정 (예: 1.0 = 정상 속도, 2.0 = 2배 속도) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Time")
+	void SetGameTimeSpeed(float Speed);
+
+	/** 게임 시간 속도 가져오기 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
+	float GetGameTimeSpeed() const { return GameTimeSpeed; }
+
+	/** 하루 길이 설정 (실제 시간 초 단위, 기본값: 1440초 = 24분) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Time")
+	void SetDayLengthInSeconds(float Seconds);
+
+	/** 하루 길이 가져오기 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
+	float GetDayLengthInSeconds() const { return DayLengthInSeconds; }
+
 public:
 	/** Broadcast when suspicion level changes */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSuspicionChanged, float, NewSuspicionLevel);
@@ -137,4 +170,18 @@ private:
 	/** Cached anchor subsystem reference */
 	UPROPERTY()
 	UAnchorRuntimeSubsystem* AnchorSubsystem = nullptr;
+
+	/** 게임 시간 시스템 변수 */
+	
+	/** 게임 시작 시간 (World TimeSeconds) */
+	UPROPERTY()
+	float GameStartTime = 0.0f;
+
+	/** 게임 시간 속도 (1.0 = 정상 속도) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Time", meta = (AllowPrivateAccess = "true"))
+	float GameTimeSpeed = 1.0f;
+
+	/** 하루 길이 (실제 시간 초 단위, 기본값: 1440초 = 24분) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Time", meta = (AllowPrivateAccess = "true"))
+	float DayLengthInSeconds = 1440.0f; // 24분 = 하루
 };

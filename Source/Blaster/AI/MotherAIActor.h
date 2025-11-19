@@ -3,12 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/AI/DroneActor.h"
 #include "MotherAIActor.generated.h"
 
-class UStaticMeshComponent;
+class USkeletalMeshComponent;
 class UWidgetComponent;
 
 /**
@@ -31,7 +31,7 @@ enum class EMotherAIState : uint8
  * Uses Behavior Tree for AI logic
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AMotherAIActor : public APawn
+class BLASTER_API AMotherAIActor : public ACharacter
 {
 	GENERATED_BODY()
 
@@ -136,7 +136,7 @@ public:
 	 * Getter functions for Behavior Tree
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
-	const TArray<FVector>& GetInspectionLocations() const { return InspectionLocations; }
+	TArray<FVector> GetInspectionLocations() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
 	FVector GetCurrentInspectionLocation() const { return CurrentInspectionLocation; }
@@ -145,8 +145,20 @@ public:
 	float GetInspectionDuration() const { return InspectionDuration; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
-	FVector GetControlTowerLocation() const { return ControlTowerLocation; }
+	FVector GetControlTowerLocation() const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	AActor* GetControlTowerActor() const { return ControlTowerActor; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	const TArray<AActor*>& GetInspectionActorLocations() const { return InspectionActorLocations; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI|Animation")
+	UAnimMontage* GetPunishmentMontage() const { return PunishmentMontage; }
+
+	/** 점검 몽타주 가져오기 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI|Animation")
+	UAnimMontage* GetInspectionMontage() const { return InspectionMontage; }
 
 	/** 특정 위치로 이동 (유틸리티 함수) */
 	void MoveToLocation(const FVector& TargetLocation, float Speed);
@@ -160,7 +172,14 @@ public:
 
 	/** 플레이어에게 제제 실행 */
 	void ExecutePunishment(class ACharacter* Player);
+	UFUNCTION(BlueprintCallable)
+	void OnPunishmentHit();
 
+	UFUNCTION(BlueprintCallable)
+	void OnPunishmentEnd();
+
+	UFUNCTION(BlueprintCallable)
+	void OnInspectionEnd();
 public:
 	/** Rest period duration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Rest Period")
@@ -190,13 +209,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Drones")
 	TSubclassOf<ADroneActor> DroneClass;
 
-	/** 중앙 통제 타워 위치 */
+	/** 중앙 통제 타워 액터 (위치는 액터의 위치에서 가져옴) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Control Tower")
-	FVector ControlTowerLocation = FVector::ZeroVector;
+	AActor* ControlTowerActor = nullptr;
 
-	/** 시설 점검 위치 목록 */
+	/** 시설 점검 액터 목록 (위치는 각 액터의 위치에서 가져옴) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
-	TArray<FVector> InspectionLocations;
+	TArray<AActor*> InspectionActorLocations;
 
 	/** 시설 점검 시간 (게임시간 기준, 하루에 두번) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
@@ -280,9 +299,18 @@ private:
 	UPROPERTY()
 	FTimerHandle RestPeriodIntervalTimer;
 
+	/** Punishment animation montage */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Animation", meta = (
+		AllowPrivateAccess = "true"))
+	UAnimMontage* PunishmentMontage;
+	/** Inspection animation montage */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Animation", meta = (
+		AllowPrivateAccess = "true"))
+	UAnimMontage* InspectionMontage;
+
 	/** Components */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	UStaticMeshComponent* MotherMesh;
+	// Note: Character는 기본적으로 GetMesh()로 SkeletalMeshComponent를 제공합니다.
+	// 필요시 블루프린트에서 SkeletalMesh를 설정하세요.
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UWidgetComponent* StatusWidget;
@@ -294,6 +322,10 @@ private:
 	/** 플레이어에게 접근 중인지 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	bool bIsApproachingPlayer = false;
+
+	/** 처벌 실행 중인지 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
+	bool bIsExecutingPunishment = false;
 
 	/** 접근 중인 플레이어 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
@@ -307,25 +339,17 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	float PunishmentDistance = 200.0f;
 
-	/** 접근 중 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
-	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
-	void UpdateApproach(float DeltaTime);
-
-	/** 시설 점검 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
-	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
-	void UpdateInspection(float DeltaTime);
-
-	/** 통제 타워로 이동 업데이트 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
-	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
-	void UpdateReturnToTower(float DeltaTime);
-
-	/** 플레이어 감지 및 즉시 처벌 체크 (레거시 - Behavior Tree로 대체됨, 더 이상 사용되지 않음) */
-	UE_DEPRECATED(5.0, "Use Behavior Tree instead")
-	void CheckForSuspiciousPlayers(float DeltaTime);
-
 	/** Replication callback */
 	UFUNCTION()
 	void OnRep_State(EMotherAIState OldState);
+
+	UFUNCTION(BlueprintCallable, Category = "Mother AI|Animation")
+	void PlayPunishmentMontage();
+
+	UFUNCTION(BlueprintCallable, Category = "Mother AI|Animation")
+	void PlayInspectionMontage();
+
+	
 
 private:
 	/** 현재 시설 점검 인덱스 */

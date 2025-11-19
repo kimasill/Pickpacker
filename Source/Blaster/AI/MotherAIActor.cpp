@@ -1,8 +1,9 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MotherAIActor.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerState/BlasterPlayerState.h"
@@ -31,13 +32,17 @@ AMotherAIActor::AMotherAIActor()
 	PrimaryActorTick.bCanEverTick = false; // Behavior Tree가 Tick을 대체
 	bReplicates = true;
 	
-	// Pawn 설정
+	// Character 설정
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	AIControllerClass = AMotherAIController::StaticClass();
 
-	// Create components
-	MotherMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MotherMesh"));
-	RootComponent = MotherMesh;
+	// Character는 기본적으로 CapsuleComponent를 RootComponent로 가집니다.
+	// SkeletalMeshComponent는 GetMesh()로 접근 가능합니다.
+	GetCapsuleComponent()->SetCapsuleHalfHeight(88.0f);
+	GetCapsuleComponent()->SetCapsuleRadius(34.0f);
+	
+	// SkeletalMesh는 블루프린트에서 설정하거나 여기서 설정할 수 있습니다.
+	// GetMesh()->SetSkeletalMesh(...);
 
 	StatusWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("StatusWidget"));
 	StatusWidget->SetupAttachment(RootComponent);
@@ -51,6 +56,9 @@ AMotherAIActor::AMotherAIActor()
 	AlertSuspicionThreshold = 30.0f;
 	AggressiveSuspicionThreshold = 70.0f;
 	MaxDrones = 5;
+
+	PunishmentMontage = nullptr;
+	InspectionMontage = nullptr;
 }
 
 void AMotherAIActor::BeginPlay()
@@ -79,17 +87,21 @@ void AMotherAIActor::BeginPlay()
 		}
 	}
 
-	// 통제 타워 위치가 설정되지 않았으면 현재 위치 사용
-	if (ControlTowerLocation.IsNearlyZero())
+	// 통제 타워 액터가 설정되지 않았으면 현재 위치를 통제 타워로 사용
+	if (!ControlTowerActor)
 	{
-		ControlTowerLocation = GetActorLocation();
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] ControlTowerActor not set, using current location"));
 	}
 
 	// 초기 상태: 통제 타워에서 대기
 	if (HasAuthority())
 	{
 		SetAIState(EMotherAIState::AtControlTower);
-		SetActorLocation(ControlTowerLocation);
+		FVector TowerLocation = GetControlTowerLocation();
+		if (!TowerLocation.IsNearlyZero())
+		{
+			SetActorLocation(TowerLocation);
+		}
 
 		// 첫 번째 점검 스케줄링
 		ScheduleNextInspection();
@@ -343,6 +355,22 @@ void AMotherAIActor::OnRep_State(EMotherAIState OldState)
 	OnStateChanged.Broadcast(CurrentState);
 }
 
+void AMotherAIActor::PlayPunishmentMontage()
+{
+	if(PunishmentMontage && GetMesh() && GetMesh()->GetAnimInstance())
+	{
+		GetMesh()->GetAnimInstance()->Montage_Play(PunishmentMontage);
+	}
+}
+
+void AMotherAIActor::PlayInspectionMontage()
+{
+	if(InspectionMontage && GetMesh() && GetMesh()->GetAnimInstance())
+	{
+		GetMesh()->GetAnimInstance()->Montage_Play(InspectionMontage);
+	}
+}
+
 void AMotherAIActor::OnSuspicionChanged_Handler(float NewSuspicionLevel)
 {
 	UpdateAIState();
@@ -389,13 +417,6 @@ void AMotherAIActor::RequestPunishment(ACharacter* Player)
 	SendWarning(WarningMessage);
 }
 
-void AMotherAIActor::UpdateApproach(float DeltaTime)
-{
-	// DEPRECATED: Behavior Tree의 BTTask_MotherMoveToLocation과 BTTask_MotherExecutePunishment로 대체됨
-	// 이 함수는 더 이상 호출되지 않음
-	UE_LOG(LogTemp, VeryVerbose, TEXT("[MotherAIActor] UpdateApproach called (deprecated - use Behavior Tree)"));
-}
-
 void AMotherAIActor::ExecutePunishment(ACharacter* Player)
 {
 	if (!Player || !HasAuthority())
@@ -403,38 +424,148 @@ void AMotherAIActor::ExecutePunishment(ACharacter* Player)
 		return;
 	}
 
-	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Player);
+	// 이미 처벌 중이면 중복 실행 방지
+	if (bIsExecutingPunishment)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Punishment already in progress, ignoring duplicate call"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Executing punishment for player: %s"), *Player->GetName());
+
+	// 처벌 시작 플래그 설정
+	bIsExecutingPunishment = true;
+
+	// TargetPlayer 설정 (OnPunishmentHit에서 사용)
+	TargetPlayer = Player;
+	bIsApproachingPlayer = true;
+
+	// AI 움직임 중지 (처벌 중 움직임 방지)
+	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
+	{
+		MotherController->StopMovement();
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Stopped movement for punishment"));
+	}
+
+	// 몽타주 재생 (노티파이로 OnPunishmentHit 호출됨)
+	PlayPunishmentMontage();
+}
+
+void AMotherAIActor::OnPunishmentHit()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// TargetPlayer 멤버 변수에서 플레이어 가져오기
+	if (!TargetPlayer.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] OnPunishmentHit: TargetPlayer is invalid"));
+		return;
+	}
+
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(TargetPlayer.Get());
 	if (!BlasterCharacter)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] OnPunishmentHit: Failed to cast TargetPlayer to BlasterCharacter"));
 		return;
 	}
 
 	ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
 	if (!BlasterPlayerState)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] OnPunishmentHit: Failed to get BlasterPlayerState"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Executing punishment for player: %s"), *Player->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] OnPunishmentHit: Applying punishment to %s"), *BlasterCharacter->GetName());
 
 	// 목숨 감소
 	BlasterPlayerState->LoseLife();
 
 	// 의심 수치 초기화 (직접 설정)
-	if (HasAuthority())
+	float OldSuspicion = BlasterPlayerState->GetPersonalSuspicion();
+	BlasterPlayerState->AddPersonalSuspicion(-OldSuspicion); // Reset to 0
+	BlasterPlayerState->OnPersonalSuspicionChanged.Broadcast(0.0f, OldSuspicion);
+
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] OnPunishmentHit: Life lost, suspicion reset. Remaining lives: %d"), BlasterPlayerState->GetLives());
+}
+
+void AMotherAIActor::OnPunishmentEnd()
+{
+	if (!HasAuthority())
 	{
-		float OldSuspicion = BlasterPlayerState->GetPersonalSuspicion();
-		BlasterPlayerState->AddPersonalSuspicion(-OldSuspicion); // Reset to 0
-		BlasterPlayerState->OnPersonalSuspicionChanged.Broadcast(0.0f, OldSuspicion);
+		return;
 	}
 
-	// 경고 메시지
-	FString WarningMessage = FString::Printf(TEXT("제제 완료: %s의 목숨이 감소했습니다. (남은 목숨: %d)"), 
-		*BlasterCharacter->GetName(), BlasterPlayerState->GetLives());
-	SendWarning(WarningMessage);
+	// TargetPlayer 멤버 변수에서 플레이어 가져오기
+	ABlasterCharacter* BlasterCharacter = nullptr;
+	if (TargetPlayer.IsValid())
+	{
+		BlasterCharacter = Cast<ABlasterCharacter>(TargetPlayer.Get());
+	}
 
-	// 처벌 후 통제 타워로 복귀
-	ReturnToControlTower();
+	// 경고 메시지 (플레이어가 유효한 경우)
+	if (BlasterCharacter)
+	{
+		ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
+		if (BlasterPlayerState)
+		{
+			FString WarningMessage = FString::Printf(TEXT("제제 완료: %s의 목숨이 감소했습니다. (남은 목숨: %d)"),
+				*BlasterCharacter->GetName(), BlasterPlayerState->GetLives());
+			SendWarning(WarningMessage);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] OnPunishmentEnd: Punishment animation ended"));
+
+	// AI 움직임 재개
+	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
+	{
+		// 움직임 재개는 Behavior Tree가 자동으로 처리하므로 여기서는 특별한 처리가 필요 없음
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Movement will resume via Behavior Tree"));
+	}
+
+	// 점검 중인지 확인
+	bool bWasInspecting = (CurrentState == EMotherAIState::Inspecting);
+
+	// Blackboard 업데이트: TargetPlayer 제거
+	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
+	{
+		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
+		{
+			Blackboard->SetValueAsObject(FName("TargetPlayer"), nullptr);
+
+			// 점검 중이었다면 점검을 계속하기 위해 ShouldInspect는 true로 유지
+			if (bWasInspecting)
+			{
+				// 점검 위치로 복귀하도록 TargetLocation 설정
+				Blackboard->SetValueAsVector(FName("TargetLocation"), CurrentInspectionLocation);
+				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Punishment completed during inspection, returning to inspection location"));
+			}
+		}
+	}
+
+	// 처벌 완료 플래그 해제
+	bIsExecutingPunishment = false;
+
+	// 점검 중이 아니었다면 통제 타워로 복귀
+	if (!bWasInspecting)
+	{
+		ReturnToControlTower();
+	}
+	else
+	{
+		// 점검 중이었다면 점검 상태 유지 (TargetPlayer만 제거)
+		bIsApproachingPlayer = false;
+		TargetPlayer = nullptr;
+		// AI 상태는 Inspecting으로 유지
+	}
+}
+
+void AMotherAIActor::OnInspectionEnd()
+{
 }
 
 void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
@@ -476,16 +607,25 @@ void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventDa
 
 void AMotherAIActor::StartInspection()
 {
-	if (!HasAuthority() || InspectionLocations.Num() == 0)
+	if (!HasAuthority() || InspectionActorLocations.Num() == 0)
 	{
 		return;
 	}
 
 	// 현재 점검할 시설 선택
-	CurrentInspectionIndex = FMath::RandRange(0, InspectionLocations.Num() - 1);
-	CurrentInspectionLocation = InspectionLocations[CurrentInspectionIndex];
+	CurrentInspectionIndex = FMath::RandRange(0, InspectionActorLocations.Num() - 1);
+	if (InspectionActorLocations[CurrentInspectionIndex])
+	{
+		CurrentInspectionLocation = InspectionActorLocations[CurrentInspectionIndex]->GetActorLocation();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] InspectionActorLocations[%d] is null"), CurrentInspectionIndex);
+		return;
+	}
 
 	SetAIState(EMotherAIState::Inspecting);
+	PlayInspectionMontage();
 	InspectionStartTime = GetWorld()->GetTimeSeconds();
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Starting inspection at facility %d"), CurrentInspectionIndex);
@@ -544,34 +684,12 @@ void AMotherAIActor::ReturnToControlTower()
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), nullptr);
 			Blackboard->SetValueAsBool(FName("ShouldInspect"), false);
-			Blackboard->SetValueAsVector(FName("TargetLocation"), ControlTowerLocation);
+			FVector TowerLocation = GetControlTowerLocation();
+			Blackboard->SetValueAsVector(FName("TargetLocation"), TowerLocation);
 		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Returning to control tower"));
-}
-
-// 레거시 함수들 - Behavior Tree로 대체됨
-// 이 함수들은 더 이상 사용되지 않지만, 참고용으로 유지됨
-void AMotherAIActor::UpdateInspection(float DeltaTime)
-{
-	// DEPRECATED: Behavior Tree의 BTTask_MotherMoveToLocation과 BTTask_MotherWaitAtLocation으로 대체됨
-	// 이 함수는 더 이상 호출되지 않음
-	UE_LOG(LogTemp, VeryVerbose, TEXT("[MotherAIActor] UpdateInspection called (deprecated - use Behavior Tree)"));
-}
-
-void AMotherAIActor::UpdateReturnToTower(float DeltaTime)
-{
-	// DEPRECATED: Behavior Tree의 BTTask_MotherMoveToLocation으로 대체됨
-	// 이 함수는 더 이상 호출되지 않음
-	UE_LOG(LogTemp, VeryVerbose, TEXT("[MotherAIActor] UpdateReturnToTower called (deprecated - use Behavior Tree)"));
-}
-
-void AMotherAIActor::CheckForSuspiciousPlayers(float DeltaTime)
-{
-	// DEPRECATED: Behavior Tree의 BTService_MotherCheckSuspiciousPlayers로 대체됨
-	// 이 함수는 더 이상 호출되지 않음
-	UE_LOG(LogTemp, VeryVerbose, TEXT("[MotherAIActor] CheckForSuspiciousPlayers called (deprecated - use Behavior Tree)"));
 }
 
 void AMotherAIActor::MoveToLocation(const FVector& TargetLocation, float Speed)
@@ -648,43 +766,70 @@ void AMotherAIActor::ScheduleNextInspection()
 		return;
 	}
 
-	// 게임시간 가져오기 (간단히 World의 TimeSeconds 사용, 실제로는 게임시간 시스템 필요)
-	float CurrentGameTime = GetWorld()->GetTimeSeconds();
+	// 게임 시간 시스템에서 현재 게임 시간 가져오기
+	APickpackerGameState* PickpackerGameState = GetWorld()->GetGameState<APickpackerGameState>();
+	if (!PickpackerGameState)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] PickpackerGameState not found, cannot schedule inspection"));
+		return;
+	}
+
+	float CurrentGameHour = PickpackerGameState->GetCurrentGameHour();
 	
 	// 다음 점검 시간 찾기
-	float NextInspectionTime = MAX_FLT;
+	float NextInspectionHour = MAX_FLT;
 	for (float InspectionTime : InspectionTimes)
 	{
-		// 하루를 24시간으로 가정하고 게임시간 계산
-		// 실제 게임시간 시스템이 있으면 그걸 사용해야 함
-		float GameDayLength = 1440.0f; // 24분 = 하루 (게임시간)
-		float CurrentHour = FMath::Fmod(CurrentGameTime, GameDayLength) / 60.0f;
-		
-		float TimeUntilInspection = InspectionTime - CurrentHour;
+		float TimeUntilInspection = InspectionTime - CurrentGameHour;
 		if (TimeUntilInspection < 0.0f)
 		{
 			TimeUntilInspection += 24.0f; // 다음 날
 		}
 		
-		float RealTimeUntilInspection = TimeUntilInspection * 60.0f; // 분을 초로 변환
-		if (RealTimeUntilInspection < NextInspectionTime)
+		if (TimeUntilInspection < NextInspectionHour)
 		{
-			NextInspectionTime = RealTimeUntilInspection;
+			NextInspectionHour = TimeUntilInspection;
 		}
 	}
 
-	if (NextInspectionTime < MAX_FLT)
+	if (NextInspectionHour < MAX_FLT)
 	{
+		// 게임 시간을 실제 시간(초)으로 변환
+		float RealTimeUntilInspection = PickpackerGameState->ConvertGameHoursToRealSeconds(NextInspectionHour);
+		
 		GetWorld()->GetTimerManager().SetTimer(
 			InspectionTimerHandle,
 			this,
 			&AMotherAIActor::StartInspection,
-			NextInspectionTime,
+			RealTimeUntilInspection,
 			false
 		);
 
-		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Scheduled next inspection in %.2f seconds"), NextInspectionTime);
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Scheduled next inspection in %.2f game hours (%.2f real seconds)"), 
+			NextInspectionHour, RealTimeUntilInspection);
 	}
+}
+
+FVector AMotherAIActor::GetControlTowerLocation() const
+{
+	if (ControlTowerActor)
+	{
+		return ControlTowerActor->GetActorLocation();
+	}
+	return GetActorLocation(); // Fallback to current location
+}
+
+TArray<FVector> AMotherAIActor::GetInspectionLocations() const
+{
+	TArray<FVector> Locations;
+	for (AActor* InspectionActor : InspectionActorLocations)
+	{
+		if (InspectionActor)
+		{
+			Locations.Add(InspectionActor->GetActorLocation());
+		}
+	}
+	return Locations;
 }
 
 void AMotherAIActor::OnRestPeriodIntervalTimerFinished()
