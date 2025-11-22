@@ -101,7 +101,7 @@ protected:
 	void MoveForward(float Value);
 	void MoveRight(float Value);
 	void Turn(float Value);
-	void LookUp(float Value);
+	void LookUp(float Value); // Revert to simple AddControllerPitchInput
 	void EquipButtonPressed();
 	void CrouchButtonPressed();
 	void ReloadButtonPressed();

@@ -39,11 +39,13 @@ ABlasterCharacter::ABlasterCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	//CameraBoom->SetupAttachment(GetMesh());
 	CameraBoom->SetupAttachment(GetCapsuleComponent());
 	CameraBoom->TargetArmLength = 0.f;
 	CameraBoom->bUsePawnControlRotation = true;
 
+	CameraBoom->bEnableCameraRotationLag = true;
+	CameraBoom->CameraRotationLagSpeed = 12.f; // 8~15 사이에서 취향 조정
+	CameraBoom->bEnableCameraLag = false;      // 위치 랙은 1인칭에서 일반적으로 비활성
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
@@ -68,9 +70,9 @@ ABlasterCharacter::ABlasterCharacter()
 	Buff = CreateDefaultSubobject<UBuffComponent>(TEXT("BuffComponent"));
 	Buff->SetIsReplicated(true);
 
-	LagCompensation = CreateDefaultSubobject<ULagCompensationComponent>(TEXT("LagCompensation"));
-
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+	LagCompensation = CreateDefaultSubobject<ULagCompensationComponent>(TEXT("LagCompensation"));
+	
 	CarryIKComponent = CreateDefaultSubobject<UCarryIKComponent>(TEXT("CarryIKComponent"));
 	PlayerInventoryComponent = CreateDefaultSubobject<UPlayerInventoryComponent>(TEXT("PlayerInventoryComponent"));
 
@@ -717,7 +719,8 @@ void ABlasterCharacter::Turn(float Value)
 
 void ABlasterCharacter::LookUp(float Value)
 {
-	AddControllerPitchInput(Value);
+    if (bDisableGameplay) return;
+    AddControllerPitchInput(Value);
 }
 
 void ABlasterCharacter::EquipButtonPressed()

@@ -115,7 +115,13 @@ public:
 	void OnSuspicionEventReceived(const struct FSuspicionEventData& EventData);
 
 	/**
-	 * 시설 점검 시작
+	 * 시설 점검 트리거 (Blackboard 업데이트, 비헤이비어 트리가 이동 처리)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mother AI")
+	void TriggerInspection();
+
+	/**
+	 * 시설 점검 시작 (비헤이비어 트리에서 위치 도착 후 호출)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mother AI")
 	void StartInspection();

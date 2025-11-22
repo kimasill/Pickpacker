@@ -5,6 +5,8 @@
 #include "Blaster/Shelf/ShelfActor.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Blaster/Interfaces/GameplayActionInterface.h"
+#include "Blaster/Library/DynamicGameplayStatics.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -12,7 +14,9 @@
 #include "DrawDebugHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Blueprint/UserWidget.h"
 
 UInteractionComponent::UInteractionComponent()
 {
@@ -22,7 +26,6 @@ UInteractionComponent::UInteractionComponent()
     TraceChannel = ECC_Visibility;
     bRequireInteractableInterface = true;
     bDrawDebugTrace = false;
-
     SetIsReplicatedByDefault(true);
 }
 
@@ -40,429 +43,129 @@ void UInteractionComponent::BeginPlay()
 void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-    // 로컬 컨트롤된 캐릭터에서만 실행
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter || !OwnerCharacter->IsLocallyControlled())
-    {
-        return;
-    }
-
-    // 오버랩 목록 정리 (유효하지 않은 액터 제거)
-    OverlappingActors.RemoveAll([](const TWeakObjectPtr<AActor>& ActorPtr)
-    {
-        return !ActorPtr.IsValid();
-    });
-
-    // 타겟 업데이트 (오버랩 목록 + Line Trace 우선순위)
+    if (!OwnerCharacter || !OwnerCharacter->IsLocallyControlled()) return;
     UpdateTarget();
 }
 
-void UInteractionComponent::PerformTrace(FHitResult& OutHitResult)
+void UInteractionComponent::ShowInteractionWidget(AActor* TargetActor)
 {
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
+    if (!InteractionWidget) { HideInteractionWidget(); return; }
+    if (!ActiveInteractionWidget)
     {
-        return;
-    }
-
-    APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
-    if (!PC)
-    {
-        return;
-    }
-
-    // 카메라에서 Trace 시작
-    UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>();
-    if (!Camera)
-    {
-        // Fallback: 캐릭터 위치에서
-        FVector Start = OwnerCharacter->GetActorLocation() + OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
-        FVector Forward = OwnerCharacter->GetActorForwardVector();
-        FVector End = Start + Forward * InteractionDistance;
-
-        GetWorld()->LineTraceSingleByChannel(
-            OutHitResult,
-            Start,
-            End,
-            TraceChannel
-        );
-
-        if (bDrawDebugTrace)
+        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
         {
-            DrawDebugLine(GetWorld(), Start, End, OutHitResult.bBlockingHit ? FColor::Green : FColor::Red, false, 0.0f, 0, 2.0f);
+            if (OwnerCharacter->IsLocallyControlled())
+            {
+                APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
+                if (PC)
+                {
+                    ActiveInteractionWidget = CreateWidget<UUserWidget>(PC, InteractionWidget);
+                }
+                else if (UWorld* World = GetWorld())
+                {
+                    ActiveInteractionWidget = CreateWidget<UUserWidget>(World, InteractionWidget);
+                }
+                if (ActiveInteractionWidget)
+                {
+                    ActiveInteractionWidget->AddToViewport();
+                }
+            }
         }
-        return;
     }
-
-    // 화면 중앙에서 Trace
-    FVector CameraLocation = Camera->GetComponentLocation();
-    FRotator CameraRotation = Camera->GetComponentRotation();
-    FVector TraceStart = CameraLocation;
-    FVector TraceDirection = CameraRotation.Vector();
-    FVector TraceEnd = TraceStart + TraceDirection * InteractionDistance;
-
-    // 액터가 가리는지 확인
-    FCollisionQueryParams QueryParams;
-    QueryParams.AddIgnoredActor(OwnerCharacter);
-
-    GetWorld()->LineTraceSingleByChannel(
-        OutHitResult,
-        TraceStart,
-        TraceEnd,
-        TraceChannel,
-        QueryParams
-    );
-
-    if (bDrawDebugTrace)
+    else
     {
-        DrawDebugLine(GetWorld(), TraceStart, TraceEnd, OutHitResult.bBlockingHit ? FColor::Green : FColor::Red, false, 0.0f, 0, 2.0f);
-        if (OutHitResult.bBlockingHit)
-        {
-            DrawDebugSphere(GetWorld(), OutHitResult.ImpactPoint, 5.0f, 12, FColor::Yellow, false, 0.0f);
-        }
+        ActiveInteractionWidget->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
+void UInteractionComponent::HideInteractionWidget()
+{
+    if (ActiveInteractionWidget)
+    {
+        ActiveInteractionWidget->RemoveFromParent();
+        ActiveInteractionWidget = nullptr;
     }
 }
 
 void UInteractionComponent::UpdateTarget()
 {
-    // 오버랩 목록에서 상호작용 가능한 액터만 필터링
-    TArray<AActor*> ValidOverlappingActors;
-    for (const TWeakObjectPtr<AActor>& ActorPtr : OverlappingActors)
-    {
-        if (ActorPtr.IsValid() && IsActorInteractable(ActorPtr.Get()))
-        {
-            ValidOverlappingActors.Add(ActorPtr.Get());
-        }
-    }
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    if (!OwnerCharacter || !OwnerCharacter->IsLocallyControlled()) return;
 
-    // 타겟 선택
+    UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>();
+    const FVector CameraLocation = Camera ? Camera->GetComponentLocation() : OwnerCharacter->GetActorLocation() + OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
+    const FVector Direction = Camera ? Camera->GetForwardVector() : OwnerCharacter->GetActorForwardVector();
+    const FVector Start = CameraLocation;
+    const FVector End = CameraLocation + Direction * InteractionDistance;
+
+    FHitResult Hit;
+    TArray<AActor*> Ignored; Ignored.Add(OwnerCharacter); if (IsValid(CarriedParcel)) Ignored.Add(CarriedParcel);
+    const ETraceTypeQuery Channel = UEngineTypes::ConvertToTraceType(TraceChannel);
+    UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, Channel, false, Ignored, EDrawDebugTrace::None, Hit, false);
+
     AActor* NewTarget = nullptr;
-
-    if (bUseLineTracePriority && ValidOverlappingActors.Num() > 0)
+    if (Hit.bBlockingHit)
     {
-        // Line Trace로 우선 타겟 선택
-        NewTarget = SelectBestTargetFromOverlap(ValidOverlappingActors);
-    }
-    else if (ValidOverlappingActors.Num() > 0)
-    {
-        // Line Trace 비활성화 시 가장 가까운 액터 선택
-        ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-        if (OwnerCharacter)
+        if (UDynamicGameplayStatics::GetActorOrComponentWithInterface(Hit.GetActor(), UInteractableInterface::StaticClass()))
         {
-            float ClosestDistance = MAX_FLT;
-            FVector OwnerLocation = OwnerCharacter->GetActorLocation();
-
-            for (AActor* Actor : ValidOverlappingActors)
-            {
-                float Distance = FVector::Dist(OwnerLocation, Actor->GetActorLocation());
-                if (Distance < ClosestDistance)
-                {
-                    ClosestDistance = Distance;
-                    NewTarget = Actor;
-                }
-            }
+            NewTarget = Hit.GetActor();
         }
     }
 
-    // 타겟 변경 확인 및 하이라이트 업데이트
     PreviousTarget = CurrentTarget;
-
-    // 새로운 타겟이 전혀 없으면, 기존 하이라이트를 해제
     if (NewTarget == nullptr)
     {
         ClearShelfSlotFocus();
-
         if (CurrentTarget.IsValid())
         {
-            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
-            {
-                IInteractableInterface::Execute_EndHighlight(CurrentTarget.Get());
-            }
-
+            HideInteractionWidget();
+            SetCustomDepth(CurrentTarget.Get(), false);
             OnTargetChanged.Broadcast(PreviousTarget.Get(), nullptr);
         }
-
-        CurrentTarget = nullptr;
-        return;
+        CurrentTarget = nullptr; return;
     }
 
-    if (CurrentTarget.Get() != NewTarget)
+    const bool bChanged = CurrentTarget.Get() != NewTarget;
+    if (bChanged)
     {
-        // 이전 타겟 하이라이트 해제
-        if (CurrentTarget.IsValid())
-        {
-            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
-            {
-                IInteractableInterface::Execute_EndHighlight(CurrentTarget.Get());
-            }
-        }
-
-        // 새 타겟 설정
         CurrentTarget = NewTarget;
-
-        // 새 타겟 하이라이트
         if (CurrentTarget.IsValid())
         {
-            if (CurrentTarget->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+            UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass());
+            bool bHandled = false;
+            if (InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
             {
-                IInteractableInterface::Execute_StartHighlight(CurrentTarget.Get());
+                bHandled = IInteractableInterface::Execute_RequestShowInteractionUI(InteractableObj, OwnerCharacter);
             }
+            if (!bHandled)
+            {
+                ShowInteractionWidget(CurrentTarget.Get());
+            }
+            else
+            {
+                HideInteractionWidget();
+            }
+            SetCustomDepth(CurrentTarget.Get(), true);
         }
-
-        // 이벤트 브로드캐스트
         OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
     }
 
-    if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get()))
-    {
-        UpdateShelfSlotFocus(ShelfTarget);
-    }
-    else
-    {
-        ClearShelfSlotFocus();
-    }
-}
-
-AActor* UInteractionComponent::SelectBestTargetFromOverlap(const TArray<AActor*>& InActors) const
-{
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
-    {
-        return InActors.Num() > 0 ? InActors[0] : nullptr;
-    }
-
-    // 카메라에서 Line Trace 수행
-    UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>();
-    if (!Camera)
-    {
-        return InActors.Num() > 0 ? InActors[0] : nullptr;
-    }
-
-    FVector CameraLocation = Camera->GetComponentLocation();
-    FRotator CameraRotation = Camera->GetComponentRotation();
-    FVector TraceDirection = CameraRotation.Vector();
-
-    // 각 오버랩 액터에 대해 Line Trace 수행
-    AActor* BestTarget = nullptr;
-    float ClosestHitDistance = MAX_FLT;
-
-    for (AActor* Actor : InActors)
-    {
-        if (!Actor || !IsValid(Actor))
-        {
-            continue;
-        }
-
-        const float Distance = FVector::Dist(CameraLocation, Actor->GetActorLocation());
-        if (Distance > InteractionDistance)
-        {
-            continue;
-        }
-
-        // 시야 각도 체크 (정면에 있는지)
-        const FVector ToActorDir = (Actor->GetActorLocation() - CameraLocation).GetSafeNormal();
-        const float DotProduct = FVector::DotProduct(TraceDirection, ToActorDir);
-        
-        if (DotProduct > 0.5f && Distance < ClosestHitDistance)
-        {
-            ClosestHitDistance = Distance;
-            BestTarget = Actor;
-        }
-    }
-
-    return BestTarget ? BestTarget : (InActors.Num() > 0 ? InActors[0] : nullptr);
-}
-
-void UInteractionComponent::AddOverlappingActor(AActor* Actor)
-{
-    if (!Actor || !IsValid(Actor))
-    {
-        return;
-    }
-
-    // 이미 목록에 있으면 무시
-    if (OverlappingActors.Contains(Actor))
-    {
-        return;
-    }
-
-    OverlappingActors.Add(Actor);
-}
-
-void UInteractionComponent::RemoveOverlappingActor(AActor* Actor)
-{
-    OverlappingActors.RemoveAllSwap([Actor](const TWeakObjectPtr<AActor>& ActorPtr)
-    {
-        return !ActorPtr.IsValid() || ActorPtr.Get() == Actor;
-    });
-}
-
-TArray<AActor*> UInteractionComponent::GetOverlappingActors() const
-{
-    TArray<AActor*> Result;
-    for (const TWeakObjectPtr<AActor>& ActorPtr : OverlappingActors)
-    {
-        if (ActorPtr.IsValid())
-        {
-            Result.Add(ActorPtr.Get());
-        }
-    }
-    return Result;
-}
-
-void UInteractionComponent::SetCarriedParcel(AParcelActor* NewParcel)
-{
-	if (!GetOwner() || !GetOwner()->HasAuthority())
-	{
-		return;
-	}
-
-	if (CarriedParcel == NewParcel)
-	{
-		return;
-	}
-
-	AParcelActor* LastParcel = CarriedParcel;
-	CarriedParcel = NewParcel;
-	HandleCarriedParcelChanged(LastParcel);
-}
-
-void UInteractionComponent::OnRep_CarriedParcel(AParcelActor* LastParcel)
-{
-	HandleCarriedParcelChanged(LastParcel);
-}
-
-void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
-{
-	const FString LastName = LastParcel ? LastParcel->GetName() : TEXT("None");
-	const FString NewName = CarriedParcel ? CarriedParcel->GetName() : TEXT("None");
-	UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Carried parcel changed %s -> %s"),
-		*LastName, *NewName);
-}
-
-bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
-{
-    if (!Actor)
-    {
-        return false;
-    }
-
-    // 액터 클래스 필터 확인
-    if (AllowedActorClasses.Num() > 0)
-    {
-        bool bIsAllowed = false;
-        for (TSubclassOf<AActor> AllowedClass : AllowedActorClasses)
-        {
-            if (Actor->IsA(AllowedClass))
-            {
-                bIsAllowed = true;
-                break;
-            }
-        }
-        if (!bIsAllowed)
-        {
-            return false;
-        }
-    }
-
-    // 인터페이스 확인
-    if (bRequireInteractableInterface)
-    {
-        if (!Actor->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
-        {
-            return false;
-        }
-    }
-
-    // CanInteract 확인
-    if (IInteractableInterface* Interface = Cast<IInteractableInterface>(Actor))
-    {
-        ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-        if (OwnerCharacter)
-        {
-            return Interface->Execute_CanInteract(Actor, OwnerCharacter);
-        }
-    }
-
-    return true;
-}
-
-void UInteractionComponent::UpdateShelfSlotFocus(AShelfActor* Shelf)
-{
-    if (!Shelf)
-    {
-        return;
-    }
-
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
-    {
-        return;
-    }
-
-    if (!OwnerCharacter->IsLocallyControlled())
-    {
-        return;
-    }
-
-    if (!FocusedShelf.IsValid() || FocusedShelf.Get() != Shelf)
-    {
-        ClearShelfSlotFocus(FocusedShelf.Get());
-        FocusedShelf = Shelf;
-    }
-
-    FVector ViewLocation = OwnerCharacter->GetActorLocation();
-    FVector ViewDirection = OwnerCharacter->GetActorForwardVector();
-
-    if (UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>())
-    {
-        ViewLocation = Camera->GetComponentLocation();
-        ViewDirection = Camera->GetForwardVector();
-    }
-    else
-    {
-        ViewLocation += OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
-    }
-
-    const int32 CandidateSlot = Shelf->FindBestSlotForView(ViewLocation, ViewDirection, InteractionDistance);
-    Shelf->SetFocusedSlot(CandidateSlot);
-    FocusedSlotIndex = CandidateSlot;
-}
-
-void UInteractionComponent::ClearShelfSlotFocus(AShelfActor* ShelfToClear)
-{
-    if (ShelfToClear == nullptr && FocusedShelf.IsValid())
-    {
-        ShelfToClear = FocusedShelf.Get();
-    }
-
-    if (ShelfToClear)
-    {
-        ShelfToClear->SetFocusedSlot(INDEX_NONE);
-    }
-
-    FocusedShelf = nullptr;
-    FocusedSlotIndex = INDEX_NONE;
+    if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get())) { UpdateShelfSlotFocus(ShelfTarget); } else { ClearShelfSlotFocus(); }
 }
 
 void UInteractionComponent::Interact()
 {
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter) return;
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
 
-    // 들고 있는 Parcel이 있으면 Drop 로직 실행
     if (IsValid(CarriedParcel))
     {
         AParcelActor* Parcel = CarriedParcel;
-        
-        // ShelfActor가 타겟이면 선반에 배치
         if (CurrentTarget.IsValid())
         {
             if (AShelfActor* Shelf = Cast<AShelfActor>(CurrentTarget.Get()))
             {
-                // 선반에 배치 시도
-				const int32 TargetSlot = FocusedSlotIndex;
+                const int32 TargetSlot = FocusedSlotIndex;
                 if (OwnerCharacter->HasAuthority())
                 {
                     if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlot))
@@ -472,109 +175,58 @@ void UInteractionComponent::Interact()
                         return;
                     }
                 }
-                else
-                {
-                    Server_Interact(Shelf, TargetSlot);
-                    return;
-                }
+                else { Server_Interact(Shelf, TargetSlot); return; }
             }
         }
-
-        // 일반 Drop
         if (Parcel)
         {
-            FVector Pulse = OwnerCharacter->GetActorForwardVector() * DropImpulse;
-            Parcel->RequestDrop(Pulse);
-			if (OwnerCharacter->HasAuthority())
-			{
-				SetCarriedParcel(nullptr);
-			}
+            Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
+            if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
         }
         return;
     }
 
-    // Parcel을 들고 있지 않으면 Pickup 로직 실행
     if (!CanInteract()) return;
-
-    AActor* Target = CurrentTarget.Get();
-    if (!Target) return;
+    AActor* TargetActor = CurrentTarget.Get(); if (!TargetActor) return;
+    UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(TargetActor, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
 
     if (OwnerCharacter->HasAuthority())
     {
-        const bool bSuccess = PerformInteract(Target, OwnerCharacter);
-        if (bSuccess)
+        if (PerformInteract(InteractableObj, OwnerCharacter))
         {
-            // Parcel을 집었으면 추적
-        if (AParcelActor* Parcel = Cast<AParcelActor>(Target))
-        {
-            if (Parcel->IsAttached())
+            if (AParcelActor* Parcel = Cast<AParcelActor>(TargetActor))
             {
-                SetCarriedParcel(Parcel);
+                if (Parcel->IsAttached()) SetCarriedParcel(Parcel);
             }
-        }
-            OnInteractSuccess.Broadcast(Target);
+            OnInteractSuccess.Broadcast(TargetActor);
         }
     }
-    else
-    {
-        Server_Interact(Target, INDEX_NONE);
-    }
+    else { Server_Interact(TargetActor, INDEX_NONE); }
 }
 
 void UInteractionComponent::InventoryInteract()
 {
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
-    {
-        return;
-    }
-
-    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OwnerCharacter);
-    if (!BlasterCharacter || !BlasterCharacter->GetPlayerInventoryComponent())
-    {
-        return;
-    }
-
-    UPlayerInventoryComponent* InventoryComponent = BlasterCharacter->GetPlayerInventoryComponent();
-
-    // 손에 Parcel을 들고 있는 경우
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
+    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OwnerCharacter); if (!BlasterCharacter || !BlasterCharacter->GetPlayerInventoryComponent()) return;
+    UPlayerInventoryComponent* Inventory = BlasterCharacter->GetPlayerInventoryComponent();
     if (IsValid(CarriedParcel))
     {
-        // 포장된 Parcel은 인벤토리 상호작용 불가
-        if (CarriedParcel->IsPackaged())
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[InteractionComponent] Cannot put packaged parcel into inventory"));
-            return;
-        }
-
-        // 포장되지 않은 Parcel만 인벤토리에 넣기
+        if (CarriedParcel->IsPackaged()) { UE_LOG(LogTemp, Warning, TEXT("[InteractionComponent] Cannot put packaged parcel into inventory")); return; }
         if (CarriedParcel->IsItem())
         {
-            // 인벤토리에 추가
-            if (InventoryComponent->CollectItem(CarriedParcel))
-            {
-                // 손에서 제거
-                SetCarriedParcel(nullptr);
-                UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Put parcel into inventory"));
-            }
+            if (Inventory->CollectItem(CarriedParcel)) { SetCarriedParcel(nullptr); UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Put parcel into inventory")); }
         }
     }
     else
     {
-        // 손에 아무것도 없고 인벤토리에 아이템이 있는 경우
-        TArray<AParcelActor*> CollectedItems = InventoryComponent->GetCollectedItems();
-        if (CollectedItems.Num() > 0)
+        const TArray<AParcelActor*> Items = Inventory->GetCollectedItems();
+        if (Items.Num() > 0)
         {
-            // 첫 번째 아이템을 손으로 가져오기
-            AParcelActor* FirstItem = CollectedItems[0];
-            if (FirstItem && InventoryComponent->RemoveItem(FirstItem))
+            AParcelActor* First = Items[0];
+            if (First && Inventory->RemoveItem(First))
             {
-                // 손에 들기
-                SetCarriedParcel(FirstItem);
-                
-                // 캐릭터에게 부착
-                FirstItem->RequestAttach(OwnerCharacter, FName("CarrySocket"));
-                
+                SetCarriedParcel(First);
+                First->RequestAttach(OwnerCharacter, FName("CarrySocket"));
                 UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Took parcel from inventory"));
             }
         }
@@ -583,63 +235,143 @@ void UInteractionComponent::InventoryInteract()
 
 void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32 TargetSlotIndex)
 {
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter) return;
-
-    // ShelfActor에 배치하는 경우
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
     if (IsValid(CarriedParcel))
     {
         if (AShelfActor* Shelf = Cast<AShelfActor>(Target))
         {
-            AParcelActor* Parcel = CarriedParcel;
-            if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlotIndex))
-            {
-                SetCarriedParcel(nullptr);
-            }
+            if (Shelf->TryPlaceParcelAtSlot(CarriedParcel, TargetSlotIndex)) { SetCarriedParcel(nullptr); }
             return;
         }
     }
-
-    const bool bSuccess = PerformInteract(Target, OwnerCharacter);
-    if (bSuccess)
+    UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(Target, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
+    if (PerformInteract(InteractableObj, OwnerCharacter))
     {
-        // Parcel을 집었으면 추적
         if (AParcelActor* Parcel = Cast<AParcelActor>(Target))
         {
-            if (Parcel->IsAttached() && OwnerCharacter->HasAuthority())
-            {
-                SetCarriedParcel(Parcel);
-            }
+            if (Parcel->IsAttached() && OwnerCharacter->HasAuthority()) SetCarriedParcel(Parcel);
         }
     }
 }
 
 bool UInteractionComponent::CanInteract() const
 {
-    if (!CurrentTarget.IsValid())
-    {
-        return false;
-    }
+    if (!CurrentTarget.IsValid()) return false;
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return false;
+    UObject* Obj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass()); if (!Obj) return false;
+    return IInteractableInterface::Execute_CanInteract(Obj, OwnerCharacter);
+}
 
-    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-    if (!OwnerCharacter)
-    {
-        return false;
-    }
+UObject* UInteractionComponent::GetCurrentInteractableObject() const
+{
+    return CurrentTarget.IsValid() ? UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass()) : nullptr;
+}
 
-    if (IInteractableInterface* Interface = Cast<IInteractableInterface>(CurrentTarget.Get()))
-    {
-        return Interface->Execute_CanInteract(CurrentTarget.Get(), OwnerCharacter);
-    }
+bool UInteractionComponent::PerformInteract(UObject* InteractableObject, ACharacter* OwnerCharacter)
+{
+    if (!InteractableObject || !OwnerCharacter) return false;
+    if (!InteractableObject->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass())) return false;
+    return IInteractableInterface::Execute_OnInteract(InteractableObject, OwnerCharacter);
+}
 
+void UInteractionComponent::SetCustomDepth(AActor* TargetActor, bool bEnable)
+{
+    if (!TargetActor) return;
+    TArray<UActorComponent*> PrimitiveComponents;
+    TargetActor->GetComponents(UPrimitiveComponent::StaticClass(), PrimitiveComponents);
+    const int StencilValue = bEnable ? CustomDepthStencilValue : 0;
+    for (UActorComponent* Component : PrimitiveComponents)
+    {
+        if (Component->ComponentHasTag(FName("IgnoreDepth"))) continue;
+        if (UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(Component))
+        {
+            Prim->SetRenderCustomDepth(bEnable);
+            Prim->SetCustomDepthStencilValue(StencilValue);
+        }
+    }
+}
+
+void UInteractionComponent::SetCarriedParcel(AParcelActor* NewParcel)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+    if (CarriedParcel == NewParcel) return;
+    AParcelActor* Last = CarriedParcel;
+    CarriedParcel = NewParcel;
+    HandleCarriedParcelChanged(Last);
+}
+
+void UInteractionComponent::OnRep_CarriedParcel(AParcelActor* LastParcel)
+{
+    HandleCarriedParcelChanged(LastParcel);
+}
+
+void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
+{
+    UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Carried parcel changed %s -> %s"),
+        LastParcel ? *LastParcel->GetName() : TEXT("None"), CarriedParcel ? *CarriedParcel->GetName() : TEXT("None"));
+}
+
+bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
+{
+    if (!Actor) return false;
+    if (AllowedActorClasses.Num() > 0)
+    {
+        bool bAllowed = false;
+        for (TSubclassOf<AActor> Allowed : AllowedActorClasses)
+        {
+            if (Actor->IsA(Allowed)) { bAllowed = true; break; }
+        }
+        if (!bAllowed) return false;
+    }
+    if (bRequireInteractableInterface)
+    {
+        if (!Actor->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()) &&
+            Actor->GetComponentsByInterface(UInteractableInterface::StaticClass()).Num() == 0)
+        {
+            return false;
+        }
+    }
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return false;
+    UObject* Obj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(Actor, UInteractableInterface::StaticClass());
+    if (Obj)
+    {
+        return IInteractableInterface::Execute_CanInteract(Obj, OwnerCharacter);
+    }
     return false;
 }
 
-bool UInteractionComponent::PerformInteract(AActor* Target, ACharacter* OwnerCharacter)
+void UInteractionComponent::UpdateShelfSlotFocus(AShelfActor* Shelf)
 {
-    if (!Target || !OwnerCharacter) return false;
-    if (!Target->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass())) return false;
-     
-    return IInteractableInterface::Execute_OnInteract(Target, OwnerCharacter);
+    if (!Shelf) return;
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
+    if (!OwnerCharacter->IsLocallyControlled()) return;
+    if (!FocusedShelf.IsValid() || FocusedShelf.Get() != Shelf)
+    {
+        ClearShelfSlotFocus(FocusedShelf.Get());
+        FocusedShelf = Shelf;
+    }
+    FVector ViewLocation = OwnerCharacter->GetActorLocation();
+    FVector ViewDirection = OwnerCharacter->GetActorForwardVector();
+    if (UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>())
+    {
+        ViewLocation = Camera->GetComponentLocation();
+        ViewDirection = Camera->GetForwardVector();
+    }
+    else
+    {
+        ViewLocation += OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
+    }
+    const int32 CandidateSlot = Shelf->FindBestSlotForView(ViewLocation, ViewDirection, InteractionDistance);
+    Shelf->SetFocusedSlot(CandidateSlot);
+    FocusedSlotIndex = CandidateSlot;
 }
 
+void UInteractionComponent::ClearShelfSlotFocus(AShelfActor* ShelfToClear)
+{
+    if (ShelfToClear == nullptr && FocusedShelf.IsValid()) { ShelfToClear = FocusedShelf.Get(); }
+    if (ShelfToClear) { ShelfToClear->SetFocusedSlot(INDEX_NONE); }
+    FocusedShelf = nullptr; FocusedSlotIndex = INDEX_NONE;
+}
+
+void UInteractionComponent::Action() {}
+void UInteractionComponent::Server_Action_Implementation(AActor* Target) {}

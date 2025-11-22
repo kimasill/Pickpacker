@@ -586,13 +586,18 @@ void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventDa
 	UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Directly detected suspicious behavior: %s from player %s"), 
 		*UEnum::GetValueAsString(EventData.Behavior), *BlasterCharacter->GetName());
 
-	// Blackboard 업데이트 (Behavior Tree용)
+	// 점검 중이어도 플레이어 위반행동 감지 시 즉시 처벌
+	// Blackboard 업데이트 (Behavior Tree가 우선순위를 변경하도록)
 	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
 	{
 		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
 		{
+			// TargetPlayer 설정으로 Behavior Tree가 처벌 우선순위로 전환
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), BlasterCharacter);
 			SetAIState(EMotherAIState::ChasingPlayer);
+			
+			// 점검 중이었다면 ShouldInspect는 유지하되, 처벌 후 복귀할 수 있도록
+			// (OnPunishmentEnd에서 처리)
 		}
 	}
 
@@ -605,15 +610,19 @@ void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventDa
 	SendWarning(WarningMessage);
 }
 
-void AMotherAIActor::StartInspection()
+void AMotherAIActor::TriggerInspection()
 {
 	if (!HasAuthority() || InspectionActorLocations.Num() == 0)
 	{
 		return;
 	}
 
-	// 현재 점검할 시설 선택
-	CurrentInspectionIndex = FMath::RandRange(0, InspectionActorLocations.Num() - 1);
+	// 현재 점검할 시설 선택 (마지막 점검 인덱스 다음부터)
+	if (CurrentInspectionIndex >= InspectionActorLocations.Num())
+	{
+		CurrentInspectionIndex = 0;
+	}
+	
 	if (InspectionActorLocations[CurrentInspectionIndex])
 	{
 		CurrentInspectionLocation = InspectionActorLocations[CurrentInspectionIndex]->GetActorLocation();
@@ -624,21 +633,35 @@ void AMotherAIActor::StartInspection()
 		return;
 	}
 
-	SetAIState(EMotherAIState::Inspecting);
-	PlayInspectionMontage();
-	InspectionStartTime = GetWorld()->GetTimeSeconds();
-
-	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Starting inspection at facility %d"), CurrentInspectionIndex);
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Triggering inspection at facility %d"), CurrentInspectionIndex);
 	
-	// Blackboard 업데이트 (Behavior Tree용)
+	// Blackboard 업데이트 (Behavior Tree가 이동 및 몽타주 재생 처리)
 	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
 	{
 		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
 		{
 			Blackboard->SetValueAsBool(FName("ShouldInspect"), true);
 			Blackboard->SetValueAsVector(FName("InspectionLocation"), CurrentInspectionLocation);
+			Blackboard->SetValueAsVector(FName("TargetLocation"), CurrentInspectionLocation);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Blackboard updated: ShouldInspect=true, InspectionLocation=%s"), 
+				*CurrentInspectionLocation.ToString());
 		}
 	}
+}
+
+void AMotherAIActor::StartInspection()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// 비헤이비어 트리에서 위치 도착 후 호출됨
+	SetAIState(EMotherAIState::Inspecting);
+	PlayInspectionMontage();
+	InspectionStartTime = GetWorld()->GetTimeSeconds();
+
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Starting inspection montage at facility %d"), CurrentInspectionIndex);
 }
 
 void AMotherAIActor::CompleteInspection()
@@ -649,6 +672,13 @@ void AMotherAIActor::CompleteInspection()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Completed inspection at facility %d"), CurrentInspectionIndex);
+
+	// 다음 점검 인덱스로 이동 (마지막 지점부터 계속)
+	CurrentInspectionIndex++;
+	if (CurrentInspectionIndex >= InspectionActorLocations.Num())
+	{
+		CurrentInspectionIndex = 0;
+	}
 
 	// Blackboard 업데이트 (Behavior Tree용)
 	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
@@ -716,6 +746,19 @@ bool AMotherAIActor::CanSeePlayer(ACharacter* Player) const
 		return false;
 	}
 
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Player);
+	if (!BlasterCharacter)
+	{
+		return false;
+	}
+
+	// 플레이어가 앉기 상태인지 확인 (책상 아래 등에 숨어있는 경우)
+	if (BlasterCharacter->bIsCrouched)
+	{
+		// 앉기 상태일 때는 감지하지 않음
+		return false;
+	}
+
 	FVector MotherLocation = GetActorLocation();
 	FVector PlayerLocation = Player->GetActorLocation();
 	FVector ToPlayer = (PlayerLocation - MotherLocation).GetSafeNormal();
@@ -736,21 +779,32 @@ bool AMotherAIActor::CanSeePlayer(ACharacter* Player) const
 		return false;
 	}
 
-	// Line of sight 확인
+	// Line of sight 확인 (오브젝트에 가려져 있는지 확인)
 	FHitResult HitResult;
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this);
 	QueryParams.AddIgnoredActor(Player);
+	QueryParams.bTraceComplex = true; // 복잡한 충돌 체크
+
+	// 마더의 눈 위치에서 플레이어의 머리 위치로 트레이스
+	FVector TraceStart = MotherLocation + FVector(0, 0, 150.0f); // 마더의 눈 높이
+	FVector TraceEnd = PlayerLocation + FVector(0, 0, 100.0f); // 플레이어의 머리 높이
 
 	bool bHit = GetWorld()->LineTraceSingleByChannel(
 		HitResult,
-		MotherLocation,
-		PlayerLocation,
+		TraceStart,
+		TraceEnd,
 		ECC_Visibility,
 		QueryParams
 	);
 
-	return !bHit || HitResult.GetActor() == Player;
+	// 오브젝트에 가려져 있으면 못봄
+	if (bHit && HitResult.GetActor() != Player)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 bool AMotherAIActor::HasReachedLocation(const FVector& TargetLocation, float Tolerance) const
@@ -797,10 +851,11 @@ void AMotherAIActor::ScheduleNextInspection()
 		// 게임 시간을 실제 시간(초)으로 변환
 		float RealTimeUntilInspection = PickpackerGameState->ConvertGameHoursToRealSeconds(NextInspectionHour);
 		
+		// 타이머로 Blackboard 업데이트 함수 호출 (StartInspection 직접 호출하지 않음)
 		GetWorld()->GetTimerManager().SetTimer(
 			InspectionTimerHandle,
 			this,
-			&AMotherAIActor::StartInspection,
+			&AMotherAIActor::TriggerInspection,
 			RealTimeUntilInspection,
 			false
 		);
@@ -851,5 +906,6 @@ void AMotherAIActor::OnRestPeriodIntervalTimerFinished()
 		);
 	}
 }
+
 
 

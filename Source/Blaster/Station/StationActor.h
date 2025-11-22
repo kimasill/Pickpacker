@@ -213,19 +213,6 @@ private:
 	 * Internal function to validate processing result
 	 */
 	bool ValidateProcessingResult(const FGameplayTagContainer& OutputTags) const;
-
-	/**
-	 * Handle overlap begin
-	 */
-	UFUNCTION()
-	void OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
-
-	/**
-	 * Handle overlap end
-	 */
-	UFUNCTION()
-	void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
-
 private:
 	/** Original materials for highlight */
 	UPROPERTY()

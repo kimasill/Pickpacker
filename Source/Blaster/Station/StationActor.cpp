@@ -54,13 +54,6 @@ void AStationActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Setup overlap events
-	if (AreaSphere)
-	{
-		AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AStationActor::OnSphereOverlap);
-		AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AStationActor::OnSphereEndOverlap);
-	}
-
 	// Store original materials
 	if (StationMesh)
 	{
@@ -397,46 +390,4 @@ void AStationActor::EndHighlight_Implementation()
 
 	// Disable custom depth
 	StationMesh->SetRenderCustomDepth(false);
-}
-
-void AStationActor::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
-	APawn* Pawn = Cast<APawn>(OtherActor);
-	if (!Pawn)
-	{
-		return;
-	}
-
-	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Pawn);
-	if (!BlasterCharacter)
-	{
-		return;
-	}
-
-	UInteractionComponent* InteractionComponent = BlasterCharacter->GetInteractionComponent();
-	if (InteractionComponent)
-	{
-		InteractionComponent->AddOverlappingActor(this);
-	}
-}
-
-void AStationActor::OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
-{
-	APawn* Pawn = Cast<APawn>(OtherActor);
-	if (!Pawn)
-	{
-		return;
-	}
-
-	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Pawn);
-	if (!BlasterCharacter)
-	{
-		return;
-	}
-
-	UInteractionComponent* InteractionComponent = BlasterCharacter->GetInteractionComponent();
-	if (InteractionComponent)
-	{
-		InteractionComponent->RemoveOverlappingActor(this);
-	}
 }

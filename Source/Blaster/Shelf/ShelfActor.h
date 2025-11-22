@@ -253,31 +253,6 @@ protected:
      * 슬롯 초기화
      */
     void InitializeSlots();
-
-    /**
-     * Called when character overlaps with this shelf
-     */
-    UFUNCTION()
-    void OnSphereOverlap(
-        UPrimitiveComponent* OverlappedComponent,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex,
-        bool bFromSweep,
-        const FHitResult& SweepResult
-    );
-
-    /**
-     * Called when character ends overlap with this shelf
-     */
-    UFUNCTION()
-    void OnSphereEndOverlap(
-        UPrimitiveComponent* OverlappedComponent,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex
-    );
-
     /**
      * Show/hide interaction widget
      */

@@ -161,8 +161,6 @@ void AShelfActor::BeginPlay()
     {
         AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         AreaSphere->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Overlap);
-        AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AShelfActor::OnSphereOverlap);
-        AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AShelfActor::OnSphereEndOverlap);
     }
 
     // 슬롯 초기화
@@ -888,34 +886,6 @@ void AShelfActor::EndHighlight_Implementation()
     ClearSlotHighlights();
 }
 
-void AShelfActor::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, 
-                                  UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, 
-                                  bool bFromSweep, const FHitResult& SweepResult)
-{
-    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor);
-    if (BlasterCharacter)
-    {
-        // 캐릭터에 오버랩 상태 설정 (기존 Weapon 패턴)
-        if (BlasterCharacter->GetInteractionComponent())
-        {
-            BlasterCharacter->GetInteractionComponent()->AddOverlappingActor(this);
-        }
-    }
-}
-
-void AShelfActor::OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, 
-                                     UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
-{
-    ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OtherActor);
-    if (BlasterCharacter)
-    {
-        // 캐릭터에서 오버랩 상태 제거
-        if (BlasterCharacter->GetInteractionComponent())
-        {
-            BlasterCharacter->GetInteractionComponent()->RemoveOverlappingActor(this);
-        }
-    }
-}
 
 void AShelfActor::ShowInteractionWidget(bool bShowWidget)
 {
