@@ -87,6 +87,41 @@ public:
 	UAnchorRuntimeSubsystem* GetAnchorSubsystem();
 
 	/**
+	 * Get current replicated orders
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Orders")
+	const TArray<FActiveOrderState>& GetActiveOrders() const { return ActiveOrders; }
+
+	/**
+	 * Server-side setter for active orders
+	 */
+	void SetActiveOrders(const TArray<FActiveOrderState>& NewOrders);
+
+	/**
+	 * Set team credits (server only)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Credits")
+	void SetTeamCredits(int32 NewCredits);
+
+	/**
+	 * Apply delta to team credits (server only)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Credits")
+	void ApplyCreditDelta(int32 Delta, const FString& Reason);
+
+	/**
+	 * Get current team credits
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Credits")
+	int32 GetTeamCredits() const { return TeamCredits; }
+
+	/**
+	 * Get credit transaction history
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Credits")
+	const TArray<FCreditTransaction>& GetCreditHistory() const { return CreditHistory; }
+
+	/**
 	 * 게임 시간 시스템
 	 */
 	
@@ -129,6 +164,16 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Simulation")
 	FOnSimulationStateChanged OnSimulationStateChanged;
 
+	/** Broadcast when active orders change */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOrdersUpdated, const TArray<FActiveOrderState>&, Orders);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
+	FOnOrdersUpdated OnOrdersUpdated;
+
+	/** Broadcast when credits are updated */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreditsChanged, int32, NewCredits, int32, Delta);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Credits")
+	FOnCreditsChanged OnCreditsChanged;
+
 protected:
 	/** Called when level variant is replicated to clients */
 	UFUNCTION()
@@ -146,6 +191,14 @@ protected:
 	UFUNCTION()
 	void OnRep_SimulationRunning();
 
+	/** Called when active orders are replicated */
+	UFUNCTION()
+	void OnRep_ActiveOrders();
+
+	/** Called when team credits replicate */
+	UFUNCTION()
+	void OnRep_TeamCredits();
+
 private:
 	/** Replicated level variant data */
 	UPROPERTY(ReplicatedUsing = OnRep_LevelVariant)
@@ -162,6 +215,22 @@ private:
 	/** Replicated simulation running state */
 	UPROPERTY(ReplicatedUsing = OnRep_SimulationRunning)
 	bool bSimulationRunning = false;
+
+	/** Replicated team credits */
+	UPROPERTY(ReplicatedUsing = OnRep_TeamCredits)
+	int32 TeamCredits = 0;
+
+	/** Replicated active orders */
+	UPROPERTY(ReplicatedUsing = OnRep_ActiveOrders)
+	TArray<FActiveOrderState> ActiveOrders;
+
+	/** Credit transaction history (server side only) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits", meta = (AllowPrivateAccess = "true"))
+	TArray<FCreditTransaction> CreditHistory;
+
+	/** Maximum stored credit log entries */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits", meta = (AllowPrivateAccess = "true"))
+	int32 MaxStoredCreditTransactions = 20;
 
 	/** Maximum suspicion before alert level increases */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Suspicion", meta = (AllowPrivateAccess = "true"))
@@ -184,4 +253,8 @@ private:
 	/** 하루 길이 (실제 시간 초 단위, 기본값: 1440초 = 24분) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Time", meta = (AllowPrivateAccess = "true"))
 	float DayLengthInSeconds = 1440.0f; // 24분 = 하루
+
+	/** Cached last replicated credits for delta calculations */
+	UPROPERTY()
+	int32 LastReplicatedTeamCredits = 0;
 };

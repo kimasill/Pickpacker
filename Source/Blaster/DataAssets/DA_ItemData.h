@@ -21,6 +21,23 @@ enum class EItemType : uint8
 };
 
 /**
+ * Item Property - key/value pair for item properties
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FItemProperty
+{
+	GENERATED_BODY()
+
+	/** Property key */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	FName Key = NAME_None;
+
+	/** Property value */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	float Value = 0.f;
+};
+
+/**
  * Item Data - Defines item properties and behavior
  */
 USTRUCT(BlueprintType)
@@ -48,9 +65,9 @@ struct BLASTER_API FItemData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
 	bool bConsumedOnUse = false;
 
-	/** Special properties for item effects */
+	/** Special properties for item effects (replication/RPC safe) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
-	TMap<FString, float> ItemProperties;
+	TArray<FItemProperty> ItemProperties;
 
 	FItemData()
 	{

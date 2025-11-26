@@ -67,3 +67,6 @@ EBTNodeResult::Type UBTTask_MoveToNextPatrolPoint::ExecuteTask(UBehaviorTreeComp
 
 
 
+
+
+

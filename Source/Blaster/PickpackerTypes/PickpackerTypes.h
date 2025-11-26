@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "GameplayTagContainer.h"
 #include "PickpackerTypes.generated.h"
 
 /**
@@ -265,6 +266,174 @@ struct BLASTER_API FSeedSet
 	{
 		Seed = 0;
 		MissionId = TEXT("");
+	}
+};
+
+/**
+ * Definition of an order that players must fulfill
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelOrderDefinition
+{
+	GENERATED_BODY()
+
+	/** Display name for UI/LED billboard */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	FName OrderName = NAME_None;
+
+	/** Description shown on UI */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	FText OrderDescription;
+
+	/** Parcel tag requirement for this order */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	FGameplayTag RequiredParcelTag;
+
+	/** Item tag requirement */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	FGameplayTag RequiredItemTag;
+
+	/** Number of parcels required */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "1"))
+	int32 RequiredQuantity = 1;
+
+	/** Should the parcel arrive packaged */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	bool bRequirePackaged = true;
+
+	/** Time limit in seconds (<=0 means no limit) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	float TimeLimitSeconds = 60.0f;
+
+	/** Credit reward on success */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	int32 CreditReward = 10;
+
+	/** Credit penalty on failure */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	int32 CreditPenalty = 5;
+
+	/** Suspicion penalty applied on failure */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	float SuspicionPenalty = 2.0f;
+
+	FParcelOrderDefinition()
+	{
+		RequiredQuantity = 1;
+		TimeLimitSeconds = 60.0f;
+		CreditReward = 10;
+		CreditPenalty = 5;
+		SuspicionPenalty = 2.0f;
+	}
+};
+
+/**
+ * Wave definition grouping multiple orders
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelOrderWave
+{
+	GENERATED_BODY()
+
+	/** Delay before the wave becomes active */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	float StartDelay = 0.0f;
+
+	/** Orders contained in this wave */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
+	TArray<FParcelOrderDefinition> Orders;
+};
+
+/**
+ * Runtime state of an order replicated to clients
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FActiveOrderState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	FGuid OrderId;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	FName OrderName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	FText OrderDescription;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	FGameplayTag RequiredParcelTag;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	FGameplayTag RequiredItemTag;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	int32 RequiredQuantity = 1;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	int32 SubmittedQuantity = 0;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	bool bRequirePackaged = true;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	float ExpireTime = -1.0f;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	bool bCompleted = false;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	bool bFailed = false;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	int32 CreditReward = 0;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	int32 CreditPenalty = 0;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	float SuspicionPenalty = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
+	float ResolutionTime = -1.0f;
+
+	FActiveOrderState()
+	{
+		OrderId = FGuid::NewGuid();
+		RequiredQuantity = 1;
+	}
+};
+
+/**
+ * Credit transaction log entry
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FCreditTransaction
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
+	FGuid TransactionId;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
+	int32 Delta = 0;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
+	int32 BalanceAfter = 0;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
+	float Timestamp = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
+	FText Reason;
+
+	FCreditTransaction()
+	{
+		TransactionId = FGuid::NewGuid();
+		Delta = 0;
+		BalanceAfter = 0;
+		Timestamp = 0.0f;
+		Reason = FText::GetEmpty();
 	}
 };
 

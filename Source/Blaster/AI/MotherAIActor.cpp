@@ -656,7 +656,6 @@ void AMotherAIActor::StartInspection()
 		return;
 	}
 
-	// 비헤이비어 트리에서 위치 도착 후 호출됨
 	SetAIState(EMotherAIState::Inspecting);
 	PlayInspectionMontage();
 	InspectionStartTime = GetWorld()->GetTimeSeconds();

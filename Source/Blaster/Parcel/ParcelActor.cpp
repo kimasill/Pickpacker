@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -21,6 +22,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"  // 추가
+#include "Engine/StaticMesh.h"
 
 AParcelActor::AParcelActor()
 {
@@ -71,6 +73,9 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, bIsItem);
 	DOREPLIFETIME(AParcelActor, bIsUsable);
 	DOREPLIFETIME(AParcelActor, ItemType);
+	DOREPLIFETIME(AParcelActor, ParcelPrice);
+	DOREPLIFETIME(AParcelActor, ParcelClassificationTag);
+	DOREPLIFETIME(AParcelActor, ParcelItemTag);
 }
 
 void AParcelActor::BeginPlay()
@@ -84,6 +89,22 @@ void AParcelActor::BeginPlay()
 		ParcelConfig.BaseDurability = 100.0f;
 		ParcelConfig.BaseWeight = 1.0f;
 		ParcelConfig.InstabilityFactor = 0.0f;
+	}
+
+	ParcelPrice = FMath::Max(0, ParcelConfig.BasePrice);
+	if (ParcelConfig.ClassificationTag.IsValid())
+	{
+		ParcelClassificationTag = ParcelConfig.ClassificationTag;
+		ParcelTags.AddTag(ParcelClassificationTag);
+	}
+	if (ParcelConfig.ItemTag.IsValid())
+	{
+		ParcelItemTag = ParcelConfig.ItemTag;
+		ParcelTags.AddTag(ParcelItemTag);
+	}
+	if (ParcelConfig.ParcelTag.IsValid())
+	{
+		ParcelTags.AddTag(ParcelConfig.ParcelTag);
 	}
 
 	// 포장되지 않은 상태면 아이템으로 설정
@@ -134,6 +155,11 @@ void AParcelActor::BeginPlay()
 	{
 		if (HasAuthority())
 		{
+			MeshComponent->OnComponentHit.AddDynamic(this, &AParcelActor::HandleParcelMeshHit);
+		}
+
+		if (HasAuthority())
+		{
 			if (!bIsAttached)
 			{
 				MeshComponent->SetSimulatePhysics(true);
@@ -172,11 +198,51 @@ void AParcelActor::InitializeParcel(const FParcelConfig& Config)
     }
 
     ParcelConfig = Config;
+	ParcelPrice = FMath::Max(0, Config.BasePrice);
+
+	if (Config.ClassificationTag.IsValid())
+	{
+		ParcelClassificationTag = Config.ClassificationTag;
+		ParcelTags.AddTag(ParcelClassificationTag);
+	}
+
+	if (Config.ItemTag.IsValid())
+	{
+		ParcelItemTag = Config.ItemTag;
+		ParcelTags.AddTag(ParcelItemTag);
+	}
+
+	if (Config.ParcelTag.IsValid())
+	{
+		ParcelTags.AddTag(Config.ParcelTag);
+	}
+
+	if (Config.UnpackagedMeshAsset.IsValid())
+	{
+		DefaultUnpackagedMesh = Config.UnpackagedMeshAsset.LoadSynchronous();
+	}
+
+	if (Config.PackagedMeshAsset.IsValid())
+	{
+		PackagedMesh = Config.PackagedMeshAsset.LoadSynchronous();
+	}
+
+	if (MeshComponent && DefaultUnpackagedMesh)
+	{
+		MeshComponent->SetStaticMesh(DefaultUnpackagedMesh);
+		OriginalMesh = DefaultUnpackagedMesh;
+	}
     
     if (ParcelStateComponent)
     {
         ParcelStateComponent->InitializeParcel(Config);
+		ParcelStateComponent->SetInternalItemData(Config.ItemData);
     }
+
+	if (Config.ItemData.ItemType != EItemType::Unknown)
+	{
+		SetItemData(Config.ItemData);
+	}
 
     if (bEnableDebugLogging)
     {
@@ -516,7 +582,12 @@ void AParcelActor::HandleParcelBroken()
 	// Broadcast broken event
 	OnParcelBroken.Broadcast(this);
 
-	// TODO: Handle broken parcel (destroy, replace, etc.)
+	if (AShelfActor* Shelf = OccupyingShelf.Get())
+	{
+		Shelf->RemoveParcel(this);
+	}
+
+	Destroy();
 }
 
 void AParcelActor::UpdateHUDWidget()
@@ -567,6 +638,32 @@ void AParcelActor::SetHUDWidgetClass(TSubclassOf<UParcelHUDWidget> WidgetClass)
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] HUD widget class set to: %s"), *WidgetClass->GetName());
+	}
+}
+
+void AParcelActor::HandleParcelMeshHit(
+	UPrimitiveComponent* HitComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	FVector NormalImpulse,
+	const FHitResult& Hit)
+{
+	if (!HasAuthority() || !ParcelStateComponent)
+	{
+		return;
+	}
+
+	const float ImpactForce = NormalImpulse.Size();
+	if (ImpactForce <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	ParcelStateComponent->ApplyImpactDamage(ImpactForce, TEXT("Impact"));
+
+	if (ParcelStateComponent->IsBroken())
+	{
+		HandleParcelBroken();
 	}
 }
 
@@ -747,6 +844,10 @@ void AParcelActor::SetPackaged(bool bPackaged)
 		{
 			MeshComponent->SetStaticMesh(OriginalMesh);
 		}
+		else if (DefaultUnpackagedMesh)
+		{
+			MeshComponent->SetStaticMesh(DefaultUnpackagedMesh);
+		}
 	}
 
 	if (bEnableDebugLogging)
@@ -783,6 +884,11 @@ void AParcelActor::SetItemData(const FItemData& NewItemData)
 	ItemData = NewItemData;
 	ItemType = NewItemData.ItemType;
 	bIsUsable = NewItemData.bIsUsable;
+
+	if (ParcelStateComponent)
+	{
+		ParcelStateComponent->SetInternalItemData(NewItemData);
+	}
 	
 	// 포장되지 않은 상태면 아이템으로 설정
 	if (!bIsPackaged)

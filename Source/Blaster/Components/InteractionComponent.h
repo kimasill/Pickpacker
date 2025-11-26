@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Blaster/Shelf/ShelfPlacementTypes.h"
 #include "InteractionComponent.generated.h"
 
 class AActor;
@@ -61,7 +62,7 @@ public:
     void Interact();
 
     UFUNCTION(Server, Reliable)
-	void Server_Interact(AActor* Target, int32 TargetSlotIndex);
+	void Server_Interact(AActor* Target, int32 TargetSlotIndex, const FTransform& DesiredTransform);
 
     UFUNCTION(BlueprintCallable, Category = "Interaction")
     void Action();
@@ -191,6 +192,8 @@ private:
     bool PerformInteract(UObject* InteractableObject, class ACharacter* OwnerCharacter);
     void UpdateShelfSlotFocus(AShelfActor* Shelf);
     void ClearShelfSlotFocus(AShelfActor* ShelfToClear = nullptr);
+    void UpdateShelfPlacementPreview(AShelfActor* Shelf);
+    void ClearShelfPlacementPreview(AShelfActor* ShelfToClear = nullptr);
 
     // Viewport interaction widget instance (screen space). Created when target changes if needed.
     UPROPERTY(Transient)
@@ -205,7 +208,15 @@ private:
     UPROPERTY()
     TWeakObjectPtr<AShelfActor> FocusedShelf;
 
+    UPROPERTY()
+    TWeakObjectPtr<AShelfActor> PreviewShelf;
+
     int32 FocusedSlotIndex = INDEX_NONE;
+
+    UPROPERTY()
+    FShelfPlacementPreview CachedPlacementPreview;
+
+    bool bHasPlacementPreview = false;
 };
 
 

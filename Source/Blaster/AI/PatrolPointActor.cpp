@@ -78,3 +78,6 @@ void APatrolPointActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 
 
 
+
+
+

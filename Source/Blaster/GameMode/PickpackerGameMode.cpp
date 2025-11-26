@@ -5,6 +5,8 @@
 #include "Blaster/Escape/EscapeZoneActor.h"
 #include "Engine/World.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
+#include "Blaster/DataAssets/DA_OrderWaveData.h"
+#include "Blaster/Parcel/ParcelActor.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Character.h"
@@ -85,6 +87,11 @@ void APickpackerGameMode::StartGameplay()
 	// Start checking game end conditions periodically
 	if (HasAuthority())
 	{
+		if (PickpackerGameState)
+		{
+			PickpackerGameState->SetTeamCredits(StartingTeamCredits);
+		}
+
 		GetWorld()->GetTimerManager().SetTimer(
 			GameEndCheckTimer,
 			this,
@@ -92,6 +99,11 @@ void APickpackerGameMode::StartGameplay()
 			1.0f,
 			true
 		);
+
+		if (bAutoStartOrders)
+		{
+			StartOrderSystem();
+		}
 	}
 }
 
@@ -134,6 +146,8 @@ void APickpackerGameMode::OnGameOver(const FString& Reason)
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().ClearTimer(GameEndCheckTimer);
+		GetWorld()->GetTimerManager().ClearTimer(OrderSystemTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(NextWaveTimerHandle);
 	}
 
 	// End simulation
@@ -211,6 +225,12 @@ void APickpackerGameMode::EndWarehouseSimulation()
 	}
 	bSimulationRunning = false;
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Simulation ended"));
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(OrderSystemTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(NextWaveTimerHandle);
+	}
 }
 
 void APickpackerGameMode::RegisterClientPCGReady(APlayerState* PlayerState)
@@ -222,4 +242,379 @@ void APickpackerGameMode::RegisterClientPCGReady(APlayerState* PlayerState)
 		NameOrNone = *Nm;
 	}
 	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode] Client PCG ready reported: %s"), NameOrNone);
+}
+
+void APickpackerGameMode::ReportParcelSubmitted(AParcelActor* Parcel)
+{
+	if (!HasAuthority() || !Parcel)
+	{
+		return;
+	}
+
+	const bool bAccepted = TryFulfillOrders(Parcel);
+	if (!bAccepted)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Parcel submission rejected - no matching order"));
+
+		// Apply a small suspicion penalty for incorrect submissions
+		FActiveOrderState DummyPenalty;
+		DummyPenalty.SuspicionPenalty = 1.0f;
+		ApplyOrderPenalty(DummyPenalty);
+		ApplyCreditDelta(-1, TEXT("Incorrect parcel submission"));
+	}
+
+	if (Parcel->IsPendingKillPending() == false)
+	{
+		Parcel->Destroy();
+	}
+}
+
+void APickpackerGameMode::ApplyCreditDelta(int32 Delta, const FString& Reason)
+{
+	if (!HasAuthority() || Delta == 0)
+	{
+		return;
+	}
+
+	if (!PickpackerGameState)
+	{
+		return;
+	}
+
+	const int32 PreviousCredits = PickpackerGameState->GetTeamCredits();
+	PickpackerGameState->ApplyCreditDelta(Delta, Reason);
+	const int32 CurrentCredits = PickpackerGameState->GetTeamCredits();
+
+	if (CurrentCredits <= 0 && PreviousCredits > 0)
+	{
+		OnGameOver(TEXT("Team credits depleted"));
+	}
+}
+
+void APickpackerGameMode::StartOrderSystem()
+{
+	if (!HasAuthority() || bOrderSystemInitialized)
+	{
+		return;
+	}
+
+	if (!OrderWaveData)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Cannot start order system - OrderWaveData not assigned"));
+		return;
+	}
+
+	bOrderSystemInitialized = true;
+	ActiveOrders.Reset();
+	CurrentOrderWaveIndex = INDEX_NONE;
+
+	BeginOrderWave(0);
+
+	if (UWorld* World = GetWorld())
+	{
+		const float Interval = FMath::Max(0.25f, OrderUpdateInterval);
+		World->GetTimerManager().SetTimer(
+			OrderSystemTimerHandle,
+			this,
+			&APickpackerGameMode::TickOrderSystem,
+			Interval,
+			true
+		);
+	}
+}
+
+void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
+{
+	if (!HasAuthority() || !OrderWaveData)
+	{
+		return;
+	}
+
+	const FParcelOrderWave* Wave = OrderWaveData->GetWave(WaveIndex);
+	if (!Wave)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Attempted to start invalid order wave index %d"), WaveIndex);
+		return;
+	}
+
+	if (Wave->Orders.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Order wave %d has no templates"), WaveIndex);
+		return;
+	}
+
+	CurrentOrderWaveIndex = WaveIndex;
+
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	const int32 TemplateCount = Wave->Orders.Num();
+	const int32 DifficultyTier = WaveIndex % 5; // 10% increase each tier
+	const float QuantityMultiplier = 1.0f + static_cast<float>(DifficultyTier) * 0.1f;
+	const int32 AdditionalItems = WaveIndex / 5;
+	const int32 OrdersToSpawn = FMath::Clamp(1 + AdditionalItems, 1, TemplateCount);
+
+	for (int32 SelectionIndex = 0; SelectionIndex < OrdersToSpawn; ++SelectionIndex)
+	{
+		const int32 TemplateIdx = FMath::RandRange(0, TemplateCount - 1);
+		const FParcelOrderDefinition& Definition = Wave->Orders[TemplateIdx];
+
+		FActiveOrderState OrderState;
+		OrderState.OrderId = FGuid::NewGuid();
+		OrderState.OrderName = Definition.OrderName;
+		if (OrdersToSpawn > 1)
+		{
+			const FString NameOverride = FString::Printf(TEXT("%s_%d"), *Definition.OrderName.ToString(), SelectionIndex + 1);
+			OrderState.OrderName = FName(*NameOverride);
+		}
+		OrderState.OrderDescription = Definition.OrderDescription;
+		OrderState.RequiredParcelTag = Definition.RequiredParcelTag;
+		OrderState.RequiredItemTag = Definition.RequiredItemTag;
+		const int32 BaseQuantity = Definition.RequiredQuantity > 0 ? Definition.RequiredQuantity : 1;
+		const int32 AdjustedQuantity = FMath::Max(1, FMath::RoundToInt(FMath::CeilToFloat(static_cast<float>(BaseQuantity) * QuantityMultiplier)));
+		OrderState.RequiredQuantity = AdjustedQuantity;
+		OrderState.SubmittedQuantity = 0;
+		OrderState.bRequirePackaged = Definition.bRequirePackaged;
+		OrderState.ExpireTime = Definition.TimeLimitSeconds > 0.f ? Now + Definition.TimeLimitSeconds : -1.f;
+		OrderState.CreditReward = Definition.CreditReward;
+		OrderState.CreditPenalty = Definition.CreditPenalty;
+		OrderState.SuspicionPenalty = Definition.SuspicionPenalty;
+		OrderState.ResolutionTime = -1.0f;
+
+		ActiveOrders.Add(OrderState);
+	}
+
+	SyncOrdersToGameState();
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order wave %d started (%d orders)"), WaveIndex, Wave->Orders.Num());
+}
+
+void APickpackerGameMode::ScheduleNextOrderWave(float DelaySeconds)
+{
+	if (!HasAuthority() || !OrderWaveData)
+	{
+		return;
+	}
+
+	if (!OrderWaveData->GetWave(CurrentOrderWaveIndex + 1))
+	{
+		return; // No more waves
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		FTimerManager& TimerManager = World->GetTimerManager();
+		if (TimerManager.IsTimerActive(NextWaveTimerHandle))
+		{
+			return;
+		}
+
+		if (DelaySeconds <= 0.f)
+		{
+			HandleNextOrderWaveTimer();
+		}
+		else
+		{
+			TimerManager.SetTimer(
+				NextWaveTimerHandle,
+				this,
+				&APickpackerGameMode::HandleNextOrderWaveTimer,
+				DelaySeconds,
+				false
+			);
+		}
+	}
+}
+
+void APickpackerGameMode::HandleNextOrderWaveTimer()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(NextWaveTimerHandle);
+	}
+
+	BeginOrderWave(CurrentOrderWaveIndex + 1);
+}
+
+void APickpackerGameMode::TickOrderSystem()
+{
+	if (!HasAuthority() || !bOrderSystemInitialized || !GetWorld())
+	{
+		return;
+	}
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	bool bOrdersChanged = false;
+
+	for (FActiveOrderState& Order : ActiveOrders)
+	{
+		if (!Order.bCompleted && !Order.bFailed && Order.ExpireTime > 0.f && Now >= Order.ExpireTime)
+		{
+			Order.bFailed = true;
+			Order.ResolutionTime = Now;
+			HandleOrderFailure(Order, TEXT("Expired"));
+			bOrdersChanged = true;
+		}
+	}
+
+	if (bOrdersChanged)
+	{
+		SyncOrdersToGameState();
+	}
+
+	CleanupResolvedOrders();
+
+	if (OrderWaveData && OrderWaveData->GetWave(CurrentOrderWaveIndex + 1) && AreAllOrdersResolved())
+	{
+		const FParcelOrderWave* NextWave = OrderWaveData->GetWave(CurrentOrderWaveIndex + 1);
+		const float Delay = NextWave ? NextWave->StartDelay : 0.0f;
+		ScheduleNextOrderWave(Delay);
+	}
+}
+
+void APickpackerGameMode::CleanupResolvedOrders()
+{
+	if (!HasAuthority() || !GetWorld())
+	{
+		return;
+	}
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	const float HoldTime = FMath::Max(0.0f, OrderResolutionHoldTime);
+
+	const int32 Removed = ActiveOrders.RemoveAll([HoldTime, Now](const FActiveOrderState& Order)
+	{
+		if (!Order.bCompleted && !Order.bFailed)
+		{
+			return false;
+		}
+
+		if (HoldTime <= 0.f)
+		{
+			return true;
+		}
+
+		return Order.ResolutionTime > 0.f && (Now - Order.ResolutionTime) >= HoldTime;
+	});
+
+	if (Removed > 0)
+	{
+		SyncOrdersToGameState();
+	}
+}
+
+bool APickpackerGameMode::AreAllOrdersResolved() const
+{
+	if (ActiveOrders.Num() == 0)
+	{
+		return true;
+	}
+
+	for (const FActiveOrderState& Order : ActiveOrders)
+	{
+		if (!Order.bCompleted && !Order.bFailed)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
+{
+	if (!HasAuthority() || !Parcel)
+	{
+		return false;
+	}
+
+	FGameplayTagContainer ParcelTags = Parcel->GetParcelTags();
+	const bool bParcelPackaged = Parcel->IsPackaged();
+	const FGameplayTag ParcelItemTag = Parcel->GetItemTag();
+
+	for (FActiveOrderState& Order : ActiveOrders)
+	{
+		if (Order.bCompleted || Order.bFailed)
+		{
+			continue;
+		}
+
+		if (Order.bRequirePackaged && !bParcelPackaged)
+		{
+			continue;
+		}
+
+		if (Order.RequiredParcelTag.IsValid() && !ParcelTags.HasTag(Order.RequiredParcelTag))
+		{
+			continue;
+		}
+
+		if (Order.RequiredItemTag.IsValid() && Order.RequiredItemTag != ParcelItemTag)
+		{
+			continue;
+		}
+
+		Order.SubmittedQuantity = FMath::Clamp(Order.SubmittedQuantity + 1, 0, Order.RequiredQuantity);
+
+		const int32 ParcelValue = Parcel->GetParcelPrice();
+		if (ParcelValue != 0)
+		{
+			ApplyCreditDelta(ParcelValue, FString::Printf(TEXT("Parcel (%s) submitted"), *Order.OrderName.ToString()));
+		}
+
+		if (Order.SubmittedQuantity >= Order.RequiredQuantity)
+		{
+			Order.bCompleted = true;
+			Order.ResolutionTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+			HandleOrderSuccess(Order);
+		}
+
+		SyncOrdersToGameState();
+		return true;
+	}
+
+	return false;
+}
+
+void APickpackerGameMode::HandleOrderFailure(FActiveOrderState& Order, const FString& Reason)
+{
+	if (Order.ResolutionTime < 0.f && GetWorld())
+	{
+		Order.ResolutionTime = GetWorld()->GetTimeSeconds();
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Order failed (%s) - %s"), *Reason, *Order.OrderName.ToString());
+	ApplyOrderPenalty(Order);
+
+	if (Order.CreditPenalty > 0)
+	{
+		ApplyCreditDelta(-Order.CreditPenalty, FString::Printf(TEXT("%s failed"), *Order.OrderName.ToString()));
+	}
+}
+
+void APickpackerGameMode::HandleOrderSuccess(FActiveOrderState& Order)
+{
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order completed - %s (Reward: %d)"), *Order.OrderName.ToString(), Order.CreditReward);
+
+	if (Order.CreditReward != 0)
+	{
+		ApplyCreditDelta(Order.CreditReward, FString::Printf(TEXT("%s completed"), *Order.OrderName.ToString()));
+	}
+}
+
+void APickpackerGameMode::SyncOrdersToGameState()
+{
+	if (PickpackerGameState)
+	{
+		PickpackerGameState->SetActiveOrders(ActiveOrders);
+	}
+}
+
+void APickpackerGameMode::ApplyOrderPenalty(const FActiveOrderState& Order) const
+{
+	if (PickpackerGameState && Order.SuspicionPenalty > 0.f)
+	{
+		PickpackerGameState->AddTeamSuspicion(Order.SuspicionPenalty);
+	}
 }

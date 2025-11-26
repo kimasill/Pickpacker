@@ -17,6 +17,8 @@ APickpackerGameState::APickpackerGameState()
 	GameTimeSpeed = 1.0f;
 	DayLengthInSeconds = 1440.0f; // 24분 = 하루
 	PrimaryActorTick.bCanEverTick = true; // 게임 시간 업데이트를 위해 Tick 활성화
+	TeamCredits = 0;
+	LastReplicatedTeamCredits = 0;
 }
 
 void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -27,6 +29,8 @@ void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(APickpackerGameState, RandomSeed);
 	DOREPLIFETIME(APickpackerGameState, TeamSuspicion);
 	DOREPLIFETIME(APickpackerGameState, bSimulationRunning);
+	DOREPLIFETIME(APickpackerGameState, ActiveOrders);
+	DOREPLIFETIME(APickpackerGameState, TeamCredits);
 }
 
 void APickpackerGameState::BeginPlay()
@@ -113,6 +117,66 @@ void APickpackerGameState::SetSimulationRunning(bool bRunning)
 	OnSimulationStateChanged.Broadcast(bRunning);
 }
 
+void APickpackerGameState::SetActiveOrders(const TArray<FActiveOrderState>& NewOrders)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetActiveOrders called without authority"));
+		return;
+	}
+
+	ActiveOrders = NewOrders;
+	OnOrdersUpdated.Broadcast(ActiveOrders);
+}
+
+void APickpackerGameState::SetTeamCredits(int32 NewCredits)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetTeamCredits called without authority"));
+		return;
+	}
+
+	const int32 OldCredits = TeamCredits;
+	TeamCredits = FMath::Max(0, NewCredits);
+	LastReplicatedTeamCredits = TeamCredits;
+
+	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
+}
+
+void APickpackerGameState::ApplyCreditDelta(int32 Delta, const FString& Reason)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] ApplyCreditDelta called without authority"));
+		return;
+	}
+
+	if (Delta == 0)
+	{
+		return;
+	}
+
+	const int32 OldCredits = TeamCredits;
+	TeamCredits = FMath::Max(0, TeamCredits + Delta);
+	LastReplicatedTeamCredits = TeamCredits;
+
+	FCreditTransaction Transaction;
+	Transaction.TransactionId = FGuid::NewGuid();
+	Transaction.Delta = Delta;
+	Transaction.BalanceAfter = TeamCredits;
+	Transaction.Timestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	Transaction.Reason = FText::FromString(Reason);
+	CreditHistory.Add(Transaction);
+
+	while (CreditHistory.Num() > MaxStoredCreditTransactions)
+	{
+		CreditHistory.RemoveAt(0);
+	}
+
+	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
+}
+
 UAnchorRuntimeSubsystem* APickpackerGameState::GetAnchorSubsystem()
 {
 	if (!AnchorSubsystem && GetWorld())
@@ -148,6 +212,18 @@ void APickpackerGameState::OnRep_SimulationRunning()
 
 	// Broadcast simulation state change
 	OnSimulationStateChanged.Broadcast(bSimulationRunning);
+}
+
+void APickpackerGameState::OnRep_ActiveOrders()
+{
+	OnOrdersUpdated.Broadcast(ActiveOrders);
+}
+
+void APickpackerGameState::OnRep_TeamCredits()
+{
+	const int32 Delta = TeamCredits - LastReplicatedTeamCredits;
+	LastReplicatedTeamCredits = TeamCredits;
+	OnCreditsChanged.Broadcast(TeamCredits, Delta);
 }
 
 float APickpackerGameState::GetCurrentGameHour() const

@@ -98,6 +98,18 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	FGameplayTagContainer GetParcelTags() const { return ParcelTags; }
 
+	/** Classification gameplay tag */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	FGameplayTag GetClassificationTag() const { return ParcelClassificationTag; }
+
+	/** Item gameplay tag */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	FGameplayTag GetItemTag() const { return ParcelItemTag; }
+
+	/** Price earned when submitted */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
+	int32 GetParcelPrice() const { return ParcelPrice; }
+
 	/**
 	 * Set parcel tags
 	 */
@@ -251,6 +263,18 @@ protected:
 	 */
 	void StabilizePhysics();
 
+	/**
+	 * Handle impact events for destruction-on-impact logic
+	 */
+	UFUNCTION()
+	void HandleParcelMeshHit(
+		UPrimitiveComponent* HitComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		FVector NormalImpulse,
+		const FHitResult& Hit
+	);
+
 public:
 	// Delegates
 	UPROPERTY(BlueprintAssignable, Category = "Parcel")
@@ -315,9 +339,28 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging")
 	UStaticMesh* PackagedMesh = nullptr;
 
+	/** 언패키지 상태 기본 메시 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging")
+	UStaticMesh* DefaultUnpackagedMesh = nullptr;
+
 	/** 원본 메시 저장 (포장 해제용) */
 	UPROPERTY()
 	UStaticMesh* OriginalMesh = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel")
+	AActor* ConveyorActor = nullptr;
+
+	/** Parcel price awarded on submission */
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Economy")
+	int32 ParcelPrice = 0;
+
+	/** Classification gameplay tag */
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Tags")
+	FGameplayTag ParcelClassificationTag;
+
+	/** Item gameplay tag */
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Tags")
+	FGameplayTag ParcelItemTag;
 
 	// Item properties (포장되지 않은 택배 = 아이템)
 	/** Whether this parcel is an item (unpackaged state) */

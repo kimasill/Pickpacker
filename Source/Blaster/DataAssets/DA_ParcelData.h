@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "Blaster/DataAssets/DA_ItemData.h"
 #include "DA_ParcelData.generated.h"
 
 /**
@@ -19,6 +20,8 @@ enum class EParcelType : uint8
 	Contraband	UMETA(DisplayName = "Contraband"),
 	Unknown		UMETA(DisplayName = "Unknown")
 };
+
+class UStaticMesh;
 
 /**
  * Parcel Configuration - Defines parcel properties and behavior
@@ -72,6 +75,30 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
 	TMap<FString, float> SpecialProperties;
 
+	/** Base sell price when submitted */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Economy")
+	int32 BasePrice = 10;
+
+	/** Classification tag (ex: Parcel-Classification.Standard) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Tags")
+	FGameplayTag ClassificationTag;
+
+	/** Item tag (ex: Parcel-Item.Chemicals) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Tags")
+	FGameplayTag ItemTag;
+
+	/** Unpackaged mesh (what players see when it is open) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Appearance")
+	TSoftObjectPtr<UStaticMesh> UnpackagedMeshAsset;
+
+	/** Packaged mesh (what players see on the belt) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Appearance")
+	TSoftObjectPtr<UStaticMesh> PackagedMeshAsset;
+
+	/** Default item data contained inside the parcel */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
+	FItemData ItemData;
+
 	FParcelConfig()
 	{
 		ParcelType = EParcelType::Unknown;
@@ -81,6 +108,7 @@ struct BLASTER_API FParcelConfig
 		InstabilityFactor = 0.0f;
 		SuspicionPoints = 0.0f;
 		ProcessingTime = 3.0f;
+		BasePrice = 10;
 	}
 };
 

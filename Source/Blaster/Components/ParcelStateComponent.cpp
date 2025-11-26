@@ -31,6 +31,8 @@ void UParcelStateComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UParcelStateComponent, CurrentState);
+	DOREPLIFETIME(UParcelStateComponent, InternalItemData);
+	DOREPLIFETIME(UParcelStateComponent, InternalItemData);
 }
 
 void UParcelStateComponent::BeginPlay()
@@ -241,6 +243,15 @@ void UParcelStateComponent::OnRep_Instability()
 	OnInstabilityChanged.Broadcast(0.0f, CurrentState.Instability); // We don't have old value in replication
 }
 
+void UParcelStateComponent::OnRep_InternalItemData()
+{
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[ParcelStateComponent] Internal item data replicated - %s"),
+			*InternalItemData.ItemName);
+	}
+}
+
 float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& DamageSource)
 {
 	float Multiplier = 1.0f;
@@ -344,4 +355,16 @@ void UParcelStateComponent::SetParcelState(const FParcelState& NewState)
 
 	// Broadcast state change
 	OnParcelStateChanged.Broadcast(CurrentState);
+}
+
+void UParcelStateComponent::SetInternalItemData(const FItemData& ItemData)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		InternalItemData = ItemData;
+		return;
+	}
+
+	InternalItemData = ItemData;
+	OnRep_InternalItemData();
 }

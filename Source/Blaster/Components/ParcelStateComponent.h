@@ -123,6 +123,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Parcel State")
 	void SetParcelState(const FParcelState& NewState);
 
+	/**
+	 * Set the internal item data stored within this parcel
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel State")
+	void SetInternalItemData(const FItemData& ItemData);
+
+	/**
+	 * Get stored item data
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel State")
+	const FItemData& GetInternalItemData() const { return InternalItemData; }
+
 protected:
 	/**
 	 * Called when parcel state is replicated
@@ -141,6 +153,12 @@ protected:
 	 */
 	UFUNCTION()
 	void OnRep_Instability();
+
+	/**
+	 * Called when internal item data changes
+	 */
+	UFUNCTION()
+	void OnRep_InternalItemData();
 
 	/**
 	 * Calculate damage based on parcel type
@@ -162,6 +180,10 @@ protected:
 	// Replicated parcel state
 	UPROPERTY(ReplicatedUsing = OnRep_ParcelState)
 	FParcelState CurrentState;
+
+	// Internal item data stored with the parcel
+	UPROPERTY(ReplicatedUsing = OnRep_InternalItemData, BlueprintReadOnly, Category = "Parcel State")
+	FItemData InternalItemData;
 
 	// Parcel configuration
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")

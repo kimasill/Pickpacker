@@ -151,7 +151,24 @@ void UInteractionComponent::UpdateTarget()
         OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
     }
 
-    if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get())) { UpdateShelfSlotFocus(ShelfTarget); } else { ClearShelfSlotFocus(); }
+    if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get()))
+    {
+        if (ShelfTarget->SupportsFreePlacement())
+        {
+            UpdateShelfPlacementPreview(ShelfTarget);
+            ClearShelfSlotFocus(ShelfTarget);
+        }
+        else
+        {
+            UpdateShelfSlotFocus(ShelfTarget);
+            ClearShelfPlacementPreview(ShelfTarget);
+        }
+    }
+    else
+    {
+        ClearShelfSlotFocus();
+        ClearShelfPlacementPreview();
+    }
 }
 
 void UInteractionComponent::Interact()
@@ -165,17 +182,48 @@ void UInteractionComponent::Interact()
         {
             if (AShelfActor* Shelf = Cast<AShelfActor>(CurrentTarget.Get()))
             {
-                const int32 TargetSlot = FocusedSlotIndex;
-                if (OwnerCharacter->HasAuthority())
+                if (Shelf->SupportsFreePlacement())
                 {
-                    if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlot))
+                    UpdateShelfPlacementPreview(Shelf);
+                    if (!bHasPlacementPreview || !CachedPlacementPreview.bIsPlaceable)
                     {
-                        SetCarriedParcel(nullptr);
-                        OnInteractSuccess.Broadcast(Shelf);
+                        return;
+                    }
+
+                    if (OwnerCharacter->HasAuthority())
+                    {
+                        if (Shelf->TryPlaceParcelWithTransform(Parcel, CachedPlacementPreview.WorldTransform))
+                        {
+                            SetCarriedParcel(nullptr);
+                            ClearShelfPlacementPreview(Shelf);
+                            OnInteractSuccess.Broadcast(Shelf);
+                        }
+                    }
+                    else
+                    {
+                        Server_Interact(Shelf, INDEX_NONE, CachedPlacementPreview.WorldTransform);
+                        ClearShelfPlacementPreview(Shelf);
+                    }
+                    return;
+                }
+                else
+                {
+                    const int32 TargetSlot = FocusedSlotIndex;
+                    if (OwnerCharacter->HasAuthority())
+                    {
+                        if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlot))
+                        {
+                            SetCarriedParcel(nullptr);
+                            OnInteractSuccess.Broadcast(Shelf);
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        Server_Interact(Shelf, TargetSlot, FTransform::Identity);
                         return;
                     }
                 }
-                else { Server_Interact(Shelf, TargetSlot); return; }
             }
         }
         if (Parcel)
@@ -201,7 +249,7 @@ void UInteractionComponent::Interact()
             OnInteractSuccess.Broadcast(TargetActor);
         }
     }
-    else { Server_Interact(TargetActor, INDEX_NONE); }
+    else { Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity); }
 }
 
 void UInteractionComponent::InventoryInteract()
@@ -233,14 +281,21 @@ void UInteractionComponent::InventoryInteract()
     }
 }
 
-void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32 TargetSlotIndex)
+void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32 TargetSlotIndex, const FTransform& DesiredTransform)
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
     if (IsValid(CarriedParcel))
     {
         if (AShelfActor* Shelf = Cast<AShelfActor>(Target))
         {
-            if (Shelf->TryPlaceParcelAtSlot(CarriedParcel, TargetSlotIndex)) { SetCarriedParcel(nullptr); }
+            if (Shelf->SupportsFreePlacement())
+            {
+                if (Shelf->TryPlaceParcelWithTransform(CarriedParcel, DesiredTransform)) { SetCarriedParcel(nullptr); }
+            }
+            else
+            {
+                if (Shelf->TryPlaceParcelAtSlot(CarriedParcel, TargetSlotIndex)) { SetCarriedParcel(nullptr); }
+            }
             return;
         }
     }
@@ -309,6 +364,11 @@ void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
 {
     UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Carried parcel changed %s -> %s"),
         LastParcel ? *LastParcel->GetName() : TEXT("None"), CarriedParcel ? *CarriedParcel->GetName() : TEXT("None"));
+
+    if (!CarriedParcel)
+    {
+        ClearShelfPlacementPreview();
+    }
 }
 
 bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
@@ -371,6 +431,70 @@ void UInteractionComponent::ClearShelfSlotFocus(AShelfActor* ShelfToClear)
     if (ShelfToClear == nullptr && FocusedShelf.IsValid()) { ShelfToClear = FocusedShelf.Get(); }
     if (ShelfToClear) { ShelfToClear->SetFocusedSlot(INDEX_NONE); }
     FocusedShelf = nullptr; FocusedSlotIndex = INDEX_NONE;
+}
+
+void UInteractionComponent::UpdateShelfPlacementPreview(AShelfActor* Shelf)
+{
+    if (!Shelf)
+    {
+        ClearShelfPlacementPreview();
+        return;
+    }
+
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    if (!OwnerCharacter || !OwnerCharacter->IsLocallyControlled())
+    {
+        return;
+    }
+
+    if (!IsValid(CarriedParcel))
+    {
+        ClearShelfPlacementPreview(Shelf);
+        return;
+    }
+
+    FVector ViewLocation = OwnerCharacter->GetActorLocation();
+    FVector ViewDirection = OwnerCharacter->GetActorForwardVector();
+    if (UCameraComponent* Camera = OwnerCharacter->FindComponentByClass<UCameraComponent>())
+    {
+        ViewLocation = Camera->GetComponentLocation();
+        ViewDirection = Camera->GetForwardVector();
+    }
+    else
+    {
+        ViewLocation += OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
+    }
+
+    FShelfPlacementPreview Preview;
+    if (Shelf->ComputePlacementPreview(CarriedParcel, ViewLocation, ViewDirection, InteractionDistance, Preview))
+    {
+        Shelf->UpdatePlacementPreviewVisual(Preview);
+        CachedPlacementPreview = Preview;
+        bHasPlacementPreview = true;
+        PreviewShelf = Shelf;
+    }
+    else
+    {
+        ClearShelfPlacementPreview(Shelf);
+    }
+}
+
+void UInteractionComponent::ClearShelfPlacementPreview(AShelfActor* ShelfToClear)
+{
+    AShelfActor* TargetShelf = ShelfToClear;
+    if (TargetShelf == nullptr && PreviewShelf.IsValid())
+    {
+        TargetShelf = PreviewShelf.Get();
+    }
+
+    if (TargetShelf)
+    {
+        TargetShelf->ClearPlacementPreviewVisual();
+    }
+
+    PreviewShelf = nullptr;
+    CachedPlacementPreview.Reset();
+    bHasPlacementPreview = false;
 }
 
 void UInteractionComponent::Action() {}

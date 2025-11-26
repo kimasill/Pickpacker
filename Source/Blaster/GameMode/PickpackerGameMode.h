@@ -11,6 +11,8 @@ class UAnchorRuntimeSubsystem;
 class APlayerState;
 class APickpackerGameState;
 class UPCGDungeonSubSystem; // forward declaration
+class UDA_OrderWaveData;
+class AParcelActor;
 
 /**
  * Pickpacker Game Mode - Manages the warehouse simulation game
@@ -96,6 +98,37 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
 	void SetMissionConfig(const FString& MissionId, int32 CustomSeed = 0);
 
+	/**
+	 * Called when a parcel enters the submission belt
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Orders")
+	void ReportParcelSubmitted(AParcelActor* Parcel);
+
+public:
+	/** Wave data describing the sequence of parcel orders */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
+	UDA_OrderWaveData* OrderWaveData = nullptr;
+
+	/** Interval (seconds) between order tick updates */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
+	float OrderUpdateInterval = 1.0f;
+
+	/** Seconds to keep resolved orders visible before pruning */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
+	float OrderResolutionHoldTime = 8.0f;
+
+	/** Whether to start the order system automatically once gameplay begins */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
+	bool bAutoStartOrders = true;
+
+	/** Starting team credits */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits")
+	int32 StartingTeamCredits = 30;
+
+	/** Apply a credit delta (server only) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Credits")
+	void ApplyCreditDelta(int32 Delta, const FString& Reason);
+
 
 protected:
 	/**
@@ -161,4 +194,33 @@ protected:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameOver, const FString&, Reason);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Events")
 	FOnGameOver OnGameOverEvent;
+protected:
+	/** Order system helpers */
+	void StartOrderSystem();
+	void BeginOrderWave(int32 WaveIndex);
+	void ScheduleNextOrderWave(float DelaySeconds);
+	void TickOrderSystem();
+	void CleanupResolvedOrders();
+	bool AreAllOrdersResolved() const;
+	bool TryFulfillOrders(AParcelActor* Parcel);
+	void HandleOrderFailure(FActiveOrderState& Order, const FString& Reason);
+	void HandleOrderSuccess(FActiveOrderState& Order);
+	void SyncOrdersToGameState();
+	void ApplyOrderPenalty(const FActiveOrderState& Order) const;
+	void HandleNextOrderWaveTimer();
+
+protected:
+	/** Current orders tracked on the server */
+	UPROPERTY()
+	TArray<FActiveOrderState> ActiveOrders;
+
+	/** Whether the order system has been initialized */
+	bool bOrderSystemInitialized = false;
+
+	/** Current wave index */
+	int32 CurrentOrderWaveIndex = INDEX_NONE;
+
+	/** Order system timers */
+	FTimerHandle OrderSystemTimerHandle;
+	FTimerHandle NextWaveTimerHandle;
 };
