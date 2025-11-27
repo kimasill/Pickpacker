@@ -5,7 +5,8 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
+#include "GameplayTagContainer.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
@@ -29,13 +30,13 @@ public:
 	 * Update parcel state display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
-	void UpdateParcelState(const FParcelState& ParcelState, EParcelType ParcelType);
+	void UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag);
 
 	/**
 	 * Set parcel type display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
-	void SetParcelType(EParcelType ParcelType);
+	void SetClassificationTag(const FGameplayTag& ClassificationTag);
 
 	/**
 	 * Update durability bar
@@ -90,13 +91,13 @@ protected:
 	 * Get parcel type icon
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel HUD")
-	UTexture2D* GetParcelTypeIcon(EParcelType ParcelType) const;
+	UTexture2D* GetClassificationIcon(const FGameplayTag& ClassificationTag) const;
 
 	/**
 	 * Get parcel type text
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel HUD")
-	FText GetParcelTypeText(EParcelType ParcelType) const;
+	FText GetClassificationText(const FGameplayTag& ClassificationTag) const;
 
 public:
 	// UI Components
@@ -127,7 +128,7 @@ protected:
 	FParcelState CurrentParcelState;
 
 	UPROPERTY()
-	EParcelType CurrentParcelType = EParcelType::Unknown;
+	FGameplayTag CurrentClassificationTag;
 
 	// Color settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
@@ -147,13 +148,13 @@ protected:
 
 	// Parcel type icons
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Icons")
+	UTexture2D* StandardIcon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Icons")
 	UTexture2D* FragileIcon;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Icons")
-	UTexture2D* HeavyIcon;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Icons")
-	UTexture2D* UnstableIcon;
+	UTexture2D* ContrabandIcon;
 
 	// Animation settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")

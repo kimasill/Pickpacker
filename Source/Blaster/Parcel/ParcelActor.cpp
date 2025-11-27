@@ -22,6 +22,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"  // 추가
+#include "GameplayTagsManager.h"
 #include "Engine/StaticMesh.h"
 
 AParcelActor::AParcelActor()
@@ -62,6 +63,20 @@ AParcelActor::AParcelActor()
 	bEnableDebugLogging = true;
 }
 
+void AParcelActor::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+
+	if (bAutoApplyParcelData)
+	{
+		ApplyParcelConfigFromDataAssetInternal(false, false);
+	}
+	else
+	{
+		UpdateMeshForCurrentPackagingState();
+	}
+}
+
 void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -82,55 +97,27 @@ void AParcelActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Initialize parcel with default config if unknown
-	if (ParcelConfig.ParcelType == EParcelType::Unknown)
+	const bool bShouldInitializeRuntimeConfig = HasAuthority();
+	bool bConfigApplied = false;
+	if (bAutoApplyParcelData)
 	{
-		ParcelConfig.ParcelType = EParcelType::Fragile;
-		ParcelConfig.BaseDurability = 100.0f;
-		ParcelConfig.BaseWeight = 1.0f;
-		ParcelConfig.InstabilityFactor = 0.0f;
+		bConfigApplied = ApplyParcelConfigFromDataAssetInternal(bShouldInitializeRuntimeConfig, true);
 	}
 
-	ParcelPrice = FMath::Max(0, ParcelConfig.BasePrice);
-	if (ParcelConfig.ClassificationTag.IsValid())
+	if (!bConfigApplied)
 	{
-		ParcelClassificationTag = ParcelConfig.ClassificationTag;
-		ParcelTags.AddTag(ParcelClassificationTag);
-	}
-	if (ParcelConfig.ItemTag.IsValid())
-	{
-		ParcelItemTag = ParcelConfig.ItemTag;
-		ParcelTags.AddTag(ParcelItemTag);
-	}
-	if (ParcelConfig.ParcelTag.IsValid())
-	{
-		ParcelTags.AddTag(ParcelConfig.ParcelTag);
-	}
-
-	// 포장되지 않은 상태면 아이템으로 설정
-	if (!bIsPackaged)
-	{
-		bIsItem = true;
-		
-		// Contraband 타입은 기본적으로 사용 가능한 아이템으로 설정
-		if (ParcelConfig.ParcelType == EParcelType::Contraband)
+		if (bShouldInitializeRuntimeConfig)
 		{
-			// 기본 아이템 데이터 설정 (블루프린트에서 오버라이드 가능)
-			if (ItemType == EItemType::Unknown)
-			{
-				ItemType = EItemType::Key; // 기본값
-				bIsUsable = true;
-				ItemData.ItemType = ItemType;
-				ItemData.ItemName = ParcelConfig.ParcelName.IsEmpty() ? TEXT("Contraband Item") : ParcelConfig.ParcelName;
-				ItemData.bIsUsable = true;
-			}
+			InitializeParcel(ParcelConfig);
+		}
+		else
+		{
+			ApplyParcelConfigVisuals(ParcelConfig);
 		}
 	}
 
-	// Initialize parcel state
 	if (ParcelStateComponent)
 	{
-		ParcelStateComponent->InitializeParcel(ParcelConfig);
 		ParcelStateComponent->OnParcelStateChanged.AddDynamic(this, &AParcelActor::OnParcelStateChanged);		
 	}
 
@@ -176,8 +163,8 @@ void AParcelActor::BeginPlay()
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Initialized - Type: %s, Location: %s"),
-			*UEnum::GetValueAsString(ParcelConfig.ParcelType), *GetActorLocation().ToString());
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Initialized - Classification: %s, Location: %s"),
+			*ParcelConfig.ClassificationTag.ToString(), *GetActorLocation().ToString());
 	}
 }
 
@@ -191,21 +178,27 @@ void AParcelActor::Tick(float DeltaTime)
 
 void AParcelActor::InitializeParcel(const FParcelConfig& Config)
 {
-    if (!HasAuthority())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Only server can initialize parcel"));
-        return;
-    }
+	ApplyParcelConfigVisuals(Config);
 
-    ParcelConfig = Config;
-	ParcelPrice = FMath::Max(0, Config.BasePrice);
-
-	if (Config.ClassificationTag.IsValid())
+	if (!HasAuthority())
 	{
-		ParcelClassificationTag = Config.ClassificationTag;
+		return;
+	}
+
+	ParcelPrice = FMath::Max(0, Config.BasePrice);
+	ParcelTags = FGameplayTagContainer();
+
+	ParcelClassificationTag = Config.ClassificationTag;
+	if (!ParcelClassificationTag.IsValid())
+	{
+		ParcelClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
+	}
+	if (ParcelClassificationTag.IsValid())
+	{
 		ParcelTags.AddTag(ParcelClassificationTag);
 	}
 
+	ParcelItemTag = FGameplayTag();
 	if (Config.ItemTag.IsValid())
 	{
 		ParcelItemTag = Config.ItemTag;
@@ -217,38 +210,147 @@ void AParcelActor::InitializeParcel(const FParcelConfig& Config)
 		ParcelTags.AddTag(Config.ParcelTag);
 	}
 
-	if (Config.UnpackagedMeshAsset.IsValid())
+	if (ParcelStateComponent)
 	{
-		DefaultUnpackagedMesh = Config.UnpackagedMeshAsset.LoadSynchronous();
-	}
-
-	if (Config.PackagedMeshAsset.IsValid())
-	{
-		PackagedMesh = Config.PackagedMeshAsset.LoadSynchronous();
-	}
-
-	if (MeshComponent && DefaultUnpackagedMesh)
-	{
-		MeshComponent->SetStaticMesh(DefaultUnpackagedMesh);
-		OriginalMesh = DefaultUnpackagedMesh;
-	}
-    
-    if (ParcelStateComponent)
-    {
-        ParcelStateComponent->InitializeParcel(Config);
+		ParcelStateComponent->InitializeParcel(Config);
 		ParcelStateComponent->SetInternalItemData(Config.ItemData);
-    }
+	}
 
 	if (Config.ItemData.ItemType != EItemType::Unknown)
 	{
 		SetItemData(Config.ItemData);
 	}
 
-    if (bEnableDebugLogging)
-    {
-        UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Parcel initialized - Type: %s, Name: %s"),
-            *UEnum::GetValueAsString(Config.ParcelType), *Config.ParcelName);
-    }
+	bIsItem = !bIsPackaged;
+
+	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
+	if (bIsItem && ParcelClassificationTag.IsValid() && ParcelClassificationTag.MatchesTagExact(ContrabandTag) && ItemType == EItemType::Unknown)
+	{
+		ItemType = EItemType::Key;
+		bIsUsable = true;
+		ItemData.ItemType = ItemType;
+		ItemData.ItemName = Config.ParcelName.IsEmpty() ? TEXT("Contraband Item") : Config.ParcelName;
+		ItemData.bIsUsable = true;
+	}
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Parcel initialized - Classification: %s, Name: %s"),
+			*ParcelClassificationTag.ToString(), *Config.ParcelName);
+	}
+}
+
+bool AParcelActor::ApplyParcelConfigFromDataAsset(bool bInitializeRuntime)
+{
+	return ApplyParcelConfigFromDataAssetInternal(bInitializeRuntime, true);
+}
+
+bool AParcelActor::ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntime, bool bLogWarnings)
+{
+	FParcelConfig ResolvedConfig;
+	if (!TryResolveParcelConfig(ResolvedConfig, bLogWarnings))
+	{
+		return false;
+	}
+
+	if (bInitializeRuntime)
+	{
+		InitializeParcel(ResolvedConfig);
+	}
+	else
+	{
+		ApplyParcelConfigVisuals(ResolvedConfig);
+	}
+
+	return true;
+}
+
+bool AParcelActor::TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const
+{
+	if (!ParcelDataAsset)
+	{
+		if (bLogWarnings)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] ParcelDataAsset is not assigned on %s"), *GetName());
+		}
+		return false;
+	}
+
+	if (!ParcelDefinitionTag.IsValid())
+	{
+		if (bLogWarnings)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] ParcelDefinitionTag is not set on %s"), *GetName());
+		}
+		return false;
+	}
+
+	if (!ParcelDataAsset->GetParcelConfigByTag(ParcelDefinitionTag, OutConfig))
+	{
+		if (bLogWarnings)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Failed to resolve parcel config for tag %s on %s"),
+				*ParcelDefinitionTag.ToString(), *GetName());
+		}
+		return false;
+	}
+
+	return true;
+}
+
+void AParcelActor::ApplyParcelConfigVisuals(const FParcelConfig& Config)
+{
+	ParcelConfig = Config;
+
+	if (!Config.UnpackagedMeshAsset.IsNull())
+	{
+		DefaultUnpackagedMesh = Config.UnpackagedMeshAsset.LoadSynchronous();
+		OriginalMesh = DefaultUnpackagedMesh;
+	}
+
+	if (!Config.PackagedMeshAsset.IsNull())
+	{
+		PackagedMesh = Config.PackagedMeshAsset.LoadSynchronous();
+	}
+
+	if (!OriginalMesh && MeshComponent)
+	{
+		OriginalMesh = MeshComponent->GetStaticMesh();
+	}
+
+	if (!DefaultUnpackagedMesh && OriginalMesh)
+	{
+		DefaultUnpackagedMesh = OriginalMesh;
+	}
+
+	UpdateMeshForCurrentPackagingState();
+}
+
+bool AParcelActor::UpdateMeshForCurrentPackagingState()
+{
+	if (!MeshComponent)
+	{
+		return false;
+	}
+
+	UStaticMesh* TargetMesh = nullptr;
+
+	if (bIsPackaged || PackageOnSpawn)
+	{
+		TargetMesh = PackagedMesh;
+	}
+	else
+	{
+		TargetMesh = OriginalMesh ? OriginalMesh : DefaultUnpackagedMesh;
+	}
+
+	if (!TargetMesh)
+	{
+		return false;
+	}
+
+	MeshComponent->SetStaticMesh(TargetMesh);
+	return true;
 }
 
 void AParcelActor::RequestAttach(ACharacter* Carrier, const FName& SocketId)
@@ -470,15 +572,6 @@ bool AParcelActor::IsAttached() const
     return bIsAttached;
 }
 
-EParcelType AParcelActor::GetParcelType() const
-{
-    if (ParcelStateComponent)
-    {
-        return ParcelStateComponent->GetParcelType();
-    }
-    return EParcelType::Unknown;
-}
-
 const FParcelState& AParcelActor::GetParcelState() const
 {
     if (ParcelStateComponent)
@@ -570,8 +663,8 @@ void AParcelActor::OnParcelStateChanged(const FParcelState& NewState)
 
 void AParcelActor::HandleParcelBroken()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Parcel broken! Type: %s"),
-		*UEnum::GetValueAsString(ParcelConfig.ParcelType));
+	UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Parcel broken! Classification: %s"),
+		*ParcelConfig.ClassificationTag.ToString());
 
 	// Detach if attached
 	if (bIsAttached)
@@ -608,9 +701,7 @@ void AParcelActor::UpdateHUDWidget()
 	{
 		// Update HUD with current parcel state
 		FParcelState CurrentState = ParcelStateComponent->GetParcelState();
-		EParcelType CurrentType = ParcelStateComponent->GetParcelType();
-		
-		HUDWidget->UpdateParcelState(CurrentState, CurrentType);
+		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ClassificationTag);
 	}
 }
 
@@ -805,6 +896,7 @@ void AParcelActor::SetPackaged(bool bPackaged)
 		return; // 이미 같은 상태
 	}
 
+	const bool bPreviousPackagedState = bIsPackaged;
 	bIsPackaged = bPackaged;
 	
 	// 포장되지 않은 상태 = 아이템
@@ -815,39 +907,29 @@ void AParcelActor::SetPackaged(bool bPackaged)
 		return;
 	}
 
-	// 원본 메시 저장 (첫 포장 시)
-	if (bPackaged && !OriginalMesh)
+	if (!OriginalMesh && DefaultUnpackagedMesh)
+	{
+		OriginalMesh = DefaultUnpackagedMesh;
+	}
+	else if (!OriginalMesh)
 	{
 		OriginalMesh = MeshComponent->GetStaticMesh();
 	}
 
-	// 메시 변경
-	if (bPackaged)
+	if (bPackaged && !PackagedMesh)
 	{
-		// 포장 메시로 변경
-		if (PackagedMesh)
-		{
-			MeshComponent->SetStaticMesh(PackagedMesh);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] PackagedMesh not set, cannot package"));
-			bIsPackaged = false;
-			bIsItem = true; // 포장 실패 시 아이템 상태 유지
-			return;
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] PackagedMesh not set, cannot package"));
+		bIsPackaged = bPreviousPackagedState;
+		bIsItem = !bPreviousPackagedState;
+		return;
 	}
-	else
+
+	if (!UpdateMeshForCurrentPackagingState())
 	{
-		// 원본 메시로 복원
-		if (OriginalMesh)
-		{
-			MeshComponent->SetStaticMesh(OriginalMesh);
-		}
-		else if (DefaultUnpackagedMesh)
-		{
-			MeshComponent->SetStaticMesh(DefaultUnpackagedMesh);
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Failed to update mesh for packaging state"));
+		bIsPackaged = bPreviousPackagedState;
+		bIsItem = !bPreviousPackagedState;
+		return;
 	}
 
 	if (bEnableDebugLogging)

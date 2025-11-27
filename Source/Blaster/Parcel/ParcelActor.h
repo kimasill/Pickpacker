@@ -35,6 +35,7 @@ public:
 	AParcelActor();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
@@ -43,6 +44,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel")
 	void InitializeParcel(const FParcelConfig& Config);
+
+	/**
+	 * Apply ParcelData asset configuration using the configured tag
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	bool ApplyParcelConfigFromDataAsset(bool bInitializeRuntime = true);
 
 	/**
 	 * Request to attach parcel to character
@@ -67,12 +74,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	bool IsAttached() const;
-
-	/**
-	 * Get parcel type
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
-	EParcelType GetParcelType() const;
 
 	/**
 	 * Get parcel state
@@ -307,12 +308,24 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UWidgetComponent* PickupWidget;
 	// Parcel configuration
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
+	bool bAutoApplyParcelData = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
+	UDA_ParcelData* ParcelDataAsset = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", Categories = "Parcel"))
+	FGameplayTag ParcelDefinitionTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	FParcelConfig ParcelConfig;
 
 	// Parcel tags
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FGameplayTagContainer ParcelTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
+	bool PackageOnSpawn = true;
 
 	// Physics settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
@@ -335,12 +348,14 @@ protected:
 	UPROPERTY(Replicated)
 	bool bIsPackaged = false;
 
+
+
 	/** 포장된 상태의 메시 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging", meta = (EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	UStaticMesh* PackagedMesh = nullptr;
 
 	/** 언패키지 상태 기본 메시 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel|Packaging", meta = (EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	UStaticMesh* DefaultUnpackagedMesh = nullptr;
 
 	/** 원본 메시 저장 (포장 해제용) */
@@ -434,4 +449,8 @@ public:
 
 private:
 	bool Handle_UseItem(class ACharacter* User);
+	bool ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntime, bool bLogWarnings);
+	bool TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const;
+	void ApplyParcelConfigVisuals(const FParcelConfig& Config);
+	bool UpdateMeshForCurrentPackagingState();
 };

@@ -100,12 +100,6 @@ public:
 	const FParcelState& GetParcelState() const { return CurrentState; }
 
 	/**
-	 * Get parcel type
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel State")
-	EParcelType GetParcelType() const { return ParcelConfig.ParcelType; }
-
-	/**
 	 * Get parcel configuration
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel State")
@@ -235,4 +229,9 @@ protected:
 	// Debug settings
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bEnableDebugLogging = true;
+
+private:
+	bool MatchesClassificationTag(const FGameplayTag& Tag) const;
+	bool IsFragileClassification() const;
+	bool IsContrabandClassification() const;
 };

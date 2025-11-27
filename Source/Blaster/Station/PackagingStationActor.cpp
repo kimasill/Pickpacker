@@ -199,49 +199,6 @@ void APackagingStationActor::UnpackageParcel(AParcelActor* Parcel)
 	OnParcelUnpackaged.Broadcast(Parcel);
 }
 
-bool APackagingStationActor::OnInteract_Implementation(ACharacter* Interactor)
-{
-	if (!Interactor)
-	{
-		return false;
-	}
-	// 모드 전환
-	ToggleMode();
-	return true;
-}
-
-bool APackagingStationActor::CanInteract_Implementation(ACharacter* Interactor) const
-{
-	return true;
-}
-
-FText APackagingStationActor::GetInteractText_Implementation() const
-{
-	FString ModeText = CurrentMode == EPackagingMode::Pack ? TEXT("Pack") : TEXT("Unpack");
-	return FText::FromString(FString::Printf(TEXT("Press E to Switch Mode (Current: %s)"), *ModeText));
-}
-
-void APackagingStationActor::StartHighlight_Implementation()
-{
-	if (!StationMesh)
-	{
-		return;
-	}
-
-	StationMesh->SetRenderCustomDepth(true);
-	StationMesh->SetCustomDepthStencilValue(252);
-}
-
-void APackagingStationActor::EndHighlight_Implementation()
-{
-	if (!StationMesh)
-	{
-		return;
-	}
-
-	StationMesh->SetRenderCustomDepth(false);
-}
-
 void APackagingStationActor::OnInputAreaOverlap(
 	UPrimitiveComponent* OverlappedComponent,
 	AActor* OtherActor,

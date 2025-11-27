@@ -6,6 +6,7 @@
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "GameplayTagsManager.h"
 
 UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -23,7 +24,7 @@ UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	bEnableDebugLogging = true;
 
 	// Initialize current state
-	CurrentParcelType = EParcelType::Unknown;
+	CurrentClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
 	CurrentParcelState = FParcelState();
 }
 
@@ -75,17 +76,17 @@ void UParcelHUDWidget::NativeDestruct()
 	}
 }
 
-void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, EParcelType ParcelType)
+void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag)
 {
 	CurrentParcelState = ParcelState;
-	CurrentParcelType = ParcelType;
+	CurrentClassificationTag = ClassificationTag;
 
 	// Update all UI elements
 	UpdateDurabilityBar(ParcelState.Durability, 100.0f);
 	UpdateWeightDisplay(ParcelState.Weight);
 	UpdateInstabilityBar(ParcelState.Instability, 100.0f);
 	UpdateCarrierCount(ParcelState.Carriers.Num());
-	SetParcelType(ParcelType);
+	SetClassificationTag(ClassificationTag);
 	UpdateHUDColor(ParcelState);
 
 	if (bEnableDebugLogging)
@@ -95,18 +96,16 @@ void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, EParce
 	}
 }
 
-void UParcelHUDWidget::SetParcelType(EParcelType ParcelType)
+void UParcelHUDWidget::SetClassificationTag(const FGameplayTag& ClassificationTag)
 {
-	CurrentParcelType = ParcelType;
-
 	if (ParcelTypeText)
 	{
-		ParcelTypeText->SetText(GetParcelTypeText(ParcelType));
+		ParcelTypeText->SetText(GetClassificationText(ClassificationTag));
 	}
 
 	if (ParcelTypeIcon)
 	{
-		UTexture2D* IconTexture = GetParcelTypeIcon(ParcelType);
+		UTexture2D* IconTexture = GetClassificationIcon(ClassificationTag);
 		if (IconTexture)
 		{
 			ParcelTypeIcon->SetBrushFromTexture(IconTexture);
@@ -115,7 +114,7 @@ void UParcelHUDWidget::SetParcelType(EParcelType ParcelType)
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelHUDWidget] Parcel type set to: %s"), *UEnum::GetValueAsString(ParcelType));
+		UE_LOG(LogTemp, Log, TEXT("[ParcelHUDWidget] Parcel classification set to: %s"), *ClassificationTag.ToString());
 	}
 }
 
@@ -275,34 +274,42 @@ FLinearColor UParcelHUDWidget::GetInstabilityColor(float Instability, float MaxI
 	}
 }
 
-UTexture2D* UParcelHUDWidget::GetParcelTypeIcon(EParcelType ParcelType) const
+UTexture2D* UParcelHUDWidget::GetClassificationIcon(const FGameplayTag& ClassificationTag) const
 {
-	switch (ParcelType)
+	const FGameplayTag FragileTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Fragile"), false);
+	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
+
+	if (ClassificationTag.MatchesTag(FragileTag))
 	{
-	case EParcelType::Fragile:
 		return FragileIcon;
-	case EParcelType::Heavy:
-		return HeavyIcon;
-	case EParcelType::Contraband:
-		return UnstableIcon;
-	default:
-		return nullptr;
 	}
+
+	if (ClassificationTag.MatchesTag(ContrabandTag))
+	{
+		return ContrabandIcon;
+	}
+
+	return StandardIcon;
 }
 
-FText UParcelHUDWidget::GetParcelTypeText(EParcelType ParcelType) const
+FText UParcelHUDWidget::GetClassificationText(const FGameplayTag& ClassificationTag) const
 {
-	switch (ParcelType)
+	const FGameplayTag FragileTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Fragile"), false);
+	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
+
+	if (ClassificationTag.MatchesTag(FragileTag))
 	{
-	case EParcelType::Fragile:
 		return FText::FromString(TEXT("Fragile"));
-	case EParcelType::Heavy:
-		return FText::FromString(TEXT("Heavy"));
-	case EParcelType::Contraband:
-		return FText::FromString(TEXT("Contraband"));
-	default:
-		return FText::FromString(TEXT("Unknown"));
 	}
+
+	if (ClassificationTag.MatchesTag(ContrabandTag))
+	{
+		return FText::FromString(TEXT("Contraband"));
+	}
+
+	return ClassificationTag.IsValid()
+		? FText::FromName(ClassificationTag.GetTagName())
+		: FText::FromString(TEXT("Standard"));
 }
 
 

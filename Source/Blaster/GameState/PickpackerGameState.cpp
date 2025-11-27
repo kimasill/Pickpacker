@@ -280,31 +280,4 @@ void APickpackerGameState::SetDayLengthInSeconds(float Seconds)
 void APickpackerGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	if(HasAuthority())
-	{
-		UWorld* World = GetWorld();
-		if (!World)
-		{
-			return;
-		}
-		float CurrentGameHour = GetCurrentGameHour();
-		int32 Hours = FMath::FloorToInt(CurrentGameHour);
-		int32 Minutes = FMath::FloorToInt((CurrentGameHour - Hours) * 60.0f);
-
-		// 실제 시간 2초에 한번
-		
-		if(FMath::Fmod(World->GetTimeSeconds(), 2.0f) < DeltaTime)
-		{
-
-			FString TimeString = FString::Printf(TEXT("Game Time: %02d:%02d"), Hours, Minutes);
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				1.1f, // 다음 프레임까지 유지
-				FColor::Green,
-				TimeString
-			);
-		}
-
-	}
 }

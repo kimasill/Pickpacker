@@ -125,7 +125,7 @@ void UInteractionComponent::UpdateTarget()
         }
         CurrentTarget = nullptr; return;
     }
-
+    
     const bool bChanged = CurrentTarget.Get() != NewTarget;
     if (bChanged)
     {
@@ -138,6 +138,9 @@ void UInteractionComponent::UpdateTarget()
             {
                 bHandled = IInteractableInterface::Execute_RequestShowInteractionUI(InteractableObj, OwnerCharacter);
             }
+            if(CurrentTarget->ActorHasTag(FName("IgnoreInteractionUI"))){
+                bHandled = true;
+            };
             if (!bHandled)
             {
                 ShowInteractionWidget(CurrentTarget.Get());
@@ -169,12 +172,14 @@ void UInteractionComponent::UpdateTarget()
         ClearShelfSlotFocus();
         ClearShelfPlacementPreview();
     }
+
 }
 
 void UInteractionComponent::Interact()
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
 
+    // If carrying a parcel, try placing onto current shelf target using preview transform when available.
     if (IsValid(CarriedParcel))
     {
         AParcelActor* Parcel = CarriedParcel;
@@ -184,10 +189,11 @@ void UInteractionComponent::Interact()
             {
                 if (Shelf->SupportsFreePlacement())
                 {
+                    // Ensure preview is fresh and valid at interaction time
                     UpdateShelfPlacementPreview(Shelf);
                     if (!bHasPlacementPreview || !CachedPlacementPreview.bIsPlaceable)
                     {
-                        return;
+                        return; // no valid placement preview
                     }
 
                     if (OwnerCharacter->HasAuthority())
@@ -208,32 +214,18 @@ void UInteractionComponent::Interact()
                 }
                 else
                 {
-                    const int32 TargetSlot = FocusedSlotIndex;
-                    if (OwnerCharacter->HasAuthority())
-                    {
-                        if (Shelf->TryPlaceParcelAtSlot(Parcel, TargetSlot))
-                        {
-                            SetCarriedParcel(nullptr);
-                            OnInteractSuccess.Broadcast(Shelf);
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        Server_Interact(Shelf, TargetSlot, FTransform::Identity);
-                        return;
-                    }
+                    // Slot mode path no longer used; fall back to free placement behavior not available
+                    return;
                 }
             }
         }
-        if (Parcel)
-        {
-            Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
-            if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
-        }
+        // If not targeting shelf, drop parcel with impulse
+        Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
+        if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
         return;
     }
 
+    // Not carrying parcel: default interaction with target object via interface
     if (!CanInteract()) return;
     AActor* TargetActor = CurrentTarget.Get(); if (!TargetActor) return;
     UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(TargetActor, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
@@ -468,7 +460,7 @@ void UInteractionComponent::UpdateShelfPlacementPreview(AShelfActor* Shelf)
     FShelfPlacementPreview Preview;
     if (Shelf->ComputePlacementPreview(CarriedParcel, ViewLocation, ViewDirection, InteractionDistance, Preview))
     {
-        Shelf->UpdatePlacementPreviewVisual(Preview);
+        Shelf->UpdatePlacementPreviewVisual(Preview, CarriedParcel);
         CachedPlacementPreview = Preview;
         bHasPlacementPreview = true;
         PreviewShelf = Shelf;

@@ -5,6 +5,28 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "GameplayTagsManager.h"
+
+namespace ParcelClassification
+{
+	static FGameplayTag Standard()
+	{
+		static FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
+		return Tag;
+	}
+
+	static FGameplayTag Fragile()
+	{
+		static FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Fragile"), false);
+		return Tag;
+	}
+
+	static FGameplayTag Contraband()
+	{
+		static FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
+		return Tag;
+	}
+}
 
 UParcelStateComponent::UParcelStateComponent()
 {
@@ -39,13 +61,10 @@ void UParcelStateComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Initialize with default config if not set
-	if (ParcelConfig.ParcelType == EParcelType::Unknown)
+	// Ensure parcel classification has a default
+	if (!ParcelConfig.ClassificationTag.IsValid())
 	{
-		ParcelConfig.ParcelType = EParcelType::Fragile;
-		ParcelConfig.BaseDurability = 100.0f;
-		ParcelConfig.BaseWeight = 1.0f;
-		ParcelConfig.InstabilityFactor = 0.0f;
+		ParcelConfig.ClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
 	}
 
 	// Set initial state
@@ -55,8 +74,8 @@ void UParcelStateComponent::BeginPlay()
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Initialized - Type: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
-			*UEnum::GetValueAsString(ParcelConfig.ParcelType),
+		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Initialized - Classification: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
+			*ParcelConfig.ClassificationTag.ToString(),
 			CurrentState.Durability, CurrentState.Weight, CurrentState.Instability);
 	}
 }
@@ -65,8 +84,8 @@ void UParcelStateComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// Update instability for unstable parcels
-	if (ParcelConfig.ParcelType == EParcelType::Contraband)
+	// Update instability for contraband parcels
+	if (IsContrabandClassification())
 	{
 		UpdateInstability(DeltaTime);		
 	}
@@ -85,10 +104,15 @@ void UParcelStateComponent::InitializeParcel(const FParcelConfig& Config)
 	CurrentState.Weight = Config.BaseWeight;
 	CurrentState.Instability = Config.InstabilityFactor;
 
+	if (!ParcelConfig.ClassificationTag.IsValid())
+	{
+		ParcelConfig.ClassificationTag = ParcelClassification::Standard();
+	}
+
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Parcel initialized - Type: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
-			*UEnum::GetValueAsString(Config.ParcelType),
+		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Parcel initialized - Classification: %s, Durability: %.2f, Weight: %.2f, Instability: %.2f"),
+			*ParcelConfig.ClassificationTag.ToString(),
 			Config.BaseDurability, Config.BaseWeight, Config.InstabilityFactor);
 	}
 }
@@ -115,8 +139,8 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Damage applied - Source: %s, Amount: %.2f, New Durability: %.2f"),
-			*DamageSource, CalculatedDamage, CurrentState.Durability);
+		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Damage applied - Classification: %s, Source: %s, Amount: %.2f, New Durability: %.2f"),
+			*ParcelConfig.ClassificationTag.ToString(), *DamageSource, CalculatedDamage, CurrentState.Durability);
 	}
 
 	// Broadcast durability change
@@ -125,19 +149,19 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 
 	if (IsBroken())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[ParcelStateComponent] Parcel broken! Type: %s, Source: %s"),
-			*UEnum::GetValueAsString(ParcelConfig.ParcelType), *DamageSource);
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelStateComponent] Parcel broken! Classification: %s, Source: %s"),
+			*ParcelConfig.ClassificationTag.ToString(), *DamageSource);
 	}
 }
 
 void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
 {
-	if (ParcelConfig.ParcelType != EParcelType::Fragile)
+	if (!IsFragileClassification())
 	{
 		if (bEnableDebugLogging)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage ignored - Not fragile parcel. Type: %s"),
-				*UEnum::GetValueAsString(ParcelConfig.ParcelType));
+			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage ignored - Classification: %s"),
+				*ParcelConfig.ClassificationTag.ToString());
 		}
 		return; // Only fragile parcels take impact damage
 	}
@@ -165,7 +189,7 @@ void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& 
 
 void UParcelStateComponent::UpdateInstability(float DeltaTime)
 {
-	if (ParcelConfig.ParcelType != EParcelType::Contraband)
+	if (!IsContrabandClassification())
 	{
 		return;
 	}
@@ -256,21 +280,13 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 {
 	float Multiplier = 1.0f;
 
-	// Apply type-specific damage multipliers
-	switch (ParcelConfig.ParcelType)
+	if (IsFragileClassification())
 	{
-	case EParcelType::Fragile:
-		Multiplier = 2.0f; // Fragile parcels take double damage
-		break;
-	case EParcelType::Heavy:
-		Multiplier = 0.5f; // Heavy parcels take half damage
-		break;
-	case EParcelType::Contraband:
-		Multiplier = 1.5f; // Contraband parcels take 1.5x damage
-		break;
-	default:
-		Multiplier = 1.0f;
-		break;
+		Multiplier = 2.0f;
+	}
+	else if (IsContrabandClassification())
+	{
+		Multiplier = 1.5f;
 	}
 
 	return BaseDamage * Multiplier;
@@ -278,25 +294,17 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 
 float UParcelStateComponent::GetMovementSpeedMultiplier() const
 {
-	if (ParcelConfig.ParcelType == EParcelType::Heavy)
-	{
-		return HeavyMovementPenalty;
-	}
 	return 1.0f;
 }
 
 bool UParcelStateComponent::CanJump() const
 {
-	if (ParcelConfig.ParcelType == EParcelType::Heavy && bHeavyBlocksJump)
-	{
-		return false;
-	}
 	return true;
 }
 
 float UParcelStateComponent::GetInstabilityDecayRate() const
 {
-	if (ParcelConfig.ParcelType == EParcelType::Contraband)
+	if (IsContrabandClassification())
 	{
 		return UnstableDecayRate;
 	}
@@ -355,6 +363,21 @@ void UParcelStateComponent::SetParcelState(const FParcelState& NewState)
 
 	// Broadcast state change
 	OnParcelStateChanged.Broadcast(CurrentState);
+}
+
+bool UParcelStateComponent::MatchesClassificationTag(const FGameplayTag& Tag) const
+{
+	return ParcelConfig.ClassificationTag.IsValid() && Tag.IsValid() && ParcelConfig.ClassificationTag.MatchesTag(Tag);
+}
+
+bool UParcelStateComponent::IsFragileClassification() const
+{
+	return MatchesClassificationTag(ParcelClassification::Fragile());
+}
+
+bool UParcelStateComponent::IsContrabandClassification() const
+{
+	return MatchesClassificationTag(ParcelClassification::Contraband());
 }
 
 void UParcelStateComponent::SetInternalItemData(const FItemData& ItemData)

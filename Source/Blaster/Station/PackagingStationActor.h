@@ -26,7 +26,7 @@ enum class EPackagingMode : uint8
  * 단일 입력 영역에서 모드에 따라 포장/포장 해제 처리
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API APackagingStationActor : public AActor, public IInteractableInterface
+class BLASTER_API APackagingStationActor : public AActor
 {
 	GENERATED_BODY()
 
@@ -71,13 +71,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Packaging")
 	void UnpackageParcel(AParcelActor* Parcel);
-
-	// InteractableInterface Implementation
-	virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
-	virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
-	virtual FText GetInteractText_Implementation() const override;
-	virtual void StartHighlight_Implementation() override;
-	virtual void EndHighlight_Implementation() override;
 
 public:
 	/** 스테이션 메시 */

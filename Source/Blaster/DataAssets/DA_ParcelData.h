@@ -8,19 +8,6 @@
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "DA_ParcelData.generated.h"
 
-/**
- * Parcel Type Enumeration
- */
-UENUM(BlueprintType)
-enum class EParcelType : uint8
-{
-	Standard	UMETA(DisplayName = "Standard"),
-	Fragile		UMETA(DisplayName = "Fragile"),
-	Heavy		UMETA(DisplayName = "Heavy"),
-	Contraband	UMETA(DisplayName = "Contraband"),
-	Unknown		UMETA(DisplayName = "Unknown")
-};
-
 class UStaticMesh;
 
 /**
@@ -30,10 +17,6 @@ USTRUCT(BlueprintType)
 struct BLASTER_API FParcelConfig
 {
 	GENERATED_BODY()
-
-	/** Parcel type */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
-	EParcelType ParcelType = EParcelType::Unknown;
 
 	/** Parcel name */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
@@ -101,7 +84,6 @@ struct BLASTER_API FParcelConfig
 
 	FParcelConfig()
 	{
-		ParcelType = EParcelType::Unknown;
 		ParcelName = TEXT("Default Parcel");
 		BaseWeight = 1.0f;
 		BaseDurability = 100.0f;
@@ -132,22 +114,10 @@ public:
 	TMap<FString, float> GlobalParameters;
 
 	/**
-	 * Get parcel config by type
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
-	bool GetParcelConfigByType(EParcelType ParcelType, FParcelConfig& OutConfig) const;
-
-	/**
 	 * Get parcel config by tag
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
 	bool GetParcelConfigByTag(const FGameplayTag& ParcelTag, FParcelConfig& OutConfig) const;
-
-	/**
-	 * Get all parcel configs of a specific type
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
-	TArray<FParcelConfig> GetParcelConfigsByType(EParcelType ParcelType) const;
 
 	/**
 	 * Get global parameter value
