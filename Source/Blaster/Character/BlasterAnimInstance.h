@@ -104,4 +104,16 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Carry IK", meta = (AllowPrivateAccess = "true"))
 	FTransform ParcelRightHandIKTransform;
+
+	/** 손 모양 애니메이션 포즈 사용 여부 */
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
+	bool bUseHandPoseAnimation;
+
+	/** 손 모양 포즈 블렌드 가중치 (0.0 ~ 1.0) */
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
+	float HandPoseBlendWeight;
+
+	/** 작은 물체 여부 */
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
+	bool bIsSmallObject;
 };

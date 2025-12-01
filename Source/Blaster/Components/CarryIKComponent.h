@@ -90,6 +90,39 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")
     FName RightHandleName = FName("CarryPoint_Right");
 
+    /** 작은 물체 감지 임계값 (cm 단위, 이 크기보다 작으면 작은 물체로 간주) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK|Hand Pose")
+    float SmallObjectThreshold = 30.0f;
+
+    /** 손 모양 애니메이션 포즈 사용 여부 */
+    UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose")
+    bool bUseHandPoseAnimation = false;
+
+    /** 손 모양 포즈 블렌드 가중치 (0.0 ~ 1.0) */
+    UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose")
+    float HandPoseBlendWeight = 0.0f;
+
+    /** 작은 물체 여부 */
+    UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose")
+    bool bIsSmallObject = false;
+
+    /**
+     * 손 모양 포즈 사용 여부 가져오기
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK|Hand Pose")
+    bool ShouldUseHandPoseAnimation() const { return bUseHandPoseAnimation; }
+
+    /**
+     * 손 모양 포즈 블렌드 가중치 가져오기
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK|Hand Pose")
+    float GetHandPoseBlendWeight() const { return HandPoseBlendWeight; }
+
+    /**
+     * 작은 물체 여부 가져오기
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK|Hand Pose")
+    bool IsSmallObject() const { return bIsSmallObject; }
 
 	UFUNCTION()
     void OnRep_IKState();
@@ -99,6 +132,11 @@ protected:
      * IK 위치 업데이트
      */
     void UpdateIKLocations(float DeltaTime);
+
+    /**
+     * 물체 크기 계산 및 손 모양 포즈 결정
+     */
+    void CalculateObjectSizeAndHandPose(AParcelActor* Parcel);
 
 private:
     /** 현재 부착된 Parcel */

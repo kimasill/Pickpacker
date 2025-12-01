@@ -155,6 +155,10 @@ protected:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Suspicion")
 	ESuspiciousBehavior GetCurrentSuspiciousBehavior() const { return CurrentSuspiciousBehavior; }
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Camera")
+	float CarriedHideCameraThreshold = 50.f; // Distance to hide camera when character is carrying an item
+
+
 #pragma region Hit box
 	/**
 	* Hit boxes used for server-side rewind
@@ -269,6 +273,7 @@ private:
 	
 
 	void HideCameraIfCharacterClose();
+	void HideCarriedCameraIfCharacterClose();
 
 	void ToggleHeadMesh(bool bHideHeadMesh);
 

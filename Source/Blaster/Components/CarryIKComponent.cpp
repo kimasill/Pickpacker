@@ -105,18 +105,18 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
 	FTransform LTransform = FTransform::Identity;
 	FTransform RTransform = FTransform::Identity;
     
-
     bool bGotTargets = false;
 
     if (bUseParcelCarryPoints)
     {
-        // 1) 정적 메시 소켓 우선
+        // 1) 정적 메시 소켓 우선 - 소켓의 Transform을 그대로 사용
         if (UStaticMeshComponent* ParcelMesh = Parcel->GetParcelMesh())
         {
             bool bLeftOk = false, bRightOk = false;
 
             if (ParcelMesh->DoesSocketExist(LeftHandleName))
             {
+                // 소켓의 Transform을 그대로 사용 (위치 + 회전)
                 LTransform = ParcelMesh->GetSocketTransform(LeftHandleName, ERelativeTransformSpace::RTS_World);
                 bLeftOk = true;
             }
@@ -128,6 +128,7 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
 
             if (ParcelMesh->DoesSocketExist(RightHandleName))
             {
+                // 소켓의 Transform을 그대로 사용 (위치 + 회전)
 				RTransform = ParcelMesh->GetSocketTransform(RightHandleName, ERelativeTransformSpace::RTS_World);
                 bRightOk = true;
             }
@@ -139,6 +140,9 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
 
             if (bLeftOk || bRightOk)
             {
+                // 회전 계산 제거 - 소켓의 회전을 그대로 사용
+                // FABRIK IK는 위치만 조정하고, 회전은 소켓의 회전을 그대로 사용
+                
                 if (!bLeftOk) 
                 {
 					LTransform = FTransform::Identity;
@@ -146,7 +150,24 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
                 if (!bRightOk) 
                 {
 					RTransform = FTransform::Identity;
-                }				
+                }
+                
+                // 중심 위치 계산
+                if (bLeftOk && bRightOk)
+                {
+                    const FVector CenterLocation = (LTransform.GetLocation() + RTransform.GetLocation()) * 0.5f;
+                    CenterTransform.SetLocation(CenterLocation);
+                    CenterTransform.SetRotation(FQuat::Identity);
+                }
+                else if (bLeftOk)
+                {
+                    CenterTransform = LTransform;
+                }
+                else if (bRightOk)
+                {
+                    CenterTransform = RTransform;
+                }
+				
                 bGotTargets = true;
             }
         }
@@ -173,25 +194,70 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
             const FVector SocketLocation = SocketTransform.GetLocation();
             const FRotator SocketRotation = SocketTransform.Rotator();
 
+            // 오프셋을 소켓의 로컬 공간에서 월드 공간으로 변환
             const FVector WorldLeftOffset = SocketRotation.RotateVector(LeftHandOffset);
             const FVector WorldRightOffset = SocketRotation.RotateVector(RightHandOffset);
 
-            // 손바닥이 중앙을 향하도록 회전 계산
-			const FVector ToCenter = (SocketLocation - (SocketLocation + WorldLeftOffset)).GetSafeNormal();
-			const FRotator LeftHandRotation = UKismetMathLibrary::MakeRotFromX(ToCenter);
-			const FRotator RightHandRotation = UKismetMathLibrary::MakeRotFromX(-ToCenter);
-			LTransform = FTransform(LeftHandRotation, SocketLocation + WorldLeftOffset);
-			RTransform = FTransform(RightHandRotation, SocketLocation + WorldRightOffset);
-			CenterTransform = SocketTransform;
+            const FVector LeftHandLocation = SocketLocation + WorldLeftOffset;
+            const FVector RightHandLocation = SocketLocation + WorldRightOffset;
+            
+            // 소켓의 회전을 그대로 사용 (회전 계산 제거)
+            // 위치만 오프셋 적용하고, 회전은 소켓의 회전 유지
+            LTransform = FTransform(SocketRotation, LeftHandLocation);
+            RTransform = FTransform(SocketRotation, RightHandLocation);
+            CenterTransform = SocketTransform;
 
             bGotTargets = true;
         }
     }
     if (!bGotTargets) return;
 
+    // 물체 크기 계산 및 작은 물체 감지
+    CalculateObjectSizeAndHandPose(Parcel);
+
     LeftHandIKTransform = LTransform;
 	RightHandIKTransform = RTransform;
 	TargetCenterTransform = CenterTransform;
+}
+
+// 물체 크기를 계산하고 손 포즈 사용 여부/블렌드 설정
+void UCarryIKComponent::CalculateObjectSizeAndHandPose(AParcelActor* Parcel)
+{
+    bUseHandPoseAnimation = false;
+    HandPoseBlendWeight = 0.0f;
+    bIsSmallObject = false;
+
+    if (!Parcel)
+    {
+        return;
+    }
+
+    const UStaticMeshComponent* ParcelMesh = Parcel->GetParcelMesh();
+    if (!ParcelMesh)
+    {
+        return;
+    }
+
+    // StaticMeshComponent의 bounds를 사용하여 물체의 대략적인 크기를 계산
+    const FBoxSphereBounds Bounds = ParcelMesh->CalcBounds(ParcelMesh->GetComponentTransform());
+    const FVector Extents = Bounds.BoxExtent * 2.0f; // BoxExtent는 half-size, 전체 크기로 변환
+
+    // 가장 큰 변 길이를 기준으로 작은 물체 여부 판정
+    const float MaxDimension = FMath::Max3(Extents.X, Extents.Y, Extents.Z);
+    bIsSmallObject = MaxDimension <= SmallObjectThreshold;
+
+    // 작은 물체면 손 포즈 애니메이션 활성화, 블렌드 가중치 상향
+    if (bIsSmallObject)
+    {
+        bUseHandPoseAnimation = true;
+        HandPoseBlendWeight = 1.0f; // 완전한 손 포즈
+    }
+    else
+    {
+        // 큰 물체는 손 포즈를 끄거나 낮은 블렌드로 설정
+        bUseHandPoseAnimation = false;
+        HandPoseBlendWeight = 0.0f;
+    }
 }
 
 

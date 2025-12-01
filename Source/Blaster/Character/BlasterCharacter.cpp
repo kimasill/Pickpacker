@@ -468,6 +468,7 @@ void ABlasterCharacter::Tick(float DeltaTime)
 
 	RotateInPlace(DeltaTime);
 	HideCameraIfCharacterClose();
+	HideCarriedCameraIfCharacterClose();
 	PollInit();
 }
 
@@ -957,6 +958,8 @@ void ABlasterCharacter::HideCameraIfCharacterClose()
 	if (!IsLocallyControlled()) return;
 	if (PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson) return;
 
+	const float DistanceToCamera = (FollowCamera->GetComponentLocation() - GetActorLocation()).Size();
+	
 	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
 	{
 		GetMesh()->SetVisibility(false);
@@ -979,6 +982,48 @@ void ABlasterCharacter::HideCameraIfCharacterClose()
 		if (Combat && Combat->SecondaryWeapon && Combat->SecondaryWeapon->GetWeaponMesh())
 		{
 			Combat->SecondaryWeapon->GetWeaponMesh()->bOwnerNoSee = false;
+		}
+	}
+
+}
+
+void ABlasterCharacter::HideCarriedCameraIfCharacterClose()
+{
+	if (!IsLocallyControlled()) return;
+	if (!InteractionComponent) return;
+	
+	AParcelActor* CarriedParcel = InteractionComponent->GetCarriedParcel();
+	if (!CarriedParcel || !CarriedParcel->IsAttached()) return;
+
+	
+	const FVector CameraLoc = FollowCamera->GetComponentLocation();
+	float DistanceToParcel = 0.f;
+
+	if (UStaticMeshComponent* ParcelMesh = CarriedParcel->GetParcelMesh())
+	{
+		const FBoxSphereBounds B = ParcelMesh->CalcBounds(ParcelMesh->GetComponentTransform());
+		DistanceToParcel = FVector::Dist(CameraLoc, B.Origin);
+	}
+	else
+	{
+		DistanceToParcel = FVector::Dist(CameraLoc, CarriedParcel->GetActorLocation());
+	}
+	const bool bShouldHideParcel = DistanceToParcel < CarriedHideCameraThreshold;
+
+	TArray<UPrimitiveComponent*> PrimitiveComponents;
+	CarriedParcel->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+	
+	for (UPrimitiveComponent* Prim : PrimitiveComponents)
+	{
+		if (!Prim) continue;
+
+		if (bShouldHideParcel)
+		{
+			Prim->SetOwnerNoSee(true);
+		}
+		else
+		{
+			Prim->SetOwnerNoSee(false);
 		}
 	}
 }
