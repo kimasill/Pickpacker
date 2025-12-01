@@ -23,7 +23,7 @@ UInteractionComponent::UInteractionComponent()
     PrimaryComponentTick.bCanEverTick = true;
     InteractionDistance = 300.0f;
     TraceStartOffset = FVector(0.0f, 0.0f, 50.0f);
-    TraceChannel = ECC_Visibility;
+    TraceChannel = ECC_GameTraceChannel3;
     bRequireInteractableInterface = true;
     bDrawDebugTrace = false;
     SetIsReplicatedByDefault(true);
@@ -97,39 +97,119 @@ void UInteractionComponent::UpdateTarget()
     const FVector CameraLocation = Camera ? Camera->GetComponentLocation() : OwnerCharacter->GetActorLocation() + OwnerCharacter->GetActorRotation().RotateVector(TraceStartOffset);
     const FVector Direction = Camera ? Camera->GetForwardVector() : OwnerCharacter->GetActorForwardVector();
     const FVector Start = CameraLocation;
-    const FVector End = CameraLocation + Direction * InteractionDistance;
+    const FVector End   = CameraLocation + Direction * InteractionDistance;
 
-    FHitResult Hit;
-    TArray<AActor*> Ignored; Ignored.Add(OwnerCharacter); if (IsValid(CarriedParcel)) Ignored.Add(CarriedParcel);
-    const ETraceTypeQuery Channel = UEngineTypes::ConvertToTraceType(TraceChannel);
-    UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, Channel, false, Ignored, EDrawDebugTrace::None, Hit, false);
+    // Primary interaction trace channel (existing logic)
+    const ECollisionChannel InteractionChannel = TraceChannel; // expected ECC_GameTraceChannel3
+    // Separate shelf trace channel (only when carrying a parcel)
+    const ECollisionChannel ShelfTraceChannel = ECC_GameTraceChannel4;
 
-    AActor* NewTarget = nullptr;
-    if (Hit.bBlockingHit)
+    // Build base query params
+    FCollisionQueryParams InteractionParams(SCENE_QUERY_STAT(InteractionTargetTrace), false);
+    InteractionParams.bReturnPhysicalMaterial = false;
+    InteractionParams.AddIgnoredActor(OwnerCharacter);
+
+
+    if (IsValid(CarriedParcel))
     {
-        if (UDynamicGameplayStatics::GetActorOrComponentWithInterface(Hit.GetActor(), UInteractableInterface::StaticClass()))
+        // Ignore carried parcel so it does not consume primary interaction hit when looking at shelves/items
+        InteractionParams.AddIgnoredActor(CarriedParcel);
+        if (AActor* Carrier = CarriedParcel->GetAttachParentActor())
         {
-            NewTarget = Hit.GetActor();
+            InteractionParams.AddIgnoredActor(Carrier);
+        }
+    }
+        
+    // Optional shelf trace (only while carrying a parcel) - allow seeing shelf even if parcel blocks interaction channel
+
+    // Perform primary multi trace (interaction channel)
+    TArray<FHitResult> InteractionHits;
+    bool bInteractionTrace = false;
+
+    bInteractionTrace = GetWorld() && GetWorld()->LineTraceMultiByChannel(InteractionHits, Start, End, InteractionChannel, InteractionParams);
+    FHitResult ShelfHit;
+    bool bShelfHitValid = false;
+    if (IsValid(CarriedParcel))
+    {
+        FCollisionQueryParams ShelfParams = InteractionParams; // reuse ignores
+        // We allow shelf trace to pass through items; do NOT ignore static world so shelf collision works
+        bShelfHitValid = GetWorld() && GetWorld()->LineTraceSingleByChannel(ShelfHit, Start, End, ShelfTraceChannel, ShelfParams)
+                         && ShelfHit.GetActor() && ShelfHit.GetActor()->IsA(AShelfActor::StaticClass());
+    }
+
+    // Debug draw (short lived)
+    if (bDrawDebugTrace)
+    {
+        const FColor LineColor = bInteractionTrace ? FColor::Green : FColor::Red;
+        DrawDebugLine(GetWorld(), Start, End, LineColor, false, 0.05f, 0, 0.5f);
+        for (const FHitResult& H : InteractionHits)
+        {
+            DrawDebugSphere(GetWorld(), H.ImpactPoint, 6.f, 12, FColor::Yellow, false, 0.05f);
+        }
+        if (bShelfHitValid)
+        {
+            DrawDebugSphere(GetWorld(), ShelfHit.ImpactPoint, 10.f, 16, FColor::Cyan, false, 0.1f);
         }
     }
 
-    PreviousTarget = CurrentTarget;
-    if (NewTarget == nullptr)
+    // Select best interactable from primary hits
+    AActor* NewTarget = nullptr;
+    float BestDistSq = TNumericLimits<float>::Max();
+
+    if (bInteractionTrace)
     {
-        ClearShelfSlotFocus();
+        for (const FHitResult& Hit : InteractionHits)
+        {
+            AActor* HitActor = Hit.GetActor();
+            if (!HitActor) continue;
+
+            // If carrying parcel, exclude other parcels from being chosen (we want shelf preference); picking parcels only when hands free
+            if (IsValid(CarriedParcel) && HitActor->IsA(AParcelActor::StaticClass()))
+            {
+                continue;
+            }
+
+            if (!UDynamicGameplayStatics::GetActorOrComponentWithInterface(HitActor, UInteractableInterface::StaticClass()))
+            {
+                continue;
+            }
+
+            const float DistSq = (Hit.ImpactPoint - Start).SizeSquared();
+            if (DistSq < BestDistSq)
+            {
+                BestDistSq = DistSq;
+                NewTarget  = HitActor;
+            }
+        }
+    }
+
+    // If carrying a parcel and shelf trace succeeded, override target with shelf (always prioritize shelf when holding)
+    if (bShelfHitValid)
+    {
+        NewTarget = ShelfHit.GetActor();
+    }
+
+    PreviousTarget = CurrentTarget;
+
+    if (!NewTarget)
+    {
+        ClearShelfPlacementPreview();
         if (CurrentTarget.IsValid())
         {
             HideInteractionWidget();
             SetCustomDepth(CurrentTarget.Get(), false);
             OnTargetChanged.Broadcast(PreviousTarget.Get(), nullptr);
         }
-        CurrentTarget = nullptr; return;
+        CurrentTarget = nullptr;
+        return;
     }
-    
+
     const bool bChanged = CurrentTarget.Get() != NewTarget;
     if (bChanged)
     {
         CurrentTarget = NewTarget;
+        if (!CanInteract()) return;
+
         if (CurrentTarget.IsValid())
         {
             UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass());
@@ -138,17 +218,11 @@ void UInteractionComponent::UpdateTarget()
             {
                 bHandled = IInteractableInterface::Execute_RequestShowInteractionUI(InteractableObj, OwnerCharacter);
             }
-            if(CurrentTarget->ActorHasTag(FName("IgnoreInteractionUI"))){
+            if (CurrentTarget->ActorHasTag(FName("IgnoreInteractionUI")))
+            {
                 bHandled = true;
-            };
-            if (!bHandled)
-            {
-                ShowInteractionWidget(CurrentTarget.Get());
             }
-            else
-            {
-                HideInteractionWidget();
-            }
+            if (!bHandled) ShowInteractionWidget(CurrentTarget.Get()); else HideInteractionWidget();
             SetCustomDepth(CurrentTarget.Get(), true);
         }
         OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
@@ -172,7 +246,6 @@ void UInteractionComponent::UpdateTarget()
         ClearShelfSlotFocus();
         ClearShelfPlacementPreview();
     }
-
 }
 
 void UInteractionComponent::Interact()
@@ -200,8 +273,8 @@ void UInteractionComponent::Interact()
                     {
                         if (Shelf->TryPlaceParcelWithTransform(Parcel, CachedPlacementPreview.WorldTransform))
                         {
-                            SetCarriedParcel(nullptr);
                             ClearShelfPlacementPreview(Shelf);
+                            SetCarriedParcel(nullptr);
                             OnInteractSuccess.Broadcast(Shelf);
                         }
                     }
@@ -460,7 +533,21 @@ void UInteractionComponent::UpdateShelfPlacementPreview(AShelfActor* Shelf)
     FShelfPlacementPreview Preview;
     if (Shelf->ComputePlacementPreview(CarriedParcel, ViewLocation, ViewDirection, InteractionDistance, Preview))
     {
-        Shelf->UpdatePlacementPreviewVisual(Preview, CarriedParcel);
+        // Hide carried parcel mesh to avoid view obstruction
+        UStaticMeshComponent* ParcelMesh = CarriedParcel->GetParcelMesh();
+        if (Preview.bIsPlaceable && ParcelMesh)
+        {
+            ParcelMesh->SetHiddenInGame(true);
+            ParcelMesh->SetVisibility(false);
+        }
+        else
+        {
+            ClearShelfPlacementPreview();
+        }
+        
+        // Ensure preview mesh clones carried parcel if needed
+        Shelf->EnsurePreviewMeshForParcel(CarriedParcel);
+        Shelf->UpdatePlacementPreviewVisual(Preview);
         CachedPlacementPreview = Preview;
         bHasPlacementPreview = true;
         PreviewShelf = Shelf;
@@ -482,6 +569,16 @@ void UInteractionComponent::ClearShelfPlacementPreview(AShelfActor* ShelfToClear
     if (TargetShelf)
     {
         TargetShelf->ClearPlacementPreviewVisual();
+    }
+
+    // Restore carried parcel visibility
+    if (IsValid(CarriedParcel))
+    {
+        if (UStaticMeshComponent* ParcelMesh = CarriedParcel->GetParcelMesh())
+        {
+            ParcelMesh->SetHiddenInGame(false);
+            ParcelMesh->SetVisibility(true);
+        }
     }
 
     PreviewShelf = nullptr;

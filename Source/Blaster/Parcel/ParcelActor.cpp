@@ -38,6 +38,7 @@ AParcelActor::AParcelActor()
 	MeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_WorldDynamic);
 	MeshComponent->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	MeshComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	MeshComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_EngineTraceChannel4, ECollisionResponse::ECR_Ignore);
 	MeshComponent->SetIsReplicated(true);
 
 	ParcelStateComponent = CreateDefaultSubobject<UParcelStateComponent>(TEXT("ParcelStateComponent"));
