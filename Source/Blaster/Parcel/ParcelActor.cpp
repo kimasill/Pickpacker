@@ -339,6 +339,7 @@ bool AParcelActor::UpdateMeshForCurrentPackagingState()
 	if (bIsPackaged || PackageOnSpawn)
 	{
 		TargetMesh = PackagedMesh;
+		bIsPackaged = TargetMesh != nullptr;
 	}
 	else
 	{

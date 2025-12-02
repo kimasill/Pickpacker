@@ -527,6 +527,8 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 {
 	if (!HasAuthority() || !Parcel)
 	{
+		UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] Early exit: HasAuthority=%s, Parcel=%s"),
+			HasAuthority() ? TEXT("true") : TEXT("false"), Parcel ? *Parcel->GetName() : TEXT("nullptr"));
 		return false;
 	}
 
@@ -547,12 +549,7 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 		}
 
 		if (Order.RequiredParcelTag.IsValid() && !ParcelTags.HasTag(Order.RequiredParcelTag))
-		{
-			continue;
-		}
-
-		if (Order.RequiredItemTag.IsValid() && Order.RequiredItemTag != ParcelItemTag)
-		{
+		{				
 			continue;
 		}
 
@@ -575,6 +572,8 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 		return true;
 	}
 
+	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] No matching order for parcel '%s' (Packaged=%s, ItemTag=%s, Tags=%s)"),
+		*Parcel->GetName(), bParcelPackaged ? TEXT("true") : TEXT("false"), *ParcelItemTag.ToString(), *ParcelTags.ToStringSimple());
 	return false;
 }
 

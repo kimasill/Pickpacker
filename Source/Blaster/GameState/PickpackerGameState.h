@@ -10,6 +10,19 @@
 
 class UAnchorRuntimeSubsystem;
 
+/** Payload for order remaining time updates (OrderId -> RemainingSeconds) */
+USTRUCT(BlueprintType)
+struct FOrderTimesUpdatePayload
+{
+	GENERATED_BODY()
+
+	/** Map of OrderId to RemainingSeconds (-1 if no time limit) */
+	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	FGuid OrderId;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	float RemainingSeconds = -1.0f;
+};
+
 /**
  * Pickpacker Game State - Manages warehouse simulation state
  * Tracks suspicion levels, team performance, and game progression
@@ -92,9 +105,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Orders")
 	const TArray<FActiveOrderState>& GetActiveOrders() const { return ActiveOrders; }
 
-	/**
-	 * Server-side setter for active orders
-	 */
+	/** Server-side setter for active orders. Starts automatic remaining-time updates. */
 	void SetActiveOrders(const TArray<FActiveOrderState>& NewOrders);
 
 	/**
@@ -154,6 +165,9 @@ public:
 	float GetDayLengthInSeconds() const { return DayLengthInSeconds; }
 
 public:
+	// Alias to allow templated type with comma in delegate macro
+	typedef TMap<FGuid, float> FOrderTimesMap;
+
 	/** Broadcast when suspicion level changes */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSuspicionChanged, float, NewSuspicionLevel);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Suspicion")
@@ -168,6 +182,11 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOrdersUpdated, const TArray<FActiveOrderState>&, Orders);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
 	FOnOrdersUpdated OnOrdersUpdated;
+
+	/** Broadcast periodic remaining time updates (OrderId -> RemainingSeconds). */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOrderTimesUpdated, const TArray<FOrderTimesUpdatePayload>&, Payload);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
+	FOnOrderTimesUpdated OnOrderTimesUpdated;
 
 	/** Broadcast when credits are updated */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreditsChanged, int32, NewCredits, int32, Delta);
@@ -199,6 +218,9 @@ protected:
 	UFUNCTION()
 	void OnRep_TeamCredits();
 
+	UFUNCTION()
+	void OnRep_OrderTimesPayloads();
+
 private:
 	/** Replicated level variant data */
 	UPROPERTY(ReplicatedUsing = OnRep_LevelVariant)
@@ -223,6 +245,10 @@ private:
 	/** Replicated active orders */
 	UPROPERTY(ReplicatedUsing = OnRep_ActiveOrders)
 	TArray<FActiveOrderState> ActiveOrders;
+
+	/** Previous order times payload for change detection */
+	UPROPERTY(ReplicatedUsing = OnRep_OrderTimesPayloads)
+	TArray<FOrderTimesUpdatePayload> OrderTimesPayloads;
 
 	/** Credit transaction history (server side only) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits", meta = (AllowPrivateAccess = "true"))
@@ -257,4 +283,20 @@ private:
 	/** Cached last replicated credits for delta calculations */
 	UPROPERTY()
 	int32 LastReplicatedTeamCredits = 0;
+
+	/** Timer handle for periodic order time updates */
+	FTimerHandle OrderTimesUpdateTimerHandle;
+
+	/** Interval (seconds) for updating remaining times */
+	UPROPERTY(EditAnywhere, Category = "Pickpacker|Orders")
+	float OrderTimesUpdateInterval = 1.0f;
+
+	/** Start (or ensure) periodic order time updates */
+	void EnsureOrderTimesUpdateTimer();
+
+	/** Stop periodic order time updates */
+	void StopOrderTimesUpdateTimer();
+
+	/** Gather remaining times and broadcast */
+	void BroadcastOrderRemainingTimes();
 };

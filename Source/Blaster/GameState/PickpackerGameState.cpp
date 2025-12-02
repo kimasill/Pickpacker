@@ -31,6 +31,7 @@ void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(APickpackerGameState, bSimulationRunning);
 	DOREPLIFETIME(APickpackerGameState, ActiveOrders);
 	DOREPLIFETIME(APickpackerGameState, TeamCredits);
+	DOREPLIFETIME(APickpackerGameState, OrderTimesPayloads);
 }
 
 void APickpackerGameState::BeginPlay()
@@ -127,6 +128,8 @@ void APickpackerGameState::SetActiveOrders(const TArray<FActiveOrderState>& NewO
 
 	ActiveOrders = NewOrders;
 	OnOrdersUpdated.Broadcast(ActiveOrders);
+
+	EnsureOrderTimesUpdateTimer();
 }
 
 void APickpackerGameState::SetTeamCredits(int32 NewCredits)
@@ -217,6 +220,8 @@ void APickpackerGameState::OnRep_SimulationRunning()
 void APickpackerGameState::OnRep_ActiveOrders()
 {
 	OnOrdersUpdated.Broadcast(ActiveOrders);
+	// Clients also update remaining times for UI responsiveness
+	BroadcastOrderRemainingTimes();
 }
 
 void APickpackerGameState::OnRep_TeamCredits()
@@ -224,6 +229,11 @@ void APickpackerGameState::OnRep_TeamCredits()
 	const int32 Delta = TeamCredits - LastReplicatedTeamCredits;
 	LastReplicatedTeamCredits = TeamCredits;
 	OnCreditsChanged.Broadcast(TeamCredits, Delta);
+}
+
+void APickpackerGameState::OnRep_OrderTimesPayloads()
+{
+	OnOrderTimesUpdated.Broadcast(OrderTimesPayloads);
 }
 
 float APickpackerGameState::GetCurrentGameHour() const
@@ -280,4 +290,64 @@ void APickpackerGameState::SetDayLengthInSeconds(float Seconds)
 void APickpackerGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
+
+void APickpackerGameState::EnsureOrderTimesUpdateTimer()
+{
+	if (!HasAuthority()) return;
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	if (ActiveOrders.Num() == 0)
+	{
+		StopOrderTimesUpdateTimer();
+		return;
+	}
+
+	FTimerManager& TM = World->GetTimerManager();
+	if (!TM.IsTimerActive(OrderTimesUpdateTimerHandle))
+	{
+		TM.SetTimer(OrderTimesUpdateTimerHandle, this, &APickpackerGameState::BroadcastOrderRemainingTimes, FMath::Max(0.05f, OrderTimesUpdateInterval), true);
+	}
+}
+
+void APickpackerGameState::StopOrderTimesUpdateTimer()
+{
+	if (!HasAuthority()) return;
+	UWorld* World = GetWorld();
+	if (!World) return;
+	World->GetTimerManager().ClearTimer(OrderTimesUpdateTimerHandle);
+}
+
+void APickpackerGameState::BroadcastOrderRemainingTimes()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	FOrderTimesUpdatePayload Payload;
+	const float Now = World->GetTimeSeconds();
+	bool bHasActive = false;
+	OrderTimesPayloads.Empty();
+
+	for (const FActiveOrderState& Order : ActiveOrders)
+	{
+		if (Order.bCompleted || Order.bFailed)
+		{
+			continue;
+		}
+		float Remaining = -1.f;
+		if (Order.ExpireTime > 0.f)
+		{
+			Remaining = FMath::Max(0.f, Order.ExpireTime - Now);
+		}
+		Payload.RemainingSeconds = Remaining;
+		Payload.OrderId = Order.OrderId; 
+		OrderTimesPayloads.Add(Payload);
+		bHasActive = true;
+	}
+	if (!bHasActive)
+	{
+		StopOrderTimesUpdateTimer();
+	}
+	OnOrderTimesUpdated.Broadcast(OrderTimesPayloads);
 }
