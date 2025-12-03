@@ -1271,27 +1271,28 @@ void ABlasterCharacter::SetSuspiciousBehavior(ESuspiciousBehavior Behavior)
 
 void ABlasterCharacter::UpdateSuspiciousBehavior(ESuspiciousBehavior NewBehavior)
 {
-	if (NewBehavior != CurrentSuspiciousBehavior)
+	if (NewBehavior == ESuspiciousBehavior::None)
 	{
-		SetSuspiciousBehavior(NewBehavior);
-		
-		// SuspicionManager에 이벤트 브로드캐스트
-		if (NewBehavior != ESuspiciousBehavior::None)
+		return;
+	}
+
+	// SuspicionManager에 이벤트 브로드캐스트 (같은 행동이어도 시간이 지나면 다시 감지되도록)
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GameInstance = World->GetGameInstance())
 		{
-			if (UWorld* World = GetWorld())
+			if (USuspicionManagerSubsystem* SuspicionManager = GameInstance->GetSubsystem<USuspicionManagerSubsystem>())
 			{
-				if (UGameInstance* GameInstance = World->GetGameInstance())
-				{
-					if (USuspicionManagerSubsystem* SuspicionManager = GameInstance->GetSubsystem<USuspicionManagerSubsystem>())
-					{
-						SuspicionManager->BroadcastSuspicionEvent(this, NewBehavior);
-						UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Broadcasted suspicion event: %s"), 
-							*UEnum::GetValueAsString(NewBehavior));
-					}
-				}
+				// SuspicionManager에서 중복 체크를 시간 기반으로 처리
+				SuspicionManager->BroadcastSuspicionEvent(this, NewBehavior);
+				UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Broadcasted suspicion event: %s"), 
+					*UEnum::GetValueAsString(NewBehavior));
 			}
 		}
 	}
+
+	// 상태는 항상 업데이트 (같은 행동이어도 시간 갱신)
+	SetSuspiciousBehavior(NewBehavior);
 }
 
 void ABlasterCharacter::OnRep_CurrentSuspiciousBehavior(ESuspiciousBehavior OldBehavior)

@@ -1,4 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "BTTask_MotherExecutePunishment.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -21,6 +20,8 @@ EBTNodeResult::Type UBTTask_MotherExecutePunishment::ExecuteTask(UBehaviorTreeCo
 		return EBTNodeResult::Failed;
 	}
 
+	CachedOwnerComp = &OwnerComp;
+	
 	AAIController* AIController = OwnerComp.GetAIOwner();
 	if (!AIController)
 	{
@@ -40,14 +41,26 @@ EBTNodeResult::Type UBTTask_MotherExecutePunishment::ExecuteTask(UBehaviorTreeCo
 		return EBTNodeResult::Failed;
 	}
 
-	// Execute punishment (이 함수가 몽타주를 재생하고 움직임을 중지함)
-	// OnPunishmentEnd 노티파이에서 타겟 제거 및 후속 처리가 이루어짐
+	MotherAI->OnPunishmentFinished.AddDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
+	
 	MotherAI->ExecutePunishment(TargetPlayer);
 
-	// 타겟 제거는 OnPunishmentEnd에서 처리하므로 여기서는 제거하지 않음
-	// Behavior Tree는 처벌 애니메이션이 끝날 때까지 대기해야 함
-	// 노티파이로 OnPunishmentEnd가 호출되면 그곳에서 타겟 제거 및 상태 복귀 처리
-
-	return EBTNodeResult::Succeeded;
+	return EBTNodeResult::InProgress;
 }
+
+void UBTTask_MotherExecutePunishment::OnPunishmentFinished(bool interrupted)
+{
+	if (CachedOwnerComp)
+	{
+		FinishLatentTask(*CachedOwnerComp, interrupted ? EBTNodeResult::Failed : EBTNodeResult::Succeeded);
+	}
+
+	if(AMotherAIActor* MotherAI = Cast<AMotherAIActor>(CachedOwnerComp->GetAIOwner()->GetPawn()))
+	{
+		MotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
+	}
+	
+}
+
+
 

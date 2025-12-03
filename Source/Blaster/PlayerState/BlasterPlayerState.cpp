@@ -109,24 +109,15 @@ void ABlasterPlayerState::AddPersonalSuspicion(float Points)
 
 	OnPersonalSuspicionChanged.Broadcast(PersonalSuspicion, OldSuspicion);
 
-	// 의심 수치가 100에 도달하면 마더에게 알림
+	// 의심 수치가 100에 도달하면 이벤트만 브로드캐스트 (마더 AI는 이벤트를 구독하여 처리)
+	// PlayerState는 MotherAI를 직접 참조하지 않아 의존성이 제거됨
 	if (PersonalSuspicion >= 100.0f && OldSuspicion < 100.0f)
 	{
-		// 마더 AI 찾기
-		AMotherAIActor* MotherAI = nullptr;
-		for (TActorIterator<AMotherAIActor> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+		ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+		if (BlasterCharacter)
 		{
-			MotherAI = *ActorItr;
-			break;
-		}
-
-		if (MotherAI)
-		{
-			ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
-			if (BlasterCharacter)
-			{
-				MotherAI->RequestPunishment(BlasterCharacter);
-			}
+			UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerState] Player %s suspicion reached 100, event will be handled by subscribers"), 
+				*GetPlayerName());
 		}
 	}
 }

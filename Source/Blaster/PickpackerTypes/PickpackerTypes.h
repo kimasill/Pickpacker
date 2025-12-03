@@ -447,6 +447,7 @@ enum class ESuspiciousBehavior : uint8
 	DisassemblingParcel		UMETA(DisplayName = "Disassembling Parcel"),
 	EnteringRestrictedZone	UMETA(DisplayName = "Entering Restricted Zone"),
 	PickingPackagedParcel	UMETA(DisplayName = "Picking Packaged Parcel"),
+	DroppingParcel			UMETA(DisplayName = "Dropping Parcel"),
 	HoldingSuspiciousItem	UMETA(DisplayName = "Holding Suspicious Item"),
 	HoldingWeapon			UMETA(DisplayName = "Holding Weapon"),
 	InteractingRestrictedSystem UMETA(DisplayName = "Interacting Restricted System"),

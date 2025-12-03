@@ -192,12 +192,12 @@ void ADroneActor::Tick(float DeltaTime)
     }
 
     // Update detection timer (Behavior Tree에서도 사용 가능하도록 데이터만 업데이트)
-    if (CurrentState == EDroneState::Detecting && DetectedPlayer.IsValid())
+    if (CurrentState == EDroneState::Detecting && DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
     {
         CurrentDetectionTime += DeltaTime;
     }
 
-    // 시야 안의 플레이어의 의심 행동 상태 지속 체크
+    // 시야 안의 플레이어의 의심 행동 상태 지속 체크 (tick에서만 처리)
     CheckVisiblePlayersSuspiciousBehavior(DeltaTime);
 
     DrawPerceptionDebug();
@@ -208,7 +208,7 @@ void ADroneActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(ADroneActor, CurrentState);
-    DOREPLIFETIME(ADroneActor, DetectedPlayer);
+    DOREPLIFETIME(ADroneActor, DetectedPlayers);
     DOREPLIFETIME(ADroneActor, bIsActive);
     DOREPLIFETIME(ADroneActor, CurrentBatteryLevel);
     DOREPLIFETIME(ADroneActor, bIsCharging);
@@ -234,10 +234,10 @@ void ADroneActor::UpdateBlackboard()
             // 무기 사용
             BlackboardComp->SetValueAsBool("ShouldUseWeapon", bUseWeapon);
 
-            // 감지된 플레이어
-            if (DetectedPlayer.IsValid())
+            // 감지된 플레이어 (첫 번째 플레이어, 호환성 유지)
+            if (DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
             {
-                BlackboardComp->SetValueAsObject("DetectedPlayer", DetectedPlayer.Get());
+                BlackboardComp->SetValueAsObject("DetectedPlayer", DetectedPlayers[0].Get());
             }
             else
             {
@@ -420,7 +420,8 @@ void ADroneActor::SetActive(bool bActive)
     if (!bActive)
     {
         SetDroneState(EDroneState::Returning);
-        DetectedPlayer = nullptr;
+        DetectedPlayers.Empty();
+        LastProcessedSuspicionTime.Empty();
     }
 }
 
@@ -466,22 +467,43 @@ void ADroneActor::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Player %s detected within line of sight and angle."), *Character->GetName());
 		
-		// 플레이어를 감지 목록에 추가 (Tick에서 지속적으로 체크)
+		// 플레이어를 감지 목록에 추가 (여러 명 감지 가능)
         if (CurrentState == EDroneState::Patrol || CurrentState == EDroneState::Returning)
         {
-            DetectedPlayer = Character;
-            // 상태는 Patrol 유지 (Detecting으로 변경하지 않음)
-            CurrentDetectionTime = 0.0f;
+            // 이미 목록에 있는지 확인
+            bool bAlreadyDetected = false;
+            for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+            {
+                if (Detected.Get() == Character)
+                {
+                    bAlreadyDetected = true;
+                    break;
+                }
+            }
+
+            if (!bAlreadyDetected)
+            {
+                DetectedPlayers.Add(Character);
+                OnPlayerDetected.Broadcast(Character);
+                // 상태는 Patrol 유지 (Detecting으로 변경하지 않음)
+                if (DetectedPlayers.Num() == 1)
+                {
+                    CurrentDetectionTime = 0.0f;
+                }
+            }
         }
     }
     else
     {
-        // Lost sight - Patrol 상태 유지
-        if (DetectedPlayer.Get() == Character)
+        // Lost sight - 감지 목록에서 제거
+        for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
         {
-            DetectedPlayer = nullptr;
-            // 상태는 Patrol 유지 (이미 Patrol 상태이므로 변경 불필요)
-            OnPlayerLost.Broadcast(nullptr);
+            if (DetectedPlayers[i].Get() == Character)
+            {
+                DetectedPlayers.RemoveAt(i);
+                OnPlayerLost.Broadcast(Character);
+                break;
+            }
         }
     }
 }
@@ -565,10 +587,13 @@ void ADroneActor::DrawPerceptionDebug()
     DrawDebugLine(GetWorld(), Origin, Origin + Forward * SightR, SightColor, false, 0.f, 0, 1.f);
 
     // 감지된 플레이어 표시
-    if (DetectedPlayer.IsValid())
+    for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
     {
-        DrawDebugSphere(GetWorld(), DetectedPlayer->GetActorLocation(), 32.f, 16, FColor::Red, false, 0.f, 0, 2.f);
-        DrawDebugLine(GetWorld(), Origin, DetectedPlayer->GetActorLocation(), FColor::Red, false, 0.f, 0, 1.5f);
+        if (Detected.IsValid())
+        {
+            DrawDebugSphere(GetWorld(), Detected->GetActorLocation(), 32.f, 16, FColor::Red, false, 0.f, 0, 2.f);
+            DrawDebugLine(GetWorld(), Origin, Detected->GetActorLocation(), FColor::Red, false, 0.f, 0, 1.5f);
+        }
     }
 }
 
@@ -728,7 +753,22 @@ void ADroneActor::StartChasing(ACharacter* Target)
         return;
     }
 
-    DetectedPlayer = Target;
+    // 감지 목록에 추가 (없으면)
+    bool bAlreadyDetected = false;
+    for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+    {
+        if (Detected.Get() == Target)
+        {
+            bAlreadyDetected = true;
+            break;
+        }
+    }
+
+    if (!bAlreadyDetected)
+    {
+        DetectedPlayers.Add(Target);
+    }
+
     SetDroneState(EDroneState::Chasing);
     
     UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Started chasing player: %s"), *Target->GetName());
@@ -743,7 +783,7 @@ void ADroneActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
 
     ABlasterCharacter* BlasterCharacter = EventData.Player;
     
-    // 1) 현재 플레이어가 내 시야에 있는가?
+    // 시야 및 각도 확인 (공통 로직은 ProcessPlayerSuspiciousBehavior에서 처리)
     if (!CanSeePlayer(BlasterCharacter))
     {
         UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s not in line of sight"), 
@@ -763,76 +803,23 @@ void ADroneActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
             *BlasterCharacter->GetName());
         return;
     }
-    FString Msg = FString::Printf(TEXT("Suspicion Event: Player %s, Behavior %s"), 
-		*BlasterCharacter->GetName(), *UEnum::GetValueAsString(EventData.Behavior));
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            -1,
-            5.0f,
-            FColor::Red,
-            Msg
-        );
-    }
-    // 2) YES → 의심 행동 즉시 감지
-    UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Suspicion event detected - Player: %s, Behavior: %s, Distance: %.2f"), 
-        *BlasterCharacter->GetName(), *UEnum::GetValueAsString(EventData.Behavior),
-        FVector::Dist(GetActorLocation(), BlasterCharacter->GetActorLocation()));
 
-    // 개인별 의심 수치 추가
-    ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
-    if (BlasterPlayerState)
-    {
-        // 중복 체크 방지: 같은 행동을 연속으로 감지하지 않도록
-        static TMap<ABlasterCharacter*, ESuspiciousBehavior> LastDetectedBehavior;
-        ESuspiciousBehavior* LastBehavior = LastDetectedBehavior.Find(BlasterCharacter);
-        
-        if (!LastBehavior || *LastBehavior != EventData.Behavior)
-        {
-            BlasterPlayerState->AddPersonalSuspicion(50.0f);
-            
-            // 경고 출력
-            FString BehaviorName = UEnum::GetValueAsString(EventData.Behavior);
-            FString WarningMessage = FString::Printf(TEXT("경고: %s의 의심스러운 행동이 감지되었습니다! (%s, 의심 수치 +50)"), 
-                *BlasterCharacter->GetName(), *BehaviorName);
-            UE_LOG(LogTemp, Warning, TEXT("[DroneActor] %s"), *WarningMessage);
-            
-            // 디버그 로그
-            UE_LOG(LogTemp, Log, TEXT("[DroneActor] DEBUG - Event received: Player: %s, Behavior: %s, Location: %s, Distance: %.2f, Angle: %.2f"), 
-                *BlasterCharacter->GetName(), *BehaviorName, 
-                *BlasterCharacter->GetActorLocation().ToString(),
-                FVector::Dist(GetActorLocation(), BlasterCharacter->GetActorLocation()),
-                Angle);
-            
-            // 마더 AI에게 경고 전달
-            if (GameState)
-            {
-                AMotherAIActor* MotherAI = nullptr;
-                for (TActorIterator<AMotherAIActor> ActorItr(GetWorld()); ActorItr; ++ActorItr)
-                {
-                    MotherAI = *ActorItr;
-                    break;
-                }
-                if (MotherAI)
-                {
-                    MotherAI->SendWarning(WarningMessage);
-                }
-            }
-            
-            // 마지막 감지 행동 저장
-            LastDetectedBehavior.Add(BlasterCharacter, EventData.Behavior);
-        }
-    }
+    // 공통 처리 함수 호출
+    ProcessPlayerSuspiciousBehavior(BlasterCharacter, EventData.Behavior);
 }
 
 void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
 {
-    // 이벤트를 놓쳤을 때를 위한 백업 체크 (대략 0.25초 간격)
+    if (!bIsActive || !HasAuthority())
+    {
+        return;
+    }
+
+    // 체크 간격 확인
     float CurrentTime = GetWorld()->GetTimeSeconds();
     if (CurrentTime - LastSuspiciousBehaviorCheckTime < SuspiciousBehaviorCheckInterval)
     {
         return;
-
     }
     LastSuspiciousBehaviorCheckTime = CurrentTime;
 
@@ -882,13 +869,110 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
                     
                     if (Behavior != ESuspiciousBehavior::None)
                     {
-                        // 이벤트 핸들러와 동일한 로직 사용
-                        FSuspicionEventData EventData(BlasterCharacter, Behavior, CurrentTime);
-                        OnSuspicionEventReceived(EventData);
+                        // 공통 처리 함수 호출
+                        ProcessPlayerSuspiciousBehavior(BlasterCharacter, Behavior);
                     }
                 }
             }
         }
     }
+}
+
+void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterCharacter, ESuspiciousBehavior Behavior)
+{
+    if (!BlasterCharacter || Behavior == ESuspiciousBehavior::None || !HasAuthority())
+    {
+        return;
+    }
+
+    // 시야 및 각도 확인 (이미 확인했지만 안전을 위해 다시 확인)
+    if (!CanSeePlayer(BlasterCharacter))
+    {
+        return;
+    }
+
+    FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+    FVector Forward = GetActorForwardVector();
+    float DotProduct = FVector::DotProduct(Forward, ToPlayer);
+    float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
+    
+    if (Angle > DetectionAngle * 0.5f)
+    {
+        return;
+    }
+
+    // 중복 처리 방지: 같은 플레이어의 같은 행동을 짧은 시간 내에 다시 처리하지 않음
+    float CurrentTime = GetWorld()->GetTimeSeconds();
+    float* LastProcessedTime = LastProcessedSuspicionTime.Find(BlasterCharacter);
+    if (LastProcessedTime && (CurrentTime - *LastProcessedTime) < SuspicionProcessCooldown)
+    {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Duplicate suspicion processing ignored - Player: %s, Behavior: %s (cooldown: %.2f)"), 
+            *BlasterCharacter->GetName(), *UEnum::GetValueAsString(Behavior), SuspicionProcessCooldown);
+        return;
+    }
+
+    // 마지막 처리 시간 업데이트
+    LastProcessedSuspicionTime.Add(BlasterCharacter, CurrentTime);
+
+    // 개인별 의심 수치 추가
+    ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
+    if (BlasterPlayerState)
+    {
+        BlasterPlayerState->AddPersonalSuspicion(50.0f);
+        
+        // 경고 출력
+        FString BehaviorName = UEnum::GetValueAsString(Behavior);
+        FString WarningMessage = FString::Printf(TEXT("경고: %s의 의심스러운 행동이 감지되었습니다! (%s, 의심 수치 +50)"), 
+            *BlasterCharacter->GetName(), *BehaviorName);
+        UE_LOG(LogTemp, Warning, TEXT("[DroneActor] %s"), *WarningMessage);
+        
+        // 디버그 로그
+        UE_LOG(LogTemp, Log, TEXT("[DroneActor] Suspicion detected - Player: %s, Behavior: %s, Location: %s, Distance: %.2f, Angle: %.2f"), 
+            *BlasterCharacter->GetName(), *BehaviorName, 
+            *BlasterCharacter->GetActorLocation().ToString(),
+            FVector::Dist(GetActorLocation(), BlasterCharacter->GetActorLocation()),
+            Angle);
+        
+        // 화면 디버그 메시지
+        FString Msg = FString::Printf(TEXT("Suspicion Event: Player %s, Behavior %s"), 
+            *BlasterCharacter->GetName(), *UEnum::GetValueAsString(Behavior));
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(
+                -1,
+                5.0f,
+                FColor::Red,
+                Msg
+            );
+        }
+        
+        // 마더 AI에게 경고 전달
+        if (GameState)
+        {
+            AMotherAIActor* MotherAI = nullptr;
+            for (TActorIterator<AMotherAIActor> ActorItr(GetWorld()); ActorItr; ++ActorItr)
+            {
+                MotherAI = *ActorItr;
+                break;
+            }
+            if (MotherAI)
+            {
+                MotherAI->SendWarning(WarningMessage);
+            }
+        }
+    }
+}
+
+TArray<ACharacter*> ADroneActor::GetDetectedPlayers() const
+{
+    TArray<ACharacter*> Result;
+    for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+    {
+        if (Detected.IsValid())
+        {
+            Result.Add(Detected.Get());
+        }
+    }
+    return Result;
 }
 

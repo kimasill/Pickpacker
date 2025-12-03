@@ -85,6 +85,17 @@ void AMotherAIActor::BeginPlay()
 				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Subscribed to SuspicionManager for immediate punishment"));
 			}
 		}
+
+		// 모든 플레이어의 PersonalSuspicion 변경 이벤트 구독 (의심 수치 100 도달 감지용)
+		// BeginPlay 시점에는 플레이어가 아직 생성되지 않았을 수 있으므로, 
+		// 첫 번째 틱에서 구독하거나 타이머로 지연 구독
+		GetWorld()->GetTimerManager().SetTimer(
+			SubscribeToPlayersTimerHandle,
+			this,
+			&AMotherAIActor::SubscribeToAllPlayerStates,
+			1.0f,
+			false
+		);
 	}
 
 	// 통제 타워 액터가 설정되지 않았으면 현재 위치를 통제 타워로 사용
@@ -371,6 +382,16 @@ void AMotherAIActor::PlayInspectionMontage()
 	}
 }
 
+void AMotherAIActor::Multicast_Punishment_Implementation()
+{
+	PlayPunishmentMontage();
+}
+
+void AMotherAIActor::Multicast_PunishmentEnd_Implementation(bool bInterrupted)
+{
+	OnPunishmentFinished.Broadcast(bInterrupted);
+}
+
 void AMotherAIActor::OnSuspicionChanged_Handler(float NewSuspicionLevel)
 {
 	UpdateAIState();
@@ -447,7 +468,15 @@ void AMotherAIActor::ExecutePunishment(ACharacter* Player)
 		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Stopped movement for punishment"));
 	}
 
-	// 몽타주 재생 (노티파이로 OnPunishmentHit 호출됨)
+	FOnMontageEnded MontageEndedDelegate;
+	MontageEndedDelegate.BindUObject(this, &AMotherAIActor::OnPunishmentEnd);
+	if (GetMesh() && GetMesh()->GetAnimInstance())
+	{
+		GetMesh()->GetAnimInstance()->Montage_SetEndDelegate(MontageEndedDelegate, PunishmentMontage);
+	}
+
+
+	Multicast_Punishment();
 	PlayPunishmentMontage();
 }
 
@@ -492,7 +521,7 @@ void AMotherAIActor::OnPunishmentHit()
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] OnPunishmentHit: Life lost, suspicion reset. Remaining lives: %d"), BlasterPlayerState->GetLives());
 }
 
-void AMotherAIActor::OnPunishmentEnd()
+void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (!HasAuthority())
 	{
@@ -517,6 +546,8 @@ void AMotherAIActor::OnPunishmentEnd()
 			SendWarning(WarningMessage);
 		}
 	}
+	Multicast_PunishmentEnd(bInterrupted);
+	OnPunishmentFinished.Broadcast(bInterrupted);
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] OnPunishmentEnd: Punishment animation ended"));
 
@@ -903,6 +934,64 @@ void AMotherAIActor::OnRestPeriodIntervalTimerFinished()
 			RestPeriodInterval,
 			false
 		);
+	}
+}
+
+void AMotherAIActor::SubscribeToAllPlayerStates()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// 모든 플레이어 상태 찾기
+	for (TActorIterator<APlayerState> PlayerStateItr(GetWorld()); PlayerStateItr; ++PlayerStateItr)
+	{
+		ABlasterPlayerState* BlasterPlayerState = Cast<ABlasterPlayerState>(*PlayerStateItr);
+		if (BlasterPlayerState && !SubscribedPlayerStates.Contains(BlasterPlayerState))
+		{
+			// 이벤트 구독 (델리게이트는 float 두 개만 받으므로, 람다로 PlayerState 캡처)
+			BlasterPlayerState->OnPersonalSuspicionChanged.AddDynamic(this, &AMotherAIActor::OnPlayerSuspicionChanged);
+			SubscribedPlayerStates.Add(BlasterPlayerState);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Subscribed to player state: %s"), *BlasterPlayerState->GetPlayerName());
+		}
+	}
+
+	// 플레이어가 아직 생성되지 않았을 수 있으므로, 주기적으로 다시 시도
+	GetWorld()->GetTimerManager().SetTimer(
+		SubscribeToPlayersTimerHandle,
+		this,
+		&AMotherAIActor::SubscribeToAllPlayerStates,
+		5.0f,
+		false
+	);
+}
+
+void AMotherAIActor::OnPlayerSuspicionChanged(float NewSuspicion, float OldSuspicion)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// 의심 수치가 100에 도달했는지 확인
+	if (NewSuspicion >= 100.0f && OldSuspicion < 100.0f)
+	{
+		// 구독 중인 플레이어 상태 중에서 의심 수치가 100인 플레이어 찾기
+		for (ABlasterPlayerState* SuspictionState : SubscribedPlayerStates)
+		{
+			if (SuspictionState && SuspictionState->GetPersonalSuspicion() >= 100.0f)
+			{
+				ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(SuspictionState->GetPawn());
+				if (BlasterCharacter)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Player %s suspicion reached 100, requesting punishment"), 
+						*SuspictionState->GetPlayerName());
+					RequestPunishment(BlasterCharacter);
+					break; // 한 번에 하나만 처리
+				}
+			}
+		}
 	}
 }
 

@@ -182,7 +182,7 @@ public:
 	void OnPunishmentHit();
 
 	UFUNCTION(BlueprintCallable)
-	void OnPunishmentEnd();
+	void OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted);
 
 	UFUNCTION(BlueprintCallable)
 	void OnInspectionEnd();
@@ -260,6 +260,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Mother AI|Events")
 	FOnWarningSent OnWarningSent;
 
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPunishmentFinished, bool, bInterrupted);
+	UPROPERTY(BlueprintAssignable, Category = "Mother AI|Events")
+	FOnPunishmentFinished OnPunishmentFinished;
+
 protected:
 
 	UFUNCTION()
@@ -287,6 +291,24 @@ protected:
 	 */
 	UFUNCTION()
 	void OnRestPeriodIntervalTimerFinished();
+
+	/**
+	 * 모든 플레이어 상태에 구독 (의심 수치 100 도달 감지용)
+	 */
+	UFUNCTION()
+	void SubscribeToAllPlayerStates();
+
+	/**
+	 * 플레이어 의심 수치 변경 핸들러
+	 */
+	UFUNCTION()
+	void OnPlayerSuspicionChanged(float NewSuspicion, float OldSuspicion);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Punishment();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PunishmentEnd(bool interrupted);
 
 private:
 	/** Current AI state */
@@ -324,6 +346,14 @@ private:
 	/** Game state reference */
 	UPROPERTY()
 	APickpackerGameState* GameState;
+
+	/** 플레이어 상태 구독 타이머 핸들 */
+	UPROPERTY()
+	FTimerHandle SubscribeToPlayersTimerHandle;
+
+	/** 구독 중인 플레이어 상태 목록 (중복 구독 방지) */
+	UPROPERTY()
+	TSet<TObjectPtr<class ABlasterPlayerState>> SubscribedPlayerStates;
 
 	/** 플레이어에게 접근 중인지 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))

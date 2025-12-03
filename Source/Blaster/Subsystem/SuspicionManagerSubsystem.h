@@ -131,5 +131,13 @@ private:
 
 	/** Tick 핸들 */
 	FTimerHandle UpdateTimerHandle;
+
+	/** 플레이어별 마지막 이벤트 발생 시간 (중복 방지용) */
+	UPROPERTY()
+	TMap<TObjectPtr<ABlasterCharacter>, float> LastEventTimeByPlayer;
+
+	/** 같은 행동의 중복 이벤트 방지 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Suspicion Manager")
+	float DuplicateEventCooldown = 2.0f;
 };
 

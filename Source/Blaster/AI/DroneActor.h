@@ -6,6 +6,7 @@
 #include "GameFramework/Pawn.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Perception/AIPerceptionTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h" // for ESuspiciousBehavior
 #include "DroneActor.generated.h"
 
 class UBehaviorTree;
@@ -15,6 +16,7 @@ class USphereComponent;
 class USkeletalMeshComponent;
 class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
+class ABlasterCharacter; // forward declaration for function signatures
 
 /**
  * Drone State Enumeration
@@ -58,10 +60,16 @@ public:
 	void SetDroneState(EDroneState NewState);
 
 	/**
-	 * Get detected player
+	 * Get detected player (첫 번째 감지된 플레이어, 호환성 유지)
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Drone")
-	class ACharacter* GetDetectedPlayer() const { return DetectedPlayer.Get(); }
+	class ACharacter* GetDetectedPlayer() const { return DetectedPlayers.Num() > 0 ? DetectedPlayers[0].Get() : nullptr; }
+
+	/**
+	 * Get all detected players
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Drone")
+	TArray<class ACharacter*> GetDetectedPlayers() const;
 
 	/**
 	 * Get suspicion points to add when player is detected
@@ -340,17 +348,32 @@ protected:
 	
 
 	/**
-	 * 시야 안의 플레이어들의 의심 행동 상태 지속 체크 (이벤트를 놓쳤을 때를 위한 백업)
+	 * 시야 안의 플레이어들의 의심 행동 상태 지속 체크 (tick에서 호출)
 	 */
 	void CheckVisiblePlayersSuspiciousBehavior(float DeltaTime);
 
-	/** 의심 행동 체크 간격 (초) - 이벤트를 놓쳤을 때를 위한 백업 체크 */
+	/** 의심 행동 체크 간격 (초) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Detection")
 	float SuspiciousBehaviorCheckInterval = 0.25f;
 
 	/** 마지막 의심 행동 체크 시간 */
 	UPROPERTY()
 	float LastSuspiciousBehaviorCheckTime = 0.0f;
+
+	/**
+	 * 플레이어의 의심 행동 처리 (공통 로직)
+	 * @param BlasterCharacter - 처리할 플레이어
+	 * @param Behavior - 의심 행동 타입
+	 */
+	void ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterCharacter, ESuspiciousBehavior Behavior);
+
+	/** 플레이어별 마지막 의심 행동 처리 시간 (중복 방지용) */
+	UPROPERTY()
+	TMap<TObjectPtr<ABlasterCharacter>, float> LastProcessedSuspicionTime;
+
+	/** 같은 플레이어의 같은 행동 중복 처리 방지 시간 (초) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Detection")
+	float SuspicionProcessCooldown = 2.0f;
 
 	/**
 	 * Add suspicion to game state
@@ -378,9 +401,9 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_State)
 	EDroneState CurrentState = EDroneState::Patrol;
 
-	/** Detected player */
+	/** Detected players (여러 명 감지 가능) */
 	UPROPERTY(Replicated)
-	TWeakObjectPtr<class ACharacter> DetectedPlayer;
+	TArray<TWeakObjectPtr<class ACharacter>> DetectedPlayers;
 
 	/** Detection timer */
 	UPROPERTY()

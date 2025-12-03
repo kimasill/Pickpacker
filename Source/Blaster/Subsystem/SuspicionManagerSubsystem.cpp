@@ -39,6 +39,7 @@ void USuspicionManagerSubsystem::Deinitialize()
 
 	PlayerSuspiciousStates.Empty();
 	Subscribers.Empty();
+	LastEventTimeByPlayer.Empty();
 
 	Super::Deinitialize();
 }
@@ -57,6 +58,21 @@ void USuspicionManagerSubsystem::BroadcastSuspicionEvent(ABlasterCharacter* Play
 	}
 
 	float CurrentTime = GetWorld()->GetTimeSeconds();
+	
+	// 중복 이벤트 방지: 같은 플레이어가 짧은 시간 내에 같은 행동을 반복하면 무시
+	float* LastEventTime = LastEventTimeByPlayer.Find(Player);
+	if (LastEventTime && (CurrentTime - *LastEventTime) < DuplicateEventCooldown)
+	{
+		// 같은 행동이 짧은 시간 내에 반복됨 - 이벤트는 브로드캐스트하지 않지만 상태는 갱신
+		SetPlayerSuspiciousBehavior(Player, Behavior, 0.25f);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[SuspicionManagerSubsystem] Duplicate event ignored - Player: %s, Behavior: %s (cooldown: %.2f)"), 
+			*Player->GetName(), *UEnum::GetValueAsString(Behavior), DuplicateEventCooldown);
+		return;
+	}
+
+	// 마지막 이벤트 시간 업데이트
+	LastEventTimeByPlayer.Add(Player, CurrentTime);
+
 	FSuspicionEventData EventData(Player, Behavior, CurrentTime);
 
 	UE_LOG(LogTemp, Log, TEXT("[SuspicionManagerSubsystem] Broadcasting suspicion event - Player: %s, Behavior: %s"), 
@@ -193,6 +209,7 @@ void USuspicionManagerSubsystem::UpdateSuspiciousStates()
 	for (ABlasterCharacter* InvalidPlayer : InvalidPlayers)
 	{
 		PlayerSuspiciousStates.Remove(InvalidPlayer);
+		LastEventTimeByPlayer.Remove(InvalidPlayer);
 	}
 }
 
