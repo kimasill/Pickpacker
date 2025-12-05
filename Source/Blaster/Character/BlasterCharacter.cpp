@@ -190,6 +190,7 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ABlasterCharacter, Shield);
 	DOREPLIFETIME(ABlasterCharacter, bDisableGameplay);
 	DOREPLIFETIME(ABlasterCharacter, CurrentSuspiciousBehavior);
+	DOREPLIFETIME(ABlasterCharacter, bBeingPunished);
 }
 
 void ABlasterCharacter::OnRep_ReplicatedMovement()
@@ -469,6 +470,7 @@ void ABlasterCharacter::Tick(float DeltaTime)
 	RotateInPlace(DeltaTime);
 	HideCameraIfCharacterClose();
 	HideCarriedCameraIfCharacterClose();
+	RotateCameraToPunisher(DeltaTime);
 	PollInit();
 }
 
@@ -693,7 +695,7 @@ void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const 
 
 void ABlasterCharacter::MoveForward(float Value)
 {
-	if (bDisableGameplay) return;
+	if (bDisableGameplay || bBeingPunished) return;
 	if (Controller != nullptr && Value != 0.f)
 	{
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -704,7 +706,7 @@ void ABlasterCharacter::MoveForward(float Value)
 
 void ABlasterCharacter::MoveRight(float Value)
 {
-	if (bDisableGameplay) return;
+	if (bDisableGameplay || bBeingPunished) return;
 	if (Controller != nullptr && Value != 0.f)
 	{
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -715,12 +717,13 @@ void ABlasterCharacter::MoveRight(float Value)
 
 void ABlasterCharacter::Turn(float Value)
 {
+	if (bBeingPunished) return; // 처벌 중에는 회전 불가
 	AddControllerYawInput(Value);
 }
 
 void ABlasterCharacter::LookUp(float Value)
 {
-    if (bDisableGameplay) return;
+    if (bDisableGameplay || bBeingPunished) return;
     AddControllerPitchInput(Value);
 }
 
@@ -1302,5 +1305,126 @@ void ABlasterCharacter::OnRep_CurrentSuspiciousBehavior(ESuspiciousBehavior OldB
 	{
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[BlasterCharacter] Client: Suspicious behavior replicated: %s"), 
 			*UEnum::GetValueAsString(CurrentSuspiciousBehavior));
+	}
+}
+
+void ABlasterCharacter::SetBeingPunished(bool bPunishing, AActor* Punisher)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	this->bBeingPunished = bPunishing;
+	Multicast_SetBeingPunished(bBeingPunished, Punisher);
+}
+
+void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishing, AActor* Punisher)
+{
+	this->bBeingPunished = bPunishing;
+
+	if (bBeingPunished && Punisher)
+	{
+		// 움직임 멈추기
+		GetCharacterMovement()->DisableMovement();
+		GetCharacterMovement()->StopMovementImmediately();
+		
+		// 입력 비활성화
+		bDisableGameplay = true;
+		
+		// Controller 회전 비활성화
+		if (Controller)
+		{
+			Controller->SetIgnoreLookInput(true);
+			Controller->SetIgnoreMoveInput(true);
+		}
+
+		// Mother AI를 향하도록 캐릭터 회전 (즉시)
+		FVector ToPunisher = (Punisher->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+		ToPunisher.Z = 0.0f; // 수평 회전만
+		
+		if (!ToPunisher.IsNearlyZero())
+		{
+			FRotator TargetRotation = ToPunisher.Rotation();
+			SetActorRotation(TargetRotation);
+		}
+
+		// 카메라 회전 설정 (부드럽게)
+		PunisherActor = Punisher;
+		bShouldRotateCameraToPunisher = true;
+		bCameraRotationComplete = false;
+
+		// 목표 카메라 회전 계산 (Mother AI를 바라보도록)
+		if (Punisher && Controller)
+		{
+			FVector CameraLocation = FollowCamera ? FollowCamera->GetComponentLocation() : GetActorLocation();
+			FVector ToPunisherFromCamera = (Punisher->GetActorLocation() - CameraLocation).GetSafeNormal();
+			TargetCameraRotation = ToPunisherFromCamera.Rotation();
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("[BlasterCharacter] Player %s is being punished, starting camera rotation to face %s"), 
+			*GetName(), *Punisher->GetName());
+	}
+	else
+	{
+		// 카메라 회전 초기화
+		bShouldRotateCameraToPunisher = false;
+		bCameraRotationComplete = false;
+		PunisherActor = nullptr;
+
+		// 움직임 복구 - 명시적으로 활성화
+		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+		{
+			MovementComp->SetMovementMode(MOVE_Walking);
+			MovementComp->SetComponentTickEnabled(true);
+		}
+
+		// 입력 활성화
+		bDisableGameplay = false;
+
+		// Controller 회전 활성화 - 명시적으로 리셋
+		if (Controller)
+		{
+			Controller->ResetIgnoreLookInput();
+			Controller->ResetIgnoreMoveInput();
+
+			// 추가 보장: 입력 무시 플래그 강제 해제
+			Controller->SetIgnoreLookInput(false);
+			Controller->SetIgnoreMoveInput(false);
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Player %s punishment ended, movement restored"), *GetName());
+	}
+}
+
+void ABlasterCharacter::RotateCameraToPunisher(float DeltaTime)
+{
+	if (!bShouldRotateCameraToPunisher || !PunisherActor || !Controller)
+	{
+		return;
+	}
+
+	// 현재 카메라 회전
+	FRotator CurrentRotation = Controller->GetControlRotation();
+
+	// 목표 회전 업데이트 (Punisher가 움직일 수 있으므로)
+	FVector CameraLocation = FollowCamera ? FollowCamera->GetComponentLocation() : GetActorLocation();
+	FVector ToPunisherFromCamera = (PunisherActor->GetActorLocation() - CameraLocation).GetSafeNormal();
+	TargetCameraRotation = ToPunisherFromCamera.Rotation();
+
+	// 부드럽게 회전
+	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetCameraRotation, DeltaTime, CameraRotationSpeed);
+	Controller->SetControlRotation(NewRotation);
+
+	// 회전 완료 확인 (목표 회전과의 차이가 작으면 완료)
+	FRotator DeltaRotation = (TargetCameraRotation - NewRotation).GetNormalized();
+	float YawDiff = FMath::Abs(DeltaRotation.Yaw);
+	float PitchDiff = FMath::Abs(DeltaRotation.Pitch);
+
+	if (YawDiff < 5.0f && PitchDiff < 5.0f && !bCameraRotationComplete)
+	{
+		bCameraRotationComplete = true;
+		Controller->SetControlRotation(TargetCameraRotation); // 정확한 위치로 설정
+		UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Camera rotation to punisher completed"));
 	}
 }

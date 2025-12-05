@@ -31,7 +31,7 @@ AMotherAIActor::AMotherAIActor()
 {
 	PrimaryActorTick.bCanEverTick = false; // Behavior Tree가 Tick을 대체
 	bReplicates = true;
-	
+	SetReplicateMovement(true);
 	// Character 설정
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	AIControllerClass = AMotherAIController::StaticClass();
@@ -57,6 +57,11 @@ AMotherAIActor::AMotherAIActor()
 	AggressiveSuspicionThreshold = 70.0f;
 	MaxDrones = 5;
 
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		MovementComp->bOrientRotationToMovement = true; // 이동 방향으로 회전
+		MovementComp->RotationRate = FRotator(0.0f, 540.0f, 0.0f); // 회전 속도 설정
+	}
 	PunishmentMontage = nullptr;
 	InspectionMontage = nullptr;
 }
@@ -73,7 +78,6 @@ void AMotherAIActor::BeginPlay()
 	{
 		GameState->OnSuspicionChanged.AddDynamic(this, &AMotherAIActor::OnSuspicionChanged_Handler);
 	}
-
 	// SuspicionManager에 구독 (즉시 처벌용)
 	if (HasAuthority())
 	{
@@ -429,6 +433,7 @@ void AMotherAIActor::RequestPunishment(ACharacter* Player)
 		if (UBlackboardComponent* Blackboard = MonterController->GetBlackboardComponent())
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), BlasterCharacter);
+			Blackboard->SetValueAsBool(FName("ShouldPunish"), true);
 		}
 	}
 
@@ -461,12 +466,67 @@ void AMotherAIActor::ExecutePunishment(ACharacter* Player)
 	TargetPlayer = Player;
 	bIsApproachingPlayer = true;
 
-	// AI 움직임 중지 (처벌 중 움직임 방지)
-	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Player);
+	if (!BlasterCharacter)
 	{
-		MotherController->StopMovement();
-		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Stopped movement for punishment"));
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] Failed to cast player to BlasterCharacter"));
+		bIsExecutingPunishment = false;
+		return;
 	}
+
+	// 거리 확인 및 조정
+	FVector MotherLocation = GetActorLocation();
+	FVector PlayerLocation = Player->GetActorLocation();
+	float CurrentDistance = FVector::Dist(MotherLocation, PlayerLocation);
+
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Current distance to player: %.2f, target distance: %.2f"), 
+		CurrentDistance, PunishmentDistance);
+
+	// 거리가 맞지 않으면 조정
+	if (FMath::Abs(CurrentDistance - PunishmentDistance) > 10.0f)
+	{
+		// 목표 위치 계산 (플레이어로부터 PunishmentDistance만큼 떨어진 위치)
+		FVector DirectionToPlayer = (PlayerLocation - MotherLocation).GetSafeNormal();
+		FVector TargetLocation = PlayerLocation - DirectionToPlayer * PunishmentDistance;
+		
+		// 목표 위치로 이동
+		SetActorLocation(TargetLocation);
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Adjusted position to maintain punishment distance"));
+	}
+
+	// Mother AI를 플레이어를 향하도록 회전
+	FVector ToPlayer = (PlayerLocation - GetActorLocation()).GetSafeNormal();
+	ToPlayer.Z = 0.0f;
+	if (!ToPlayer.IsNearlyZero())
+	{
+		// 기본은 +X 정면. 메쉬가 +Y 정면이면 Yaw에 +90도 보정
+		const FRotator LookAtRotation = ToPlayer.Rotation();
+		const FRotator AdjustedRotation(0.f, LookAtRotation.Yaw, 0.f); // +Y를 정면으로 만들기
+		SetActorRotation(AdjustedRotation);
+	}
+
+	// 플레이어를 멈추고 Mother를 향하도록 회전 (카메라 회전 시작)
+	BlasterCharacter->SetBeingPunished(true, this);
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Player %s movement disabled, starting camera rotation"), *Player->GetName());
+
+	// 카메라 회전 대기 후 처벌 모션 실행
+	GetWorld()->GetTimerManager().SetTimer(
+		PunishmentCameraRotationTimer,
+		this,
+		&AMotherAIActor::StartPunishmentMontage,
+		CameraRotationWaitTime,
+		false
+	);
+}
+
+void AMotherAIActor::StartPunishmentMontage()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Camera rotation complete, starting punishment montage"));
 
 	FOnMontageEnded MontageEndedDelegate;
 	MontageEndedDelegate.BindUObject(this, &AMotherAIActor::OnPunishmentEnd);
@@ -474,7 +534,6 @@ void AMotherAIActor::ExecutePunishment(ACharacter* Player)
 	{
 		GetMesh()->GetAnimInstance()->Montage_SetEndDelegate(MontageEndedDelegate, PunishmentMontage);
 	}
-
 
 	Multicast_Punishment();
 	PlayPunishmentMontage();
@@ -545,6 +604,10 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 				*BlasterCharacter->GetName(), BlasterPlayerState->GetLives());
 			SendWarning(WarningMessage);
 		}
+
+		// 플레이어 움직임 복구
+		BlasterCharacter->SetBeingPunished(false, nullptr);
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Player %s movement restored after punishment"), *BlasterCharacter->GetName());
 	}
 	Multicast_PunishmentEnd(bInterrupted);
 	OnPunishmentFinished.Broadcast(bInterrupted);
@@ -567,14 +630,15 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), nullptr);
-
 			// 점검 중이었다면 점검을 계속하기 위해 ShouldInspect는 true로 유지
 			if (bWasInspecting)
 			{
 				// 점검 위치로 복귀하도록 TargetLocation 설정
 				Blackboard->SetValueAsVector(FName("TargetLocation"), CurrentInspectionLocation);
+				
 				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Punishment completed during inspection, returning to inspection location"));
-			}
+			}	
+
 		}
 	}
 
@@ -737,15 +801,30 @@ void AMotherAIActor::ReturnToControlTower()
 	bIsApproachingPlayer = false;
 	TargetPlayer = nullptr;
 
+	// Movement Component가 활성화되어 있는지 확인
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		if (MovementComp->MovementMode == MOVE_None)
+		{
+			MovementComp->SetMovementMode(MOVE_Walking);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Movement component reactivated in ReturnToControlTower"));
+		}
+	}
+
 	// Blackboard 업데이트 (Behavior Tree용)
 	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
 	{
+		// 현재 실행 중인 MoveTo 태스크를 중단
+		MotherController->StopMovement();
+
 		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), nullptr);
-			Blackboard->SetValueAsBool(FName("ShouldInspect"), false);
 			FVector TowerLocation = GetControlTowerLocation();
 			Blackboard->SetValueAsVector(FName("TargetLocation"), TowerLocation);
+
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Blackboard updated for return to control tower: %s"),
+				*TowerLocation.ToString());
 		}
 	}
 

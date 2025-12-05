@@ -309,7 +309,7 @@ protected:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PunishmentEnd(bool interrupted);
-
+	
 private:
 	/** Current AI state */
 	UPROPERTY(ReplicatedUsing = OnRep_State)
@@ -371,9 +371,13 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	float ApproachSpeed = 500.0f;
 
-	/** 제제 거리 */
+	/** 제제 거리 (모션을 잘 볼 수 있는 거리) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	float PunishmentDistance = 200.0f;
+
+	/** 카메라 회전 대기 시간 (초) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
+	float CameraRotationWaitTime = 1.5f;
 
 	/** Replication callback */
 	UFUNCTION()
@@ -384,6 +388,9 @@ private:
 
 	UFUNCTION(BlueprintCallable, Category = "Mother AI|Animation")
 	void PlayInspectionMontage();
+
+	/** 카메라 회전 완료 후 처벌 모션 시작 */
+	void StartPunishmentMontage();
 
 	
 
@@ -406,6 +413,10 @@ private:
 	/** 점검 타이머 핸들 */
 	UPROPERTY()
 	FTimerHandle InspectionTimerHandle;
+
+	/** 처벌 모션 실행 전 카메라 회전 대기 타이머 */
+	UPROPERTY()
+	FTimerHandle PunishmentCameraRotationTimer;
 
 	/** 플레이어 감지 체크 타이머 */
 	UPROPERTY()

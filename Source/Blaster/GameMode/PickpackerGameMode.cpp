@@ -330,7 +330,7 @@ void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
 		return;
 	}
 
-	const FParcelOrderWave* Wave = OrderWaveData->GetWave(WaveIndex);
+	const FParcelOrderWave* Wave = OrderWaveData->GetWave(0);
 	if (!Wave)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Attempted to start invalid order wave index %d"), WaveIndex);

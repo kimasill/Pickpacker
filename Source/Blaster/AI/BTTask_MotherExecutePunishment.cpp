@@ -40,6 +40,13 @@ EBTNodeResult::Type UBTTask_MotherExecutePunishment::ExecuteTask(UBehaviorTreeCo
 	{
 		return EBTNodeResult::Failed;
 	}
+	if (CachedMotherAI)
+	{
+		CachedMotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
+	}
+
+	// Mother AI 참조 저장
+	CachedMotherAI = MotherAI;
 
 	MotherAI->OnPunishmentFinished.AddDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
 	
@@ -50,15 +57,21 @@ EBTNodeResult::Type UBTTask_MotherExecutePunishment::ExecuteTask(UBehaviorTreeCo
 
 void UBTTask_MotherExecutePunishment::OnPunishmentFinished(bool interrupted)
 {
+	UE_LOG(LogTemp, Log, TEXT("[BTTask_MotherExecutePunishment] OnPunishmentFinished called, interrupted: %d"), interrupted);
+
 	if (CachedOwnerComp)
 	{
 		FinishLatentTask(*CachedOwnerComp, interrupted ? EBTNodeResult::Failed : EBTNodeResult::Succeeded);
 	}
 
-	if(AMotherAIActor* MotherAI = Cast<AMotherAIActor>(CachedOwnerComp->GetAIOwner()->GetPawn()))
+	// 이벤트 해제
+	if (CachedMotherAI)
 	{
-		MotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
+		CachedMotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
+		CachedMotherAI = nullptr;
 	}
+
+	CachedOwnerComp = nullptr;
 	
 }
 

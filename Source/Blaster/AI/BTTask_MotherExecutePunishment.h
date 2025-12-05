@@ -19,11 +19,15 @@ public:
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 
+	UFUNCTION()
 	void OnPunishmentFinished(bool interrupted);
 	/** Target player key in blackboard */
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
 	FBlackboardKeySelector TargetPlayerKey;
 private:
 	UBehaviorTreeComponent* CachedOwnerComp = nullptr;
+
+	UPROPERTY()
+	class AMotherAIActor* CachedMotherAI = nullptr;
 };
 

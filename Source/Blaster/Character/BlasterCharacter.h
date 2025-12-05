@@ -61,6 +61,10 @@ public:
 	UPROPERTY(Replicated)
 	bool bDisableGameplay = false; // Disable gameplay for this character, used in the lobby
 
+	/** 처벌 중인지 (Mother AI 처벌 시) */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Punishment")
+	bool bBeingPunished = false;
+
 	UFUNCTION(BlueprintImplementableEvent)
 	void ShowSniperScopeWidget(bool bShowSniperScope);
 	void UpdateHUDHealth();
@@ -95,6 +99,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Suspicion")
 	void ReportSuspiciousBehavior(ESuspiciousBehavior Behavior);
+	/** 처벌 상태 설정 (Mother AI 처벌 시 호출) */
+	UFUNCTION(BlueprintCallable, Category = "Punishment")
+	void SetBeingPunished(bool bPunishing, AActor* Punisher = nullptr);
 
 protected:
 	virtual void BeginPlay() override;
@@ -154,6 +161,19 @@ protected:
 	/** 현재 의심 행동 상태 가져오기 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Suspicion")
 	ESuspiciousBehavior GetCurrentSuspiciousBehavior() const { return CurrentSuspiciousBehavior; }
+
+	
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_SetBeingPunished(bool bPunishing, AActor* Punisher);
+
+	/** 처벌 중인지 확인 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Punishment")
+	bool IsBeingPunished() const { return bBeingPunished; }
+
+	/** 카메라 회전이 완료되었는지 확인 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Punishment")
+	bool IsCameraRotationComplete() const { return bCameraRotationComplete; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Camera")
 	float CarriedHideCameraThreshold = 50.f; // Distance to hide camera when character is carrying an item
@@ -280,6 +300,24 @@ private:
 	UPROPERTY(EditAnywhere)
 	float CameraThreshold = 200.f; // Distance to hide camera when character is close
 
+	/** 처벌 시 카메라 회전 관련 변수 */
+	UPROPERTY()
+	bool bShouldRotateCameraToPunisher = false;
+
+	UPROPERTY()
+	FRotator TargetCameraRotation;
+
+	UPROPERTY(EditAnywhere, Category = "Punishment")
+	float CameraRotationSpeed = 2.0f; // 카메라 회전 속도
+
+	UPROPERTY()
+	bool bCameraRotationComplete = false;
+
+	UPROPERTY()
+	AActor* PunisherActor = nullptr;
+
+	/** 처벌 시 카메라 회전 처리 */
+	void RotateCameraToPunisher(float DeltaTime);
 
 	bool bRotateRootBone;
 	float TurnThreshold = 0.5f; // Threshold to start turning in place
