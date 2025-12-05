@@ -309,6 +309,12 @@ protected:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PunishmentEnd(bool interrupted);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_Inspection();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_InspectionEnd(bool interrupted);
 	
 private:
 	/** Current AI state */
@@ -362,6 +368,9 @@ private:
 	/** 처벌 실행 중인지 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
 	bool bIsExecutingPunishment = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
+	bool bIsInspecting = false;
 
 	/** 접근 중인 플레이어 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mother AI", meta = (AllowPrivateAccess = "true"))
@@ -425,5 +434,19 @@ private:
 	/** 감지 체크 간격 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Detection", meta = (AllowPrivateAccess = "true"))
 	float DetectionCheckInterval = 0.5f;
+
+	// 추격/걷기 속도 설정
+	UPROPERTY(EditDefaultsOnly, Category="Movement")
+	float WalkSpeed = 300.f;
+
+	UPROPERTY(EditDefaultsOnly, Category="Movement")
+	float ChaseSpeed = 600.f;
+
+	// 현재 적용된 속도를 추적(옵션)
+	UPROPERTY(VisibleInstanceOnly, Category="Movement")
+	float CurrentDesiredSpeed = 300.f;
+
+	// 상태에 따른 속도 적용 헬퍼
+	void ApplySpeedForState(EMotherAIState NewState);
 };
 

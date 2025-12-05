@@ -167,6 +167,8 @@ void AMotherAIActor::SetAIState(EMotherAIState NewState)
 
 	OnStateChanged.Broadcast(NewState);
 
+	ApplySpeedForState(NewState);
+
 	if (HasAuthority())
 	{
 		OnRep_State(OldState);
@@ -394,6 +396,16 @@ void AMotherAIActor::Multicast_Punishment_Implementation()
 void AMotherAIActor::Multicast_PunishmentEnd_Implementation(bool bInterrupted)
 {
 	OnPunishmentFinished.Broadcast(bInterrupted);
+}
+
+
+void AMotherAIActor::Multicast_InspectionEnd_Implementation(bool interrupted)
+{
+}
+
+void AMotherAIActor::Multicast_Inspection_Implementation()
+{
+	PlayInspectionMontage();
 }
 
 void AMotherAIActor::OnSuspicionChanged_Handler(float NewSuspicionLevel)
@@ -661,6 +673,18 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 
 void AMotherAIActor::OnInspectionEnd()
 {
+	// 점검 종료 처리: 점검 모션 이후 호출 함수
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (CurrentState != EMotherAIState::Inspecting)
+	{
+		return;
+	}
+
+	Multicast_InspectionEnd(false);
+
 }
 
 void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
@@ -752,6 +776,7 @@ void AMotherAIActor::StartInspection()
 	}
 
 	SetAIState(EMotherAIState::Inspecting);
+	Multicast_Inspection();
 	PlayInspectionMontage();
 	InspectionStartTime = GetWorld()->GetTimeSeconds();
 
@@ -760,6 +785,11 @@ void AMotherAIActor::StartInspection()
 
 void AMotherAIActor::CompleteInspection()
 {
+	if (!HasAuthority())
+	{
+		return;
+	}
+
 	if (CurrentState != EMotherAIState::Inspecting)
 	{
 		return;
@@ -971,6 +1001,24 @@ void AMotherAIActor::ScheduleNextInspection()
 
 		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Scheduled next inspection in %.2f game hours (%.2f real seconds)"), 
 			NextInspectionHour, RealTimeUntilInspection);
+	}
+}
+
+void AMotherAIActor::ApplySpeedForState(EMotherAIState NewState)
+{
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		float Desired = WalkSpeed;
+		if (NewState == EMotherAIState::ChasingPlayer)
+		{
+			Desired = ChaseSpeed;
+		}
+		CurrentDesiredSpeed = Desired;
+		MovementComp->MaxWalkSpeed = Desired;
+
+		MovementComp->RotationRate = (NewState == EMotherAIState::ChasingPlayer)
+			? FRotator(0.f, 720.f, 0.f) // 추격 시 빠른 회전
+			: FRotator(0.f, 540.f, 0.f); // 기본 회전
 	}
 }
 
