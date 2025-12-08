@@ -26,6 +26,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "GameFramework/PawnMovementComponent.h"
+#include "BehaviorTree/BlackboardComponent.h"
 
 AMotherAIActor::AMotherAIActor()
 {
@@ -48,6 +49,20 @@ AMotherAIActor::AMotherAIActor()
 	StatusWidget->SetupAttachment(RootComponent);
 	StatusWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	StatusWidget->SetDrawAtDesiredSize(true);
+
+	// AI Perception sight
+	PerceptionComp = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("Perception"));
+	SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
+	SightConfig->SightRadius = DetectionRange;
+	SightConfig->LoseSightRadius = DetectionRange * 1.2f;
+	SightConfig->PeripheralVisionAngleDegrees = DetectionAngle;
+	SightConfig->SetMaxAge(2.0f);
+	SightConfig->DetectionByAffiliation.bDetectEnemies = true;
+	SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
+	SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
+
+	PerceptionComp->ConfigureSense(*SightConfig);
+	PerceptionComp->SetDominantSense(UAISense_Sight::StaticClass());
 
 	// Initialize values
 	CurrentState = EMotherAIState::Normal;
@@ -72,6 +87,12 @@ void AMotherAIActor::BeginPlay()
 
 	// Get game state
 	GameState = GetWorld()->GetGameState<APickpackerGameState>();
+
+	// Bind perception updated
+	if (PerceptionComp)
+	{
+		PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &AMotherAIActor::OnTargetPerceptionUpdated);
+	}
 
 	// Subscribe to suspicion changes
 	if (GameState)
@@ -100,6 +121,17 @@ void AMotherAIActor::BeginPlay()
 			1.0f,
 			false
 		);
+
+		// 레벨에 미리 스폰된 드론들을 ActiveDrones에 추가
+		for (TActorIterator<ADroneActor> DroneItr(GetWorld()); DroneItr; ++DroneItr)
+		{
+			ADroneActor* ExistingDrone = *DroneItr;
+			if (ExistingDrone && !ActiveDrones.Contains(ExistingDrone))
+			{
+				ActiveDrones.Add(ExistingDrone);
+				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Found pre-spawned drone: %s"), *ExistingDrone->GetName());
+			}
+		}
 	}
 
 	// 통제 타워 액터가 설정되지 않았으면 현재 위치를 통제 타워로 사용
@@ -153,6 +185,7 @@ void AMotherAIActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 	DOREPLIFETIME(AMotherAIActor, CurrentState);
 	DOREPLIFETIME(AMotherAIActor, ActiveDrones);
+	DOREPLIFETIME(AMotherAIActor, DetectedPlayers);
 }
 
 void AMotherAIActor::SetAIState(EMotherAIState NewState)
@@ -446,6 +479,14 @@ void AMotherAIActor::RequestPunishment(ACharacter* Player)
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), BlasterCharacter);
 			Blackboard->SetValueAsBool(FName("ShouldPunish"), true);
+			Blackboard->SetValueAsBool(FName("Chasing"), true);
+			
+			// CanSeeTarget을 즉시 설정 (비헤이비어 트리 진입 시 올바른 노드가 실행되도록)
+			// 플레이어를 볼 수 있는지 확인하고 설정
+			bool bCanSee = CanSeePlayer(BlasterCharacter);
+			Blackboard->SetValueAsBool(FName("CanSeeTarget"), bCanSee);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Set CanSeeTarget to %s on punishment request"), 
+				bCanSee ? TEXT("True") : TEXT("False"));
 		}
 	}
 
@@ -684,7 +725,29 @@ void AMotherAIActor::OnInspectionEnd()
 	}
 
 	Multicast_InspectionEnd(false);
+}
 
+void AMotherAIActor::UpdatePlayerLocationFromDrone(ACharacter* Player, const FVector& NewLocation)
+{
+	if (!Player || !HasAuthority())
+	{
+		return;
+	}
+
+	// Check if this player is the target
+	if (AMotherAIController* MotherController = Cast<AMotherAIController>(GetController()))
+	{
+		if (UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent())
+		{
+			ACharacter* LocalTargetPlayer = Cast<ACharacter>(Blackboard->GetValueAsObject(FName("TargetPlayer")));
+			if (LocalTargetPlayer == Player)
+			{
+				// Update TargetLocation in blackboard (drone reported new location)
+				Blackboard->SetValueAsVector(FName("TargetLocation"), NewLocation);
+				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Drone updated player location: %s"), *NewLocation.ToString());
+			}
+		}
+	}
 }
 
 void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
@@ -718,15 +781,13 @@ void AMotherAIActor::OnSuspicionEventReceived(const FSuspicionEventData& EventDa
 			// 점검 중이었다면 ShouldInspect는 유지하되, 처벌 후 복귀할 수 있도록
 			// (OnPunishmentEnd에서 처리)
 		}
+	} 
+	ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
+	if (BlasterPlayerState)
+	{
+		BlasterPlayerState->AddPersonalSuspicion(100.0f);
+		FString BehaviorName = UEnum::GetValueAsString(EventData.Behavior);		
 	}
-
-	// 즉시 처벌 (의심 스택 쌓지 않음)
-	ExecutePunishment(BlasterCharacter);
-
-	// 경고 메시지
-	FString WarningMessage = FString::Printf(TEXT("즉시 제제: %s의 의심스러운 행동이 직접 감지되었습니다. (%s)"), 
-		*BlasterCharacter->GetName(), *UEnum::GetValueAsString(EventData.Behavior));
-	SendWarning(WarningMessage);
 }
 
 void AMotherAIActor::TriggerInspection()
@@ -736,7 +797,7 @@ void AMotherAIActor::TriggerInspection()
 		return;
 	}
 
-	// 현재 점검할 시설 선택 (마지막 점검 인덱스 다음부터)
+	// 현재 점검할 시설 선택 (마더에 저장된 인덱스 사용)
 	if (CurrentInspectionIndex >= InspectionActorLocations.Num())
 	{
 		CurrentInspectionIndex = 0;
@@ -744,7 +805,8 @@ void AMotherAIActor::TriggerInspection()
 	
 	if (InspectionActorLocations[CurrentInspectionIndex])
 	{
-		CurrentInspectionLocation = InspectionActorLocations[CurrentInspectionIndex]->GetActorLocation();
+		CurrentInspectionActor = InspectionActorLocations[CurrentInspectionIndex];
+		CurrentInspectionLocation = CurrentInspectionActor->GetActorLocation();
 	}
 	else
 	{
@@ -762,8 +824,10 @@ void AMotherAIActor::TriggerInspection()
 			Blackboard->SetValueAsBool(FName("ShouldInspect"), true);
 			Blackboard->SetValueAsVector(FName("InspectionLocation"), CurrentInspectionLocation);
 			Blackboard->SetValueAsVector(FName("TargetLocation"), CurrentInspectionLocation);
-			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Blackboard updated: ShouldInspect=true, InspectionLocation=%s"), 
-				*CurrentInspectionLocation.ToString());
+			Blackboard->SetValueAsInt(FName("InspectionCounter"), InspectionCounter);
+			Blackboard->SetValueAsObject(FName("InspectionActor"), CurrentInspectionActor);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Blackboard updated: ShouldInspect=true, InspectionLocation=%s, InspectionActor=%s"), 
+				*CurrentInspectionLocation.ToString(), *GetNameSafe(CurrentInspectionActor));
 		}
 	}
 }
@@ -778,7 +842,7 @@ void AMotherAIActor::StartInspection()
 	SetAIState(EMotherAIState::Inspecting);
 	Multicast_Inspection();
 	PlayInspectionMontage();
-	InspectionStartTime = GetWorld()->GetTimeSeconds();
+	this->InspectionStartTime = GetWorld()->GetTimeSeconds();
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Starting inspection montage at facility %d"), CurrentInspectionIndex);
 }
@@ -892,6 +956,7 @@ bool AMotherAIActor::CanSeePlayer(ACharacter* Player) const
 	}
 
 	// 플레이어가 앉기 상태인지 확인 (책상 아래 등에 숨어있는 경우)
+	// TODO: 단순 앉기가 아니라 오브젝트에 가려져야함
 	if (BlasterCharacter->bIsCrouched)
 	{
 		// 앉기 상태일 때는 감지하지 않음
@@ -1013,6 +1078,11 @@ void AMotherAIActor::ApplySpeedForState(EMotherAIState NewState)
 		{
 			Desired = ChaseSpeed;
 		}
+		else if (NewState == EMotherAIState::Searching)
+		{
+			// 탐색 상태에서는 느리게 이동 (긴장감)
+			Desired = WalkSpeed;
+		}
 		CurrentDesiredSpeed = Desired;
 		MovementComp->MaxWalkSpeed = Desired;
 
@@ -1077,7 +1147,6 @@ void AMotherAIActor::SubscribeToAllPlayerStates()
 		ABlasterPlayerState* BlasterPlayerState = Cast<ABlasterPlayerState>(*PlayerStateItr);
 		if (BlasterPlayerState && !SubscribedPlayerStates.Contains(BlasterPlayerState))
 		{
-			// 이벤트 구독 (델리게이트는 float 두 개만 받으므로, 람다로 PlayerState 캡처)
 			BlasterPlayerState->OnPersonalSuspicionChanged.AddDynamic(this, &AMotherAIActor::OnPlayerSuspicionChanged);
 			SubscribedPlayerStates.Add(BlasterPlayerState);
 			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Subscribed to player state: %s"), *BlasterPlayerState->GetPlayerName());
@@ -1121,6 +1190,105 @@ void AMotherAIActor::OnPlayerSuspicionChanged(float NewSuspicion, float OldSuspi
 		}
 	}
 }
+
+void AMotherAIActor::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
+{
+	if (!HasAuthority() || !Actor)
+	{
+		return;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(Actor);
+	if (!Character)
+	{
+		return;
+	}
+
+	// Only react to player characters
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Character);
+	if (!BlasterCharacter)
+	{
+		return;
+	}
+
+	if (Stimulus.WasSuccessfullySensed())
+	{
+		// Check line of sight (투시 불가능)
+		if (!CanSeePlayer(Character))
+		{
+			return;
+		}
+
+		// Check if player is in detection angle (전방 120도)
+		FVector ToPlayer = (Character->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+		FVector Forward = GetActorForwardVector();
+		float DotProduct = FVector::DotProduct(Forward, ToPlayer);
+		float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
+		
+		if (Angle > DetectionAngle * 0.5f)
+		{
+			// Player is outside detection angle
+			return;
+		}
+
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[MotherAIActor] Player %s detected within line of sight and angle."), *Character->GetName());
+		
+		// 플레이어를 감지 목록에 추가 (여러 명 감지 가능)
+		// 이미 목록에 있는지 확인
+		bool bAlreadyDetected = false;
+		for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+		{
+			if (Detected.Get() == Character)
+			{
+				bAlreadyDetected = true;
+				break;
+			}
+		}
+
+		if (!bAlreadyDetected)
+		{
+			DetectedPlayers.Add(Character);
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Player %s added to detected list"), *Character->GetName());
+		}
+	}
+	else
+	{
+		// Lost sight - 감지 목록에서 제거
+		for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
+		{
+			if (DetectedPlayers[i].Get() == Character)
+			{
+				DetectedPlayers.RemoveAt(i);
+				UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Player %s removed from detected list"), *Character->GetName());
+				break;
+			}
+		}
+	}
+}
+
+TArray<ACharacter*> AMotherAIActor::GetDetectedPlayers() const
+{
+	TArray<ACharacter*> Result;
+	for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+	{
+		if (Detected.IsValid())
+		{
+			Result.Add(Detected.Get());
+		}
+	}
+	return Result;
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

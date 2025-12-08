@@ -6,10 +6,13 @@
 #include "GameFramework/Character.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/AI/DroneActor.h"
+#include "Perception/AIPerceptionTypes.h"
 #include "MotherAIActor.generated.h"
 
 class USkeletalMeshComponent;
 class UWidgetComponent;
+class UAIPerceptionComponent;
+class UAISenseConfig_Sight;
 
 /**
  * Mother AI State Enumeration
@@ -23,7 +26,8 @@ enum class EMotherAIState : uint8
 	RestPeriod		UMETA(DisplayName = "Rest Period"),
 	AtControlTower	UMETA(DisplayName = "At Control Tower"),
 	Inspecting		UMETA(DisplayName = "Inspecting Facilities"),
-	ChasingPlayer	UMETA(DisplayName = "Chasing Player")
+	ChasingPlayer	UMETA(DisplayName = "Chasing Player"),
+	Searching		UMETA(DisplayName = "Searching - Lost Player During Chase")
 };
 
 /**
@@ -166,6 +170,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI|Animation")
 	UAnimMontage* GetInspectionMontage() const { return InspectionMontage; }
 
+	/** Get punishment distance */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI")
+	float GetPunishmentDistance() const { return PunishmentDistance; }
+
+	/** Update player location from drone report */
+	UFUNCTION(BlueprintCallable, Category = "Mother AI")
+	void UpdatePlayerLocationFromDrone(class ACharacter* Player, const FVector& NewLocation);
+
 	/** 특정 위치로 이동 (유틸리티 함수) */
 	void MoveToLocation(const FVector& TargetLocation, float Speed);
 
@@ -174,6 +186,10 @@ public:
 
 	/** 현재 위치가 목표 위치에 도달했는지 확인 */
 	bool HasReachedLocation(const FVector& TargetLocation, float Tolerance = 100.0f) const;
+
+	/** Get all detected players */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI|Detection")
+	TArray<class ACharacter*> GetDetectedPlayers() const;
 
 
 	/** 플레이어에게 제제 실행 */
@@ -293,6 +309,12 @@ protected:
 	void OnRestPeriodIntervalTimerFinished();
 
 	/**
+	 * Detect players in range (from AI Perception)
+	 */
+	UFUNCTION()
+	void OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
+
+	/**
 	 * 모든 플레이어 상태에 구독 (의심 수치 100 도달 감지용)
 	 */
 	UFUNCTION()
@@ -348,6 +370,16 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UWidgetComponent* StatusWidget;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UAIPerceptionComponent* PerceptionComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UAISenseConfig_Sight* SightConfig;
+
+	/** Detected players (여러 명 감지 가능) */
+	UPROPERTY(Replicated)
+	TArray<TWeakObjectPtr<class ACharacter>> DetectedPlayers;
 
 	/** Game state reference */
 	UPROPERTY()
@@ -412,9 +444,17 @@ private:
 	UPROPERTY()
 	FVector CurrentInspectionLocation = FVector::ZeroVector;
 
-	/** 점검 시작 시간 */
+	/** 현재 점검 중인 시설 액터 */
+	UPROPERTY()
+	AActor* CurrentInspectionActor = nullptr;
+
+	/** 점검 시작 시간 (월드 초 단위) */
 	UPROPERTY()
 	float InspectionStartTime = 0.0f;
+
+public:
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Mother AI|Inspection")
+	AActor* GetCurrentInspectionActor() const { return CurrentInspectionActor; }
 
 	/** 다음 점검 시간 계산 */
 	void ScheduleNextInspection();
@@ -448,5 +488,8 @@ private:
 
 	// 상태에 따른 속도 적용 헬퍼
 	void ApplySpeedForState(EMotherAIState NewState);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
+	int32 InspectionCounter = 5;
 };
 

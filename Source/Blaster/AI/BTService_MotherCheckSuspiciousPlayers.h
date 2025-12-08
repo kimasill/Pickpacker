@@ -18,6 +18,7 @@ public:
 	UBTService_MotherCheckSuspiciousPlayers();
 
 	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+	virtual void InitializeFromAsset(UBehaviorTree& Asset) override;
 
 	/** Target player key in blackboard */
 	UPROPERTY(EditAnywhere, Category = "Blackboard")
@@ -30,6 +31,14 @@ public:
 	/** Check interval in seconds */
 	UPROPERTY(EditAnywhere, Category = "Detection", meta = (ClampMin = "0.0"))
 	float CheckInterval = 0.5f;
+
+	/** CanSeeTarget blackboard key */
+	UPROPERTY(EditAnywhere, Category = "Blackboard")
+	FBlackboardKeySelector CanSeeTargetKey;
+
+	/** Chasing blackboard key */
+	UPROPERTY(EditAnywhere, Category = "Blackboard")
+	FBlackboardKeySelector ChasingKey;
 
 private:
 	float LastCheckTime = 0.0f;

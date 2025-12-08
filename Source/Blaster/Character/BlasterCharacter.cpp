@@ -413,6 +413,15 @@ void ABlasterCharacter::MulticastLostTheLead_Implementation()
 	}
 }
 
+void ABlasterCharacter::Client_PlayHitCameraShake_Implementation(float Scale)
+{
+	// 로컬 컨트롤러에서만 실행
+	ABlasterPlayerController* PC = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
+	if (!PC || !CameraShakeClass) return;
+	
+	PC->ClientStartCameraShake(CameraShakeClass, Scale);
+}
+
 void ABlasterCharacter::SetTeamColor(ETeam Team)
 {
 	if (GetMesh() == nullptr || OriginalMaterial == nullptr) return;
@@ -681,6 +690,11 @@ void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const 
 	UpdateHUDHealth();
 	UpdateHUDShield();
 	PlayHitReactMontage();
+	
+	if (bBeingPunished) {
+		Client_PlayHitCameraShake(HitCameraShakeScale);
+	}
+	
 
 	if (Health == 0.f)
 	{		

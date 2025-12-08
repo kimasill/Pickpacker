@@ -78,6 +78,18 @@ public:
 
 	bool bFinishedSwapping = false;
 
+	// 카메라 흔들림 클래스
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Shake")
+	TSubclassOf<UCameraShakeBase> CameraShakeClass;
+
+	// 흔들림 세기 스케일
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Shake", meta = (ClampMin = "0.0", UIMin = "0.0"))
+	float HitCameraShakeScale = 1.0f;
+
+	// 소유 클라이언트 RPC
+	UFUNCTION(Client, Reliable)
+	void Client_PlayHitCameraShake(float Scale = 1.0f);
+
 	UFUNCTION(Server, Reliable)
 	void ServerLeaveGame();
 

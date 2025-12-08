@@ -79,7 +79,7 @@ void USuspicionManagerSubsystem::BroadcastSuspicionEvent(ABlasterCharacter* Play
 		*Player->GetName(), *UEnum::GetValueAsString(Behavior));
 
 	// 델리게이트 브로드캐스트
-	OnSuspicionEvent.Broadcast(EventData);
+	OnSuspicionEvent.Broadcast(EventData);	
 
 	// 플레이어 상태 설정 (짧은 시간 유지)
 	SetPlayerSuspiciousBehavior(Player, Behavior, 0.25f);
@@ -101,19 +101,27 @@ void USuspicionManagerSubsystem::SubscribeToSuspicionEvents(UObject* Subscriber,
 
 	Subscribers.Add(Subscriber);
 
-	// 델리게이트에 바인딩
-	if (ADroneActor* Drone = Cast<ADroneActor>(Subscriber))
+	// 기본 콜백 이름 지정: C++ 핸들러 `OnSuspicionEventReceived`
+	if (CallbackFunctionName.IsNone())
 	{
-		OnSuspicionEvent.AddDynamic(Drone, &ADroneActor::OnSuspicionEventReceived);
-	}
-	else
-	{
-		FScriptDelegate Delegate;
-		Delegate.BindUFunction(Subscriber, CallbackFunctionName);
-		OnSuspicionEvent.Add(Delegate);
+		CallbackFunctionName = FName(TEXT("OnSuspicionEventReceived"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[SuspicionManagerSubsystem] Subscriber %s subscribed to suspicion events"), *Subscriber->GetName());
+	// 유효한 바인드 가능한 함수인지 확인
+	const UFunction* Func = Subscriber->FindFunction(CallbackFunctionName);
+	if (!Func)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SuspicionManagerSubsystem] Subscriber %s does not implement function %s. Suspicion events will not be received."),
+			*Subscriber->GetName(), *CallbackFunctionName.ToString());
+		return;
+	}
+
+	// 델리게이트에 바인딩
+	FScriptDelegate Delegate;
+	Delegate.BindUFunction(Subscriber, CallbackFunctionName);
+	OnSuspicionEvent.Add(Delegate);
+
+	UE_LOG(LogTemp, Log, TEXT("[SuspicionManagerSubsystem] Subscriber %s subscribed to suspicion events via %s"), *Subscriber->GetName(), *CallbackFunctionName.ToString());
 }
 
 void USuspicionManagerSubsystem::UnsubscribeFromSuspicionEvents(UObject* Subscriber)

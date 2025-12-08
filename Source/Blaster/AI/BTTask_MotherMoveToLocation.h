@@ -15,11 +15,21 @@ struct FMotherMoveToLocationMemory
 	GENERATED_BODY()
 
 	FVector TargetLocation;
+	FVector LastKnownPlayerLocation;
+	float SearchStartTime;
+	float SearchElapsedTime;
 	bool bIsActive;
+	bool bIsChasingPlayer;
+	bool bHasReachedLastKnownLocation;
 
 	FMotherMoveToLocationMemory()
 		: TargetLocation(FVector::ZeroVector)
+		, LastKnownPlayerLocation(FVector::ZeroVector)
+		, SearchStartTime(0.0f)
+		, SearchElapsedTime(0.0f)
 		, bIsActive(false)
+		, bIsChasingPlayer(false)
+		, bHasReachedLastKnownLocation(false)
 	{
 	}
 };
@@ -51,5 +61,13 @@ public:
 	/** Acceptable radius to consider reached */
 	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0.0"))
 	float AcceptableRadius = 100.0f;
+
+	/** Search timeout when chasing player (seconds) */
+	UPROPERTY(EditAnywhere, Category = "Punishment", meta = (ClampMin = "0.0"))
+	float SearchTimeout = 10.0f;
+
+	/** Credit penalty when search fails */
+	UPROPERTY(EditAnywhere, Category = "Punishment", meta = (ClampMin = "0"))
+	int32 CreditPenaltyOnFailure = 5;
 };
 
