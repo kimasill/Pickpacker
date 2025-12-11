@@ -107,32 +107,29 @@ void APackagingSwitchActor::SetPackagingStation(APackagingStationActor* Station)
 	}
 }
 
-bool APackagingSwitchActor::OnInteract_Implementation(ACharacter* Interactor)
+void APackagingSwitchActor::OnInteract_Implementation(ACharacter* Interactor)
 {
 	if (!Interactor)
 	{
-		return false;
+		return;
 	}
 
 	ToggleSwitch();
 
 	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Interactor);
 
-
-	if (PackagingStation->CurrentMode == EPackagingMode::Unpack && BlasterCharacter)
+	if (PackagingStation && PackagingStation->CurrentMode == EPackagingMode::Unpack && BlasterCharacter)
 	{
 		BlasterCharacter->ReportSuspiciousBehavior(ESuspiciousBehavior::DisassemblingParcel);
 	}
-
-	return true;
 }
 
-bool APackagingSwitchActor::CanInteract_Implementation(ACharacter* Interactor) const
+bool APackagingSwitchActor::CanInteract_Implementation(ACharacter* Interactor)
 {
 	return PackagingStation != nullptr;
 }
 
-FText APackagingSwitchActor::GetInteractText_Implementation() const
+FText APackagingSwitchActor::GetInteractText_Implementation()
 {
 	if (!PackagingStation)
 	{

@@ -8,6 +8,7 @@
 #include "Components/WidgetComponent.h"
 #include "Blaster/Components/InteractionComponent.h"
 #include "Blaster/Station/PackagingStationActor.h"
+#include "Blaster/Interfaces/InteractableInterface.h"
 #include "PackagingSwitchActor.generated.h"
 
 /**
@@ -43,11 +44,11 @@ public:
 	APackagingStationActor* GetPackagingStation() const { return PackagingStation; }
 
 	// InteractableInterface Implementation
-	virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
-	virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
-	virtual FText GetInteractText_Implementation() const override;
-	virtual void StartHighlight_Implementation() override;
-	virtual void EndHighlight_Implementation() override;
+	virtual void OnInteract_Implementation(ACharacter* Interactor);
+	virtual bool CanInteract_Implementation(ACharacter* Interactor);
+	virtual FText GetInteractText_Implementation();
+	virtual void StartHighlight_Implementation();
+	virtual void EndHighlight_Implementation();
 
 
 	UFUNCTION(BlueprintCallable, Category = "PackagingSwitch")
@@ -86,6 +87,52 @@ protected:
 
 	void FindNearestPackagingStation();
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -9,6 +9,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Blaster/Blaster.h"
 #include "DrawDebugHelpers.h"
+#include "GameFramework/DamageType.h"
 
 ULagCompensationComponent::ULagCompensationComponent()
 {

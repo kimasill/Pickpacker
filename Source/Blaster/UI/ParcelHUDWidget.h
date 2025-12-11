@@ -10,7 +10,41 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/Border.h"
 #include "ParcelHUDWidget.generated.h"
+
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelHUDStyle
+{
+	GENERATED_BODY()
+
+	// Durability colors
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor HealthyColor = FLinearColor(0.486f, 1.0f, 0.486f, 1.0f); // #7CFF7C
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor WarningColor = FLinearColor(1.0f, 0.75f, 0.25f, 1.0f);   // 노랑-주황
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor CriticalColor = FLinearColor(1.0f, 0.0f, 0.0f, 1.0f);     // 빨강
+
+	// Instability colors (안정 → 파랑, 불안정 → 보라/빨강)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor StableColor = FLinearColor(0.3f, 0.6f, 1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor UnstableColor = FLinearColor(0.7f, 0.0f, 0.8f, 1.0f);
+
+	// Background tints (Border Brush Tint)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor BackgroundHealthyTint = FLinearColor(0.3f, 1.0f, 0.3f, 0.12f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor BackgroundWarningTint = FLinearColor(1.0f, 0.6f, 0.2f, 0.2f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
+	FLinearColor BackgroundCriticalTint = FLinearColor(1.0f, 0.1f, 0.1f, 0.28f);
+};
 
 /**
  * Parcel HUD Widget - Displays parcel state information
@@ -74,6 +108,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
 	void UpdateHUDColor(const FParcelState& ParcelState);
 
+	/** 최소 표시 모드 토글 (집은 상태 등) */
+	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
+	void SetMinimalDisplay(bool bMinimal);
+
+	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
+	void SetParcelName(const FText& InName);
+
 protected:
 	/**
 	 * Get color for durability bar
@@ -104,6 +145,7 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UProgressBar* DurabilityBar;
 
+	// Optional instability/weight/carrier displays
 	UPROPERTY(meta = (BindWidget))
 	UProgressBar* InstabilityBar;
 
@@ -120,7 +162,14 @@ public:
 	UImage* ParcelTypeIcon;
 
 	UPROPERTY(meta = (BindWidget))
-	UImage* BackgroundImage;
+	UTextBlock* ParcelNameText;
+
+	UPROPERTY(meta = (BindWidget))
+	UBorder* BackgroundBorder;
+
+	// 분류 태그 -> 표시 텍스트 매핑 (예: Parcel-Classification.Standard -> "일반")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel HUD")
+	TMap<FName, FText> ClassificationDisplayMap;
 
 protected:
 	// Current parcel state
@@ -130,21 +179,9 @@ protected:
 	UPROPERTY()
 	FGameplayTag CurrentClassificationTag;
 
-	// Color settings
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
-	FLinearColor HealthyColor = FLinearColor::Green;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
-	FLinearColor WarningColor = FLinearColor::Yellow;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
-	FLinearColor CriticalColor = FLinearColor::Red;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
-	FLinearColor StableColor = FLinearColor::Blue;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Colors")
-	FLinearColor UnstableColor = FLinearColor::Red;
+	// Style (BP에서 색/아이콘/배경 Tint 조정)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD Style")
+	FParcelHUDStyle HUDStyle;
 
 	// Parcel type icons
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Icons")
@@ -166,6 +203,30 @@ protected:
 	// Debug settings
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bEnableDebugLogging = true;
+
+	// Simplification toggles
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bShowInstability = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bShowCarrierCount = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bShowWeight = true;
+
+	// Optional movement multiplier display (derived from weight)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bShowMovementMultiplier = false;
+
+	// Minimal 모드에서 남길 요소
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bMinimalShowWeight = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD|Visibility")
+	bool bMinimalShowClassification = true;
+
+private:
+	bool bMinimalMode = false;
 };
 
 

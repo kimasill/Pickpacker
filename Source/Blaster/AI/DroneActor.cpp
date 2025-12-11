@@ -20,6 +20,7 @@
 #include "Blaster/AI/MotherAIActor.h"
 #include "Blaster/Library/PickpackerSuspicionLibrary.h"
 #include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "TimerManager.h"

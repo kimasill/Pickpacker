@@ -1,4 +1,7 @@
 #include "BlasterHUD.h"
+#include "Engine/Texture2D.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "CharacterOverlay.h"
 #include "Announcement.h"
@@ -6,6 +9,7 @@
 #include "Components/HorizontalBox.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanelSlot.h"
+#include "TimerManager.h"
 
 void ABlasterHUD::BeginPlay()
 {

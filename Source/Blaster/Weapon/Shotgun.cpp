@@ -2,6 +2,7 @@
 
 
 #include "Shotgun.h"
+#include "GameFramework/DamageType.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"

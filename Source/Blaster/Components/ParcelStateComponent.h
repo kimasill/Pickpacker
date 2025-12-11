@@ -198,6 +198,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float HeavyMovementPenalty = 0.75f; // 25% speed reduction
 
+	// Weight thresholds for movement scaling (Light<=Medium<Heavy)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float MediumWeightThreshold = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float HeavyWeightThreshold = 20.0f;
+
+	// Medium weight penalty (applied between MediumWeightThreshold and HeavyWeightThreshold)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float MediumMovementPenalty = 0.9f; // 10% speed reduction
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool bHeavyBlocksJump = true;
 

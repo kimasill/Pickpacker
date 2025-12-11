@@ -8,6 +8,8 @@
 #include "Blaster/Weapon/Weapon.h"
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Components/StaticMeshComponent.h"
+#include "TimerManager.h"
 
 APickup::APickup()
 { 	

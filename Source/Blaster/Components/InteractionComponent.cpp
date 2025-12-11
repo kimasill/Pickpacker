@@ -1,12 +1,18 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "InteractionComponent.h"
+#include "Blaster/Interfaces/InteractableInterface.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/Shelf/ShelfActor.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Blaster/Components/CreditUnlockComponent.h"
 #include "Blaster/Interfaces/GameplayActionInterface.h"
 #include "Blaster/Library/DynamicGameplayStatics.h"
+#include "Blaster/Components/ParcelStateComponent.h"
+#include "Blaster/GameState/PickpackerGameState.h"
+#include "Blaster/Interaction/InteractionUIData.h"
+#include "Blaster/UI/InteractionPromptWidget.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -17,6 +23,11 @@
 #include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/InputSettings.h"
+#include "Engine/LocalPlayer.h"
+
+// Removed EnhancedInputSubsystems include and usage due to API mismatch; use legacy InputSettings instead.
 
 UInteractionComponent::UInteractionComponent()
 {
@@ -50,42 +61,182 @@ void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 
 void UInteractionComponent::ShowInteractionWidget(AActor* TargetActor)
 {
-    if (!InteractionWidget) { HideInteractionWidget(); return; }
-    if (!ActiveInteractionWidget)
+    if (!InteractionWidget || !TargetActor)
     {
-        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+        HideInteractionWidget();
+        return;
+    }
+
+    // Destroy previous widget component if we switched targets.
+    if (ActiveInteractionWidgetComponent.IsValid() && ActiveInteractionWidgetComponent->GetOwner() != TargetActor)
+    {
+        HideInteractionWidget();
+    }
+
+    UWidgetComponent* WidgetComp = ActiveInteractionWidgetComponent.Get();
+    if (!WidgetComp)
+    {
+        WidgetComp = NewObject<UWidgetComponent>(TargetActor, TEXT("InteractionWidgetComponent"));
+        if (!WidgetComp)
         {
-            if (OwnerCharacter->IsLocallyControlled())
-            {
-                APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
-                if (PC)
-                {
-                    ActiveInteractionWidget = CreateWidget<UUserWidget>(PC, InteractionWidget);
-                }
-                else if (UWorld* World = GetWorld())
-                {
-                    ActiveInteractionWidget = CreateWidget<UUserWidget>(World, InteractionWidget);
-                }
-                if (ActiveInteractionWidget)
-                {
-                    ActiveInteractionWidget->AddToViewport();
-                }
-            }
+            return;
         }
+
+        // Screen space keeps the widget camera-facing without manual rotation.
+        WidgetComp->SetWidgetSpace(EWidgetSpace::Screen);
+        WidgetComp->SetDrawAtDesiredSize(true);
+        WidgetComp->SetTwoSided(true);
+        WidgetComp->SetWidgetClass(InteractionWidget);
+
+        UWidgetComponent* AnchorComponent = FindInteractionWidgetAnchor(TargetActor);
+        if (AnchorComponent)
+        {
+            WidgetComp->AttachToComponent(AnchorComponent, FAttachmentTransformRules::KeepRelativeTransform);
+            WidgetComp->SetRelativeTransform(FTransform::Identity);
+        }
+        else if (USceneComponent* Root = TargetActor->GetRootComponent())
+        {
+            WidgetComp->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
+        }
+        WidgetComp->RegisterComponent();
     }
-    else
+    else if (WidgetComp->GetWidgetClass() != InteractionWidget)
     {
-        ActiveInteractionWidget->SetVisibility(ESlateVisibility::Visible);
+        WidgetComp->SetWidgetClass(InteractionWidget);
     }
+
+    // Anchor above the actor using bounds height + configurable offset when no explicit anchor component.
+    if (!WidgetComp->GetAttachParent() || !WidgetComp->GetAttachParent()->IsA<UWidgetComponent>())
+    {
+        FVector Origin, Extent;
+        TargetActor->GetActorBounds(true, Origin, Extent);
+        float AnchorHeight = Extent.Z * WidgetAnchorHeightFactor;
+        if (bClampWidgetAnchorHeight)
+        {
+            AnchorHeight = FMath::Min(AnchorHeight, MaxWidgetAnchorHeight);
+        }
+        WidgetComp->SetRelativeLocation(FVector(0.f, 0.f, AnchorHeight) + WidgetWorldOffset);
+    }
+
+    WidgetComp->SetVisibility(true);
+    WidgetComp->SetHiddenInGame(false);
+
+    ActiveInteractionWidgetComponent = WidgetComp;
+
+    // Update UI on the current widget instance (only meaningful for prompt-derived widgets).
+    UpdateInteractionWidgetUI(TargetActor, WidgetComp->GetUserWidgetObject());
 }
 
 void UInteractionComponent::HideInteractionWidget()
 {
-    if (ActiveInteractionWidget)
+    if (ActiveInteractionWidgetComponent.IsValid())
     {
-        ActiveInteractionWidget->RemoveFromParent();
-        ActiveInteractionWidget = nullptr;
+        ActiveInteractionWidgetComponent->DestroyComponent();
+        ActiveInteractionWidgetComponent = nullptr;
     }
+}
+
+static void SetParcelTargetedFlag(AActor* Actor, bool bTargeted)
+{
+	if (AParcelActor* Parcel = Cast<AParcelActor>(Actor))
+	{
+		Parcel->SetTargetedByLocalPlayer(bTargeted);
+	}
+}
+
+UWidgetComponent* UInteractionComponent::FindInteractionWidgetAnchor(AActor* TargetActor) const
+{
+    if (!TargetActor)
+    {
+        return nullptr;
+    }
+
+    TArray<UWidgetComponent*> WidgetComponents;
+    TargetActor->GetComponents<UWidgetComponent>(WidgetComponents);
+
+    for (UWidgetComponent* WidgetComp : WidgetComponents)
+    {
+        if (!WidgetComp || WidgetComp == ActiveInteractionWidgetComponent.Get())
+        {
+            continue;
+        }
+
+        const bool bTaggedAnchor = WidgetComp->ComponentHasTag(FName("InteractionAnchor")) || WidgetComp->ComponentHasTag(FName("InteractionUIAnchor"));
+        const bool bNamedAnchor = WidgetComp->GetName().Contains(TEXT("InteractionAnchor")) || WidgetComp->GetName().Contains(TEXT("UIAnchor"));
+        if (bTaggedAnchor || bNamedAnchor)
+        {
+            return WidgetComp;
+        }
+    }
+
+    return nullptr;
+}
+
+bool UInteractionComponent::InvokeWidgetCreditUpdate(UUserWidget* Widget, bool bRequiresUnlock, int32 UnlockCost, const FText& LockedMessage, const FText& UnlockedMessage, int32 CurrentCredits)
+{
+    if (!Widget)
+    {
+        return false;
+    }
+
+    // If no unlock required or zero cost, try clear handler first.
+    if (!bRequiresUnlock || UnlockCost <= 0)
+    {
+        static const FName ClearFuncName(TEXT("OnInteractionCreditInfoCleared"));
+        if (UFunction* ClearFunc = Widget->FindFunction(ClearFuncName))
+        {
+            Widget->ProcessEvent(ClearFunc, nullptr);
+            return true;
+        }
+        return false;
+    }
+
+    // Unlock path: provide data to a BP event if present.
+    static const FName UpdateFuncName(TEXT("OnInteractionCreditInfoUpdated"));
+    if (UFunction* UpdateFunc = Widget->FindFunction(UpdateFuncName))
+    {
+        struct FUpdateParams
+        {
+            bool bRequiresUnlock;
+            int32 UnlockCost;
+            FText LockedMessage;
+            FText UnlockedMessage;
+            int32 CurrentCredits;
+        };
+
+        FUpdateParams Params{ bRequiresUnlock, UnlockCost, LockedMessage, UnlockedMessage, CurrentCredits };
+        Widget->ProcessEvent(UpdateFunc, &Params);
+        return true;
+    }
+
+    return false;
+}
+
+static UUserWidget* GetWidgetFromComponent(TWeakObjectPtr<UWidgetComponent> WidgetComp)
+{
+    return WidgetComp.IsValid() ? WidgetComp->GetUserWidgetObject() : nullptr;
+}
+
+void UInteractionComponent::UpdateInteractionWidgetCreditInfo(AActor* TargetActor)
+{
+    if (!ActiveInteractionWidgetComponent.IsValid())
+    {
+        return;
+    }
+
+    UUserWidget* WidgetToUse = GetWidgetFromComponent(ActiveInteractionWidgetComponent);
+    if (!WidgetToUse)
+    {
+        return;
+    }
+
+    FInteractionUIData UIData;
+    if (!GatherInteractionUIData(TargetActor, UIData))
+    {
+        return;
+    }
+
+    InvokeWidgetCreditUpdate(WidgetToUse, UIData.bRequiresUnlock, UIData.UnlockCost, UIData.LockedMessage, UIData.UnlockedMessage, UIData.CurrentCredits);
 }
 
 void UInteractionComponent::UpdateTarget()
@@ -196,6 +347,7 @@ void UInteractionComponent::UpdateTarget()
         ClearShelfPlacementPreview();
         if (CurrentTarget.IsValid())
         {
+            SetParcelTargetedFlag(CurrentTarget.Get(), false);
             HideInteractionWidget();
             SetCustomDepth(CurrentTarget.Get(), false);
             OnTargetChanged.Broadcast(PreviousTarget.Get(), nullptr);
@@ -207,7 +359,12 @@ void UInteractionComponent::UpdateTarget()
     const bool bChanged = CurrentTarget.Get() != NewTarget;
     if (bChanged)
     {
+        if (CurrentTarget.IsValid())
+        {
+            SetParcelTargetedFlag(CurrentTarget.Get(), false);
+        }
         CurrentTarget = NewTarget;
+        SetParcelTargetedFlag(CurrentTarget.Get(), true);
         if (!CanInteract()) return;
 
         if (CurrentTarget.IsValid())
@@ -222,10 +379,42 @@ void UInteractionComponent::UpdateTarget()
             {
                 bHandled = true;
             }
-            if (!bHandled) ShowInteractionWidget(CurrentTarget.Get()); else HideInteractionWidget();
+
+            if (!bHandled) 
+            {
+                ShowInteractionWidget(CurrentTarget.Get());
+                UpdateInteractionWidgetUI(CurrentTarget.Get(), ActiveInteractionWidgetComponent.IsValid() ? ActiveInteractionWidgetComponent->GetUserWidgetObject() : nullptr);
+            }
+            else 
+            {
+                HideInteractionWidget();
+            }
             SetCustomDepth(CurrentTarget.Get(), true);
         }
         OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
+    }
+    else if (CurrentTarget.IsValid())
+    {
+        // If actor is self-handling UI we should not enforce our widget. Re-evaluate request flag.
+        bool bHandled = false;
+        UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass());
+        if (InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+        {
+            bHandled = IInteractableInterface::Execute_RequestShowInteractionUI(InteractableObj, OwnerCharacter);
+        }
+
+        if (!bHandled)
+        {
+            ShowInteractionWidget(CurrentTarget.Get());
+            if (ActiveInteractionWidgetComponent.IsValid())
+            {
+                UpdateInteractionWidgetUI(CurrentTarget.Get(), ActiveInteractionWidgetComponent->GetUserWidgetObject());
+            }
+        }
+        else
+        {
+            HideInteractionWidget();
+        }
     }
 
     if (AShelfActor* ShelfTarget = Cast<AShelfActor>(CurrentTarget.Get()))
@@ -296,7 +485,10 @@ void UInteractionComponent::Interact()
         Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
         if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
         ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OwnerCharacter);
-        BlasterCharacter->ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
+        if (BlasterCharacter)
+        {
+            BlasterCharacter->ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
+        }
         return;
     }
 
@@ -305,16 +497,46 @@ void UInteractionComponent::Interact()
     AActor* TargetActor = CurrentTarget.Get(); if (!TargetActor) return;
     UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(TargetActor, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
 
+    // Check if target requires credit unlock
+    UCreditUnlockComponent* CreditUnlockComp = TargetActor->FindComponentByClass<UCreditUnlockComponent>();
+    if (CreditUnlockComp && !CreditUnlockComp->IsUnlocked())
+    {
+        // Try to unlock first
+        if (OwnerCharacter->HasAuthority())
+        {
+            if (CreditUnlockComp->RequestUnlock(OwnerCharacter))
+            {
+                // Unlock successful, now perform interaction
+                PerformInteract(InteractableObj, OwnerCharacter);
+                OnInteractSuccess.Broadcast(TargetActor);
+                // Update UI after unlock
+                UpdateInteractionWidgetCreditInfo(TargetActor);
+            }
+            else
+            {
+                // Unlock failed (not enough credits)
+                UE_LOG(LogTemp, Warning, TEXT("[InteractionComponent] Failed to unlock - insufficient credits"));
+            }
+        }
+        else
+        {
+            // Client: request unlock on server
+            if (CreditUnlockComp->RequestUnlock(OwnerCharacter))
+            {
+                Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity);
+            }
+        }
+        return;
+    }
+
     if (OwnerCharacter->HasAuthority())
     {
-        if (PerformInteract(InteractableObj, OwnerCharacter))
+        PerformInteract(InteractableObj, OwnerCharacter);
+        if (AParcelActor* Parcel = Cast<AParcelActor>(TargetActor))
         {
-            if (AParcelActor* Parcel = Cast<AParcelActor>(TargetActor))
-            {
-                if (Parcel->IsAttached()) SetCarriedParcel(Parcel);
-            }
-            OnInteractSuccess.Broadcast(TargetActor);
+            if (Parcel->IsAttached()) SetCarriedParcel(Parcel);
         }
+        OnInteractSuccess.Broadcast(TargetActor);
     }
     else { Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity); }
 }
@@ -367,13 +589,7 @@ void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32
         }
     }
     UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(Target, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
-    if (PerformInteract(InteractableObj, OwnerCharacter))
-    {
-        if (AParcelActor* Parcel = Cast<AParcelActor>(Target))
-        {
-            if (Parcel->IsAttached() && OwnerCharacter->HasAuthority()) SetCarriedParcel(Parcel);
-        }
-    }
+    PerformInteract(InteractableObj, OwnerCharacter);
 }
 
 bool UInteractionComponent::CanInteract() const
@@ -389,11 +605,11 @@ UObject* UInteractionComponent::GetCurrentInteractableObject() const
     return CurrentTarget.IsValid() ? UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass()) : nullptr;
 }
 
-bool UInteractionComponent::PerformInteract(UObject* InteractableObject, ACharacter* OwnerCharacter)
+void UInteractionComponent::PerformInteract(UObject* InteractableObject, ACharacter* OwnerCharacter)
 {
-    if (!InteractableObject || !OwnerCharacter) return false;
-    if (!InteractableObject->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass())) return false;
-    return IInteractableInterface::Execute_OnInteract(InteractableObject, OwnerCharacter);
+    if (!InteractableObject || !OwnerCharacter) return;
+    if (!InteractableObject->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass())) return;
+    IInteractableInterface::Execute_OnInteract(InteractableObject, OwnerCharacter);
 }
 
 void UInteractionComponent::SetCustomDepth(AActor* TargetActor, bool bEnable)
@@ -435,7 +651,61 @@ void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
     if (!CarriedParcel)
     {
         ClearShelfPlacementPreview();
+
+        // Clear movement penalty when dropping parcel
+        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+        {
+            ClearParcelMovementPenalty(OwnerCharacter);
+        }
     }
+    else
+    {
+        // Apply movement penalty when picking up parcel
+        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+        {
+            ApplyParcelMovementPenalty(OwnerCharacter, CarriedParcel);
+        }
+    }
+}
+
+void UInteractionComponent::ApplyParcelMovementPenalty(ACharacter* OwnerCharacter, AParcelActor* Parcel)
+{
+    if (!OwnerCharacter || !Parcel) return;
+
+    if (UCharacterMovementComponent* MoveComp = OwnerCharacter->FindComponentByClass<UCharacterMovementComponent>())
+    {
+        // Cache original speed once
+        if (!bMovementPenaltyApplied)
+        {
+            CachedOriginalMaxWalkSpeed = MoveComp->MaxWalkSpeed;
+        }
+
+        float SpeedMultiplier = 1.0f;
+        if (UParcelStateComponent* StateComp = Parcel->GetParcelStateComponent())
+        {
+            SpeedMultiplier = StateComp->GetEffectiveMovementSpeedMultiplier();
+        }
+
+        MoveComp->MaxWalkSpeed = CachedOriginalMaxWalkSpeed * SpeedMultiplier;
+        bMovementPenaltyApplied = true;
+    }
+}
+
+void UInteractionComponent::ClearParcelMovementPenalty(ACharacter* OwnerCharacter)
+{
+    if (!OwnerCharacter) return;
+    if (!bMovementPenaltyApplied) return;
+
+    if (UCharacterMovementComponent* MoveComp = OwnerCharacter->FindComponentByClass<UCharacterMovementComponent>())
+    {
+        if (CachedOriginalMaxWalkSpeed > 0.f)
+        {
+            MoveComp->MaxWalkSpeed = CachedOriginalMaxWalkSpeed;
+        }
+    }
+
+    bMovementPenaltyApplied = false;
+    CachedOriginalMaxWalkSpeed = -1.0f;
 }
 
 bool UInteractionComponent::IsActorInteractable(AActor* Actor) const
@@ -590,3 +860,180 @@ void UInteractionComponent::ClearShelfPlacementPreview(AShelfActor* ShelfToClear
 
 void UInteractionComponent::Action() {}
 void UInteractionComponent::Server_Action_Implementation(AActor* Target) {}
+
+void UInteractionComponent::UpdateInteractionWidgetUI(AActor* TargetActor, UUserWidget* WidgetInstance)
+{
+    if (!TargetActor)
+    {
+        return;
+    }
+
+    UUserWidget* WidgetToUse = WidgetInstance;
+    if (!WidgetToUse && ActiveInteractionWidgetComponent.IsValid())
+    {
+        WidgetToUse = ActiveInteractionWidgetComponent->GetUserWidgetObject();
+    }
+    if (!WidgetToUse)
+    {
+        return;
+    }
+
+    FInteractionUIData UIData;
+    if (!GatherInteractionUIData(TargetActor, UIData))
+    {
+        return;
+    }
+
+    const FText InputKeyText = BuildInputPromptText(UIData.ActionText);
+
+    if (UInteractionPromptWidget* PromptWidget = Cast<UInteractionPromptWidget>(WidgetToUse))
+    {
+        PromptWidget->UpdateFromInteractionData(UIData, InputKeyText);
+        return;
+    }
+
+    // Fallback: optional Blueprint event for arbitrary widgets
+    static const FName UpdateFuncName(TEXT("OnInteractionUIDataUpdated"));
+    if (UFunction* UpdateFunc = WidgetToUse->FindFunction(UpdateFuncName))
+    {
+        struct FUpdateParams
+        {
+            FInteractionUIData Data;
+            FText InputKey;
+        };
+
+        FUpdateParams Params{ UIData, InputKeyText };
+        WidgetToUse->ProcessEvent(UpdateFunc, &Params);
+    }
+    else
+    {
+        // 마지막 수단: 크레딧 정보만 전달
+        InvokeWidgetCreditUpdate(WidgetToUse, UIData.bRequiresUnlock, UIData.UnlockCost, UIData.LockedMessage, UIData.UnlockedMessage, UIData.CurrentCredits);
+    }
+}
+
+bool UInteractionComponent::GatherInteractionUIData(AActor* TargetActor, FInteractionUIData& OutData) const
+{
+    if (!TargetActor)
+    {
+        return false;
+    }
+
+    UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(TargetActor, UInteractableInterface::StaticClass());
+    if (InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+    {
+        IInteractableInterface::Execute_GetInteractionUIData(InteractableObj, OutData);
+        if (OutData.ActionText.IsEmpty())
+        {
+            OutData.ActionText = IInteractableInterface::Execute_GetInteractText(InteractableObj);
+        }
+        if (OutData.InteractionType == EInteractionType::None)
+        {
+            OutData.InteractionType = EInteractionType::Default;
+        }
+    }
+
+    // 잠금 정보 보완
+    UCreditUnlockComponent* CreditUnlockComp = TargetActor->FindComponentByClass<UCreditUnlockComponent>();
+    if (CreditUnlockComp && !CreditUnlockComp->IsUnlocked())
+    {
+        OutData.bRequiresUnlock = true;
+        OutData.UnlockCost = CreditUnlockComp->UnlockCost;
+        OutData.LockedMessage = CreditUnlockComp->LockedMessage;
+        OutData.UnlockedMessage = CreditUnlockComp->UnlockedMessage;
+        if (OutData.InteractionType == EInteractionType::None)
+        {
+            OutData.InteractionType = EInteractionType::Unlock;
+        }
+    }
+    else if (InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+    {
+        bool bRequiresUnlock = false;
+        int32 UnlockCost = 0;
+        FText LockedMessage;
+        FText UnlockedMessage;
+        IInteractableInterface::Execute_GetCreditUnlockInfo(InteractableObj, bRequiresUnlock, UnlockCost, LockedMessage, UnlockedMessage);
+        if (bRequiresUnlock)
+        {
+            OutData.bRequiresUnlock = true;
+            OutData.UnlockCost = UnlockCost;
+            OutData.LockedMessage = LockedMessage;
+            OutData.UnlockedMessage = UnlockedMessage;
+            if (OutData.InteractionType == EInteractionType::None)
+            {
+                OutData.InteractionType = EInteractionType::Unlock;
+            }
+        }
+    }
+
+    // 팀 크레딧
+    if (UWorld* World = GetWorld())
+    {
+        if (APickpackerGameState* GameState = World->GetGameState<APickpackerGameState>())
+        {
+            OutData.CurrentCredits = GameState->GetTeamCredits();
+        }
+    }
+
+    // 기본 텍스트 확보
+    if (OutData.ActionText.IsEmpty() && InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+    {
+        OutData.ActionText = IInteractableInterface::Execute_GetInteractText(InteractableObj);
+    }
+
+    return true;
+}
+
+FText UInteractionComponent::BuildInputPromptText(const FText& /*ActionText*/) const
+{
+    if (InteractInputAction)
+    {
+        if (FText InputKey = GetPrimaryKeyForInputAction(InteractInputAction); !InputKey.IsEmpty())
+        {
+            return InputKey;
+        }
+    }
+
+    return GetPrimaryKeyForAction(InteractActionName);
+}
+
+FText UInteractionComponent::GetPrimaryKeyForAction(const FName& ActionName) const
+{
+    const UInputSettings* InputSettings = UInputSettings::GetInputSettings();
+    if (!InputSettings)
+    {
+        return FText();
+    }
+
+    TArray<FInputActionKeyMapping> Mappings;
+    InputSettings->GetActionMappingByName(ActionName, Mappings);
+    if (Mappings.Num() > 0)
+    {
+        return Mappings[0].Key.GetDisplayName(false);
+    }
+
+    return FText();
+}
+
+FText UInteractionComponent::GetPrimaryKeyForInputAction(const UInputAction* InputAction) const
+{
+    if (!InputAction)
+    {
+        return FText();
+    }
+
+    const UInputSettings* InputSettings = UInputSettings::GetInputSettings();
+    if (!InputSettings)
+    {
+        return FText();
+    }
+
+    TArray<FInputActionKeyMapping> Mappings;
+    InputSettings->GetActionMappingByName(InteractActionName, Mappings);
+    if (Mappings.Num() > 0)
+    {
+        return Mappings[0].Key.GetDisplayName(false);
+    }
+
+    return FText();
+}

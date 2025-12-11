@@ -3,6 +3,8 @@
 
 #include "PickupSpawnPoint.h"
 #include "Pickup.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 APickupSpawnPoint::APickupSpawnPoint()
 {

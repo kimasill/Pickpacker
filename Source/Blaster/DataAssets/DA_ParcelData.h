@@ -120,6 +120,12 @@ public:
 	bool GetParcelConfigByTag(const FGameplayTag& ParcelTag, FParcelConfig& OutConfig) const;
 
 	/**
+	 * Get parcel config by row name (index in array)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
+	bool GetParcelConfigByName(const FName& RowName, FParcelConfig& OutConfig) const;
+
+	/**
 	 * Get global parameter value
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")

@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Projectile.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundCue.h"
+#include "Sound/SoundAttenuation.h"
 #include "ProjectileRocket.generated.h"
 
 /**

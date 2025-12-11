@@ -9,6 +9,7 @@
 #include "Blaster/DataAssets/DA_LabelRuleData.h"
 #include "Blaster/Components/InteractionComponent.h"
 #include "GameplayTagContainer.h"
+#include "Blaster/Interfaces/InteractableInterface.h"
 #include "StationActor.generated.h"
 
 class UStaticMeshComponent;
@@ -103,11 +104,11 @@ public:
 	const FStationConfig& GetStationConfig() const { return StationConfig; }
 
 	// InteractableInterface Implementation
-	virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
-	virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
-	virtual FText GetInteractText_Implementation() const override;
-	virtual void StartHighlight_Implementation() override;
-	virtual void EndHighlight_Implementation() override;
+	virtual void OnInteract_Implementation(ACharacter* Interactor);
+	virtual bool CanInteract_Implementation(ACharacter* Interactor);
+	virtual FText GetInteractText_Implementation();
+	virtual void StartHighlight_Implementation();
+	virtual void EndHighlight_Implementation();
 
 public:
 	/** Broadcast when processing starts */

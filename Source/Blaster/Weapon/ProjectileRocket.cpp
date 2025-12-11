@@ -1,4 +1,3 @@
-
 #include "ProjectileRocket.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
@@ -6,6 +5,7 @@
 #include "NiagaraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/AudioComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "RocketMovementComponent.h"
 
 AProjectileRocket::AProjectileRocket()
@@ -30,18 +30,18 @@ void AProjectileRocket::BeginPlay()
 	if (ProjectileLoop && LoopingSoundAttenuation)
 	{
 		ProjectileLoopComponent = UGameplayStatics::SpawnSoundAttached(
-			ProjectileLoop, // Sound to play
-			GetRootComponent(), // Attach to the root component
-			FName(), // Attach point name
-			GetActorLocation(), // Location			
-			EAttachLocation::KeepWorldPosition, // Attach location
-			false, // Auto destroy
-			1.0f, // Volume multiplier
-			1.0f, // Pitch multiplier
-			0.0f, // Start time
-			LoopingSoundAttenuation, // Attenuation settings
-			(USoundConcurrency*)nullptr, // Concurrency settings
-			false // bAutoDestroy
+			ProjectileLoop,
+			GetRootComponent(),
+			FName(),
+			GetActorLocation(),
+			EAttachLocation::KeepWorldPosition,
+			false,
+			1.0f,
+			1.0f,
+			0.0f,
+			LoopingSoundAttenuation,
+			(USoundConcurrency*)nullptr,
+			false
 		);
 	}
 		
@@ -57,7 +57,7 @@ void AProjectileRocket::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 	StartDestroyTimer();
 	if (ImpactParticles)
 	{
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ImpactParticles, GetActorLocation(), GetActorRotation());
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactParticles, GetActorLocation(), GetActorRotation());
 	}
 	if (ImpactSound)
 	{

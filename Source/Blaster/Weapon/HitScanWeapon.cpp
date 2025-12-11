@@ -2,6 +2,7 @@
 
 #include "HitScanWeapon.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -10,6 +11,7 @@
 #include "DrawDebugHelpers.h"
 #include "WeaponTypes.h"
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
+#include "GameFramework/DamageType.h"
 
 void AHitScanWeapon::Fire(const FVector& HitTarget)
 {

@@ -1,11 +1,15 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/ObjectMacros.h"
+#include "UObject/UObjectGlobals.h"
 #include "Components/ActorComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "Blaster/Shelf/ShelfPlacementTypes.h"
+#include "Blaster/Interaction/InteractionUIData.h"
+#include "InputAction.h"
 #include "InteractionComponent.generated.h"
 
 class AActor;
@@ -14,37 +18,9 @@ class AShelfActor;
 class AParcelActor;
 class ACharacter;
 class UWidgetComponent;
-
-UINTERFACE(MinimalAPI, BlueprintType)
-class UInteractableInterface : public UInterface
-{
-    GENERATED_BODY()
-};
-
-class BLASTER_API IInteractableInterface
-{
-    GENERATED_BODY()
-
-public:
-    UFUNCTION(BlueprintNativeEvent, Category = "Interaction")
-    bool OnInteract(class ACharacter* Interactor);
-
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
-    bool CanInteract(class ACharacter* Interactor) const;
-
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
-    FText GetInteractText() const;
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Interaction")
-    void StartHighlight();
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Interaction")
-    void EndHighlight();
-
-    // 액터/컴포넌트가 자체 UI 처리 시 true 반환. false면 기본 부착형 위젯 표시.
-    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction|UI")
-    bool RequestShowInteractionUI(class ACharacter* Interactor);
-};
+class UInputAction;
+class UInteractableInterface;
+class IInteractableInterface;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class BLASTER_API UInteractionComponent : public UActorComponent
@@ -168,6 +144,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|UI")
     FVector OffscreenFallbackOffset = FVector(0,0,0);
 
+    // UI 프롬프트에 사용할 Enhanced Input 액션 (예: IA_Interact). 없으면 액션 이름으로 폴백.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|UI")
+    TObjectPtr<const class UInputAction> InteractInputAction = nullptr;
+
+    // 레거시 액션 이름 폴백 (InputSettings)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|UI")
+    FName InteractActionName = TEXT("Interact");
+
 protected:
     void UpdateTarget();
     bool IsActorInteractable(AActor* Actor) const;
@@ -189,19 +173,34 @@ private:
 
     void HandleCarriedParcelChanged(class AParcelActor* LastParcel);
 
-    bool PerformInteract(UObject* InteractableObject, class ACharacter* OwnerCharacter);
+    void PerformInteract(UObject* InteractableObject, class ACharacter* OwnerCharacter);
     void UpdateShelfSlotFocus(AShelfActor* Shelf);
     void ClearShelfSlotFocus(AShelfActor* ShelfToClear = nullptr);
     void UpdateShelfPlacementPreview(AShelfActor* Shelf);
     void ClearShelfPlacementPreview(AShelfActor* ShelfToClear = nullptr);
 
-    // Viewport interaction widget instance (screen space). Created when target changes if needed.
+    // Target-anchored widget component created on demand when the target does not self-handle UI.
     UPROPERTY(Transient)
-    UUserWidget* ActiveInteractionWidget = nullptr;
+    TWeakObjectPtr<UWidgetComponent> ActiveInteractionWidgetComponent;
 
     // Show/hide helpers for screen widget.
     void ShowInteractionWidget(AActor* TargetActor);
     void HideInteractionWidget();
+    void UpdateInteractionWidgetUI(AActor* TargetActor, UUserWidget* WidgetInstance = nullptr);
+    UWidgetComponent* FindInteractionWidgetAnchor(AActor* TargetActor) const;
+    bool InvokeWidgetCreditUpdate(UUserWidget* Widget, bool bRequiresUnlock, int32 UnlockCost, const FText& LockedMessage, const FText& UnlockedMessage, int32 CurrentCredits);
+    bool GatherInteractionUIData(AActor* TargetActor, FInteractionUIData& OutData) const;
+    FText BuildInputPromptText(const FText& ActionText) const;
+    FText GetPrimaryKeyForAction(const FName& ActionName) const;
+    FText GetPrimaryKeyForInputAction(const UInputAction* InputAction) const;
+    void UpdateInteractionWidgetCreditInfo(AActor* TargetActor);
+
+    // Movement penalty helpers when carrying parcels
+    void ApplyParcelMovementPenalty(ACharacter* OwnerCharacter, class AParcelActor* Parcel);
+    void ClearParcelMovementPenalty(ACharacter* OwnerCharacter);
+
+    float CachedOriginalMaxWalkSpeed = -1.0f;
+    bool bMovementPenaltyApplied = false;
 
     // (Widget component & anchor removed)
 

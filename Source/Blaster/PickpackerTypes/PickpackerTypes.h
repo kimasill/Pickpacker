@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "GameplayTagContainer.h"
+#include "Templates/SubclassOf.h"
 #include "PickpackerTypes.generated.h"
 
 /**
@@ -146,7 +147,7 @@ struct BLASTER_API FObjectiveRow : public FTableRowBase
 	FName Tag = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective")
-	TSubclassOf<AActor> Class = nullptr;
+	TSubclassOf<AActor> Class;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective")
 	int32 Count = 1;
@@ -179,7 +180,7 @@ struct BLASTER_API FSpawnerRow : public FTableRowBase
 	FName Tag = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
-	TSubclassOf<AActor> Class = nullptr;
+	TSubclassOf<AActor> Class;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawner")
 	int32 Count = 1;
@@ -453,6 +454,7 @@ enum class ESuspiciousBehavior : uint8
 	InteractingRestrictedSystem UMETA(DisplayName = "Interacting Restricted System"),
 	OtherViolation			UMETA(DisplayName = "Other Violation")
 };
+
 
 
 

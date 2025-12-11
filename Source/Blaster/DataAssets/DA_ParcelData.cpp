@@ -40,6 +40,38 @@ bool UDA_ParcelData::GetParcelConfigByTag(const FGameplayTag& ParcelTag, FParcel
 	return false;
 }
 
+bool UDA_ParcelData::GetParcelConfigByName(const FName& RowName, FParcelConfig& OutConfig) const
+{
+	if (RowName == NAME_None)
+	{
+		return false;
+	}
+
+	// 1) 이름 매칭 (ParcelName 또는 TagName)
+	for (const FParcelConfig& Config : ParcelConfigs)
+	{
+		if (Config.ParcelTag.GetTagName() == RowName || FName(*Config.ParcelName) == RowName)
+		{
+			OutConfig = Config;
+			return true;
+		}
+	}
+
+	// 2) 숫자 인덱스 해석
+	const FString RowNameString = RowName.ToString();
+	if (RowNameString.IsNumeric())
+	{
+		const int32 Index = FCString::Atoi(*RowNameString);
+		if (ParcelConfigs.IsValidIndex(Index))
+		{
+			OutConfig = ParcelConfigs[Index];
+			return true;
+		}
+	}
+
+	return false;
+}
+
 float UDA_ParcelData::GetGlobalParameter(const FString& ParameterName, float DefaultValue) const
 {
 	if (const float* Value = GlobalParameters.Find(ParameterName))

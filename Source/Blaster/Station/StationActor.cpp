@@ -288,37 +288,35 @@ bool AStationActor::ValidateProcessingResult(const FGameplayTagContainer& Output
 }
 
 // InteractableInterface Implementation
-bool AStationActor::OnInteract_Implementation(ACharacter* Interactor)
+void AStationActor::OnInteract_Implementation(ACharacter* Interactor)
 {
 	if (!Interactor || !CanInteract_Implementation(Interactor))
 	{
-		return false;
+		return;
 	}
 
 	// Check if player is carrying a parcel
 	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Interactor);
 	if (!BlasterCharacter)
 	{
-		return false;
+		return;
 	}
 
 	UInteractionComponent* InteractionComponent = BlasterCharacter->GetInteractionComponent();
 	if (!InteractionComponent)
 	{
-		return false;
+		return;
 	}
 
 	AParcelActor* CarriedParcel = InteractionComponent->GetCarriedParcel();
 	if (CarriedParcel && IsAvailable())
 	{
-		// Start processing the parcel
-		return StartProcessingParcel(CarriedParcel);
+		// Start processing the parcel (server authoritative)
+		StartProcessingParcel(CarriedParcel);
 	}
-
-	return false;
 }
 
-bool AStationActor::CanInteract_Implementation(ACharacter* Interactor) const
+bool AStationActor::CanInteract_Implementation(ACharacter* Interactor)
 {
 	if (!Interactor)
 	{
@@ -354,7 +352,7 @@ bool AStationActor::CanInteract_Implementation(ACharacter* Interactor) const
 	return StationConfig.RequiredInputTags.HasAll(CarriedParcel->GetParcelTags());
 }
 
-FText AStationActor::GetInteractText_Implementation() const
+FText AStationActor::GetInteractText_Implementation()
 {
 	if (bIsProcessing)
 	{

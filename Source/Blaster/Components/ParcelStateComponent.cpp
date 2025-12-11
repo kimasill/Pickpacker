@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
+#include "Blaster/Components/InstabilityFactorComponent.h"
 
 namespace ParcelClassification
 {
@@ -71,6 +72,17 @@ void UParcelStateComponent::BeginPlay()
 	CurrentState.Durability = ParcelConfig.BaseDurability;
 	CurrentState.Weight = ParcelConfig.BaseWeight;
 	CurrentState.Instability = ParcelConfig.InstabilityFactor;
+
+	// Aggregate instability from attached components (e.g., special items)
+	TArray<UInstabilityFactorComponent*> Factors;
+	GetOwner()->GetComponents<UInstabilityFactorComponent>(Factors);
+	for (UInstabilityFactorComponent* FactorComp : Factors)
+	{
+		if (FactorComp)
+		{
+			CurrentState.Instability += FactorComp->InstabilityFactor;
+		}
+	}
 
 	if (bEnableDebugLogging)
 	{
@@ -156,34 +168,34 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 
 void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
 {
-	if (!IsFragileClassification())
-	{
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage ignored - Classification: %s"),
-				*ParcelConfig.ClassificationTag.ToString());
-		}
-		return; // Only fragile parcels take impact damage
-	}
-
-	if (ImpactForce > ImpactDamageThreshold)
-	{
-		float DamageAmount = (ImpactForce - ImpactDamageThreshold) * 0.1f * FragileImpactMultiplier;
-		ApplyDamage(DamageAmount, FString::Printf(TEXT("Impact_%s"), *ImpactSource));
-		
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage applied - Force: %.2f, Threshold: %.2f, Damage: %.2f, Source: %s"),
-				ImpactForce, ImpactDamageThreshold, DamageAmount, *ImpactSource);
-		}
-	}
-	else
+	if (ImpactForce <= ImpactDamageThreshold)
 	{
 		if (bEnableDebugLogging)
 		{
 			UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelStateComponent] Impact damage below threshold - Force: %.2f, Threshold: %.2f"),
 				ImpactForce, ImpactDamageThreshold);
 		}
+		return;
+	}
+
+	// Base damage scales with over-threshold impulse; classification adjusts multiplier
+	float Multiplier = 1.0f;
+	if (IsFragileClassification())
+	{
+		Multiplier = FragileImpactMultiplier;
+	}
+	else if (IsContrabandClassification())
+	{
+		Multiplier = 1.5f;
+	}
+
+	const float DamageAmount = (ImpactForce - ImpactDamageThreshold) * 0.1f * Multiplier;
+	ApplyDamage(DamageAmount, FString::Printf(TEXT("Impact_%s"), *ImpactSource));
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage applied - Force: %.2f, Threshold: %.2f, Damage: %.2f, Multiplier: %.2f, Source: %s"),
+			ImpactForce, ImpactDamageThreshold, DamageAmount, Multiplier, *ImpactSource);
 	}
 }
 
@@ -294,6 +306,16 @@ float UParcelStateComponent::CalculateDamage(float BaseDamage, const FString& Da
 
 float UParcelStateComponent::GetMovementSpeedMultiplier() const
 {
+	// 기본 1.0에서 무게에 따라 감속
+	const float Weight = CurrentState.Weight;
+	if (Weight >= HeavyWeightThreshold && HeavyWeightThreshold > 0.f)
+	{
+		return HeavyMovementPenalty;
+	}
+	if (Weight >= MediumWeightThreshold && MediumWeightThreshold > 0.f)
+	{
+		return MediumMovementPenalty;
+	}
 	return 1.0f;
 }
 

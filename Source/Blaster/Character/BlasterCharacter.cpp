@@ -33,6 +33,11 @@
 #include "Blaster/Components/PlayerInventoryComponent.h"
 #include "Blaster/Library/PickpackerSuspicionLibrary.h"
 #include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
+#include "Components/InputComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Animation/AnimInstance.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "Engine/GameInstance.h"
 
 ABlasterCharacter::ABlasterCharacter()
 {
@@ -1300,7 +1305,6 @@ void ABlasterCharacter::UpdateSuspiciousBehavior(ESuspiciousBehavior NewBehavior
 		{
 			if (USuspicionManagerSubsystem* SuspicionManager = GameInstance->GetSubsystem<USuspicionManagerSubsystem>())
 			{
-				// SuspicionManager에서 중복 체크를 시간 기반으로 처리
 				SuspicionManager->BroadcastSuspicionEvent(this, NewBehavior);
 				UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Broadcasted suspicion event: %s"), 
 					*UEnum::GetValueAsString(NewBehavior));

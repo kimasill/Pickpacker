@@ -394,7 +394,7 @@ void APickpackerGameMode::ScheduleNextOrderWave(float DelaySeconds)
 		return;
 	}
 
-	if (!OrderWaveData->GetWave(CurrentOrderWaveIndex + 1))
+	if (!OrderWaveData->GetWave(0))
 	{
 		return; // No more waves
 	}
@@ -467,9 +467,13 @@ void APickpackerGameMode::TickOrderSystem()
 
 	CleanupResolvedOrders();
 
-	if (OrderWaveData && OrderWaveData->GetWave(CurrentOrderWaveIndex + 1) && AreAllOrdersResolved())
+	// 기존 구현은 "다음 인덱스 wave"가 존재할 때만 다음 웨이브를 시작했는데,
+	// 데이터 자산이 0번 웨이브 하나만 가지고 있고 그 안에서 템플릿을 랜덤 선택하는 구조라면
+	// 추가 웨이브가 생성되지 않는다. 따라서 웨이브 존재 여부는 0번 웨이브만 확인하고,
+	// 모든 오더가 해결되면 동일 웨이브(난이도 인덱스만 증가)로 다음 라운드를 스케줄한다.
+	if (OrderWaveData && AreAllOrdersResolved())
 	{
-		const FParcelOrderWave* NextWave = OrderWaveData->GetWave(CurrentOrderWaveIndex + 1);
+		const FParcelOrderWave* NextWave = OrderWaveData->GetWave(0);
 		const float Delay = NextWave ? NextWave->StartDelay : 0.0f;
 		ScheduleNextOrderWave(Delay);
 	}

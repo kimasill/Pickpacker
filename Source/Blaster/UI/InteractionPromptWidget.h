@@ -6,6 +6,8 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Styling/SlateBrush.h"
+#include "Blaster/Interaction/InteractionUIData.h"
 #include "InteractionPromptWidget.generated.h"
 
 /**
@@ -21,6 +23,14 @@ public:
 
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInteractionWidgetUpdated, FInteractionUIData, Data);
+	UPROPERTY(BlueprintAssignable, Category = "Interaction Prompt")
+	FOnInteractionWidgetUpdated OnInteractionWidgetUpdated;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInteractionWidgetCleared);
+	UPROPERTY(BlueprintAssignable, Category = "Interaction Prompt")
+	FOnInteractionWidgetCleared OnInteractionWidgetCleared;
 
 	/**
 	 * Update interaction text
@@ -40,6 +50,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction Prompt")
 	void SetPromptPosition(const FVector2D& Position);
 
+	/**
+	 * Update credit unlock information
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction Prompt")
+	void UpdateCreditInfo(bool bRequiresUnlock, int32 UnlockCost, const FText& LockedMessage, const FText& UnlockedMessage, int32 CurrentCredits);
+
+	/** 새 UI 데이터로 전체 갱신 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction Prompt")
+	void UpdateFromInteractionData(const FInteractionUIData& Data, const FText& InputKeyText);
+
+	/** UI 초기화 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction Prompt")
+	void ClearInteractionData();
+
+	/**
+	 * Clear credit information
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction Prompt")
+	void ClearCreditInfo();
+
 public:
 	/** Interaction text */
 	UPROPERTY(meta = (BindWidget))
@@ -49,8 +79,15 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UImage* PromptBackground;
 
-	/** Key icon (E key) */
+	// Key icon brush (locked state)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Prompt|Icons")
+	FSlateBrush LockedKeyBrush;
+
+	/** Credit cost text (optional) */
 	UPROPERTY(meta = (BindWidget))
-	UImage* KeyIcon;
+	UTextBlock* CreditCostText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Prompt|Icons")
+	UTextBlock* InformationText;
 };
 

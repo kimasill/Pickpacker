@@ -17,6 +17,8 @@
 #include "Blaster/Character/BlasterAnimInstance.h"
 #include "Blaster/Weapon/Projectile.h"
 #include "Blaster/Weapon/Shotgun.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 
 UCombatComponent::UCombatComponent()
 {

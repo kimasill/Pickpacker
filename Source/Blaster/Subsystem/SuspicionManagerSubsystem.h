@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "TimerManager.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "SuspicionManagerSubsystem.generated.h"
 

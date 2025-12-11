@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "Blaster/DataAssets/ParcelRowNamePicker.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "Blaster/Components/ParcelStateComponent.h"
 #include "Blaster/Components/CarryPointsComponent.h"
@@ -12,7 +13,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameplayTagContainer.h"
-#include "Blaster/Components/InteractionComponent.h"
+#include "Blaster/Interfaces/InteractableInterface.h"
 #include "ParcelActor.generated.h"
 
 class UCarryPointsComponent;
@@ -153,6 +154,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	bool IsItem() const { return bIsItem; }
 
+	/** Whether this parcel should be carried two-handed (based on carry socket count) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	bool RequiresTwoHandCarry() const { return bRequiresTwoHandCarry; }
+
 	/**
 	 * Check if this item is usable
 	 */
@@ -188,6 +193,11 @@ public:
 	 */
 	UFUNCTION(Server, Reliable, Category = "Item")
 	void Server_UseItem(ACharacter* User);
+
+	/**
+	* 	HUD 제어
+	*/
+	void SetTargetedByLocalPlayer(bool bTargeted);
 
 	/**
 	 * Overlap notification for interaction
@@ -314,10 +324,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
 	UDA_ParcelData* ParcelDataAsset = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", Categories = "Parcel"))
-	FGameplayTag ParcelDefinitionTag;
+	// DataAsset 안의 Row를 직접 선택 (우선 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
+	FParcelRowNamePicker ParcelDefinitionRowName;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (EditCondition = "!bAutoApplyParcelData", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	FParcelConfig ParcelConfig;
 
 	// Parcel tags
@@ -394,6 +405,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
 	FItemData ItemData;
 
+	/** Story/특수 아이템 여부 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
+	bool bIsSpecialItem = false;
+
+	/** 특수 아이템 태그 (스토리/효과 구분용) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item")
+	FGameplayTagContainer SpecialItemTags;
+
 	// Physics stabilization
 	UPROPERTY()
 	FTimerHandle StabilizeTimerHandle;
@@ -405,6 +424,12 @@ protected:
 	UPROPERTY()
 	UParcelHUDWidget* HUDWidget = nullptr;
 
+	/** 상호작용 타겟 상태 (로컬 전용) */
+	bool bIsTargetedByLocalPlayer = false;
+
+	/** 특수 아이템 사용 시 블루프린트 처리 훅 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Item")
+	void BP_OnSpecialItemUsed(ACharacter* User);
 	/**
 	 * Show/hide pickup widget
 	 */
@@ -416,10 +441,10 @@ protected:
 	bool bEnableDebugLogging = true;
 
 	// InteractableInterface Implementation
-	virtual bool OnInteract_Implementation(ACharacter* Interactor) override;
-	virtual bool CanInteract_Implementation(ACharacter* Interactor) const override;
-	virtual FText GetInteractText_Implementation() const override;
-	virtual void StartHighlight_Implementation() override;
+	virtual void OnInteract_Implementation(ACharacter* Interactor);
+	virtual bool CanInteract_Implementation(ACharacter* Interactor);
+	virtual FText GetInteractText_Implementation();
+	virtual void StartHighlight_Implementation();
 	virtual void EndHighlight_Implementation() override;
 
 private:
@@ -453,4 +478,8 @@ private:
 	bool TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const;
 	void ApplyParcelConfigVisuals(const FParcelConfig& Config);
 	bool UpdateMeshForCurrentPackagingState();
+
+	// Whether to use two-hand carry animations (derived from carry socket count)
+	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Carry")
+	bool bRequiresTwoHandCarry = false;
 };

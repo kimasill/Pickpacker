@@ -4,6 +4,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/Border.h"
 #include "Engine/Texture2D.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
@@ -11,13 +12,6 @@
 UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// Initialize default colors
-	HealthyColor = FLinearColor::Green;
-	WarningColor = FLinearColor::Yellow;
-	CriticalColor = FLinearColor::Red;
-	StableColor = FLinearColor::Blue;
-	UnstableColor = FLinearColor::Red;
-
 	// Initialize animation settings
 	ColorTransitionSpeed = 2.0f;
 	bEnableColorTransitions = true;
@@ -26,6 +20,11 @@ UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	// Initialize current state
 	CurrentClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
 	CurrentParcelState = FParcelState();
+
+	// 기본 분류 표시 매핑
+	ClassificationDisplayMap.Add(FName("Parcel-Classification.Standard"), NSLOCTEXT("ParcelHUD", "ClassificationStandard", "일반"));
+	ClassificationDisplayMap.Add(FName("Parcel-Classification.Fragile"), NSLOCTEXT("ParcelHUD", "ClassificationFragile", "취급주의"));
+	ClassificationDisplayMap.Add(FName("Parcel-Classification.Contraband"), NSLOCTEXT("ParcelHUD", "ClassificationContraband", "특수"));
 }
 
 void UParcelHUDWidget::NativeConstruct()
@@ -36,28 +35,41 @@ void UParcelHUDWidget::NativeConstruct()
 	if (DurabilityBar)
 	{
 		DurabilityBar->SetPercent(1.0f);
-		DurabilityBar->SetFillColorAndOpacity(HealthyColor);
+		DurabilityBar->SetFillColorAndOpacity(HUDStyle.HealthyColor);
 	}
 
 	if (InstabilityBar)
 	{
 		InstabilityBar->SetPercent(0.0f);
-		InstabilityBar->SetFillColorAndOpacity(StableColor);
+		InstabilityBar->SetFillColorAndOpacity(HUDStyle.StableColor);
+		InstabilityBar->SetVisibility(bShowInstability ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
 	if (WeightText)
 	{
 		WeightText->SetText(FText::FromString(TEXT("Weight: 1.0")));
+		WeightText->SetVisibility(bShowWeight ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
 	if (CarrierCountText)
 	{
 		CarrierCountText->SetText(FText::FromString(TEXT("Carriers: 0")));
+		CarrierCountText->SetVisibility(bShowCarrierCount ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
 	if (ParcelTypeText)
 	{
 		ParcelTypeText->SetText(FText::FromString(TEXT("Unknown")));
+	}
+
+	if (ParcelNameText)
+	{
+		ParcelNameText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (BackgroundBorder)
+	{
+		BackgroundBorder->SetBrushColor(HUDStyle.BackgroundHealthyTint);
 	}
 
 	if (bEnableDebugLogging)
@@ -80,6 +92,27 @@ void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const 
 {
 	CurrentParcelState = ParcelState;
 	CurrentClassificationTag = ClassificationTag;
+
+	// 최소 모드에서는 제한된 정보만 갱신
+	if (bMinimalMode)
+	{
+		// 최소 모드: 내구도/불안정도/캐리어 수 숨김, 분류와 무게만 유지
+		if (ParcelTypeText && bMinimalShowClassification)
+		{
+			ParcelTypeText->SetVisibility(ESlateVisibility::Visible);
+			ParcelTypeText->SetText(GetClassificationText(ClassificationTag));
+		}
+		if (ParcelTypeIcon && bMinimalShowClassification)
+		{
+			if (UTexture2D* IconTexture = GetClassificationIcon(ClassificationTag))
+			{
+				ParcelTypeIcon->SetBrushFromTexture(IconTexture);
+				ParcelTypeIcon->SetVisibility(ESlateVisibility::Visible);
+			}
+		}
+		UpdateWeightDisplay(ParcelState.Weight);
+		return;
+	}
 
 	// Update all UI elements
 	UpdateDurabilityBar(ParcelState.Durability, 100.0f);
@@ -146,8 +179,12 @@ void UParcelHUDWidget::UpdateWeightDisplay(float Weight)
 		return;
 	}
 
-	FText WeightTextContent = FText::Format(FText::FromString(TEXT("Weight: {0}")), FText::AsNumber(Weight));
-	WeightText->SetText(WeightTextContent);
+	WeightText->SetVisibility(bShowWeight ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (bShowWeight)
+	{
+		FText WeightTextContent = FText::Format(FText::FromString(TEXT("무게: {0}kg")), FText::AsNumber(Weight));
+		WeightText->SetText(WeightTextContent);
+	}
 
 	if (bEnableDebugLogging)
 	{
@@ -162,17 +199,62 @@ void UParcelHUDWidget::UpdateInstabilityBar(float Instability, float MaxInstabil
 		return;
 	}
 
-	float InstabilityPercent = FMath::Clamp(Instability / MaxInstability, 0.0f, 1.0f);
-	InstabilityBar->SetPercent(InstabilityPercent);
-
-	// Update color based on instability
-	FLinearColor InstabilityColor = GetInstabilityColor(Instability, MaxInstability);
-	InstabilityBar->SetFillColorAndOpacity(InstabilityColor);
-
-	if (bEnableDebugLogging)
+	InstabilityBar->SetVisibility(bShowInstability ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (bShowInstability)
 	{
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelHUDWidget] Instability bar updated - Value: %.2f, Percent: %.2f"),
-			Instability, InstabilityPercent);
+		float InstabilityPercent = FMath::Clamp(Instability / MaxInstability, 0.0f, 1.0f);
+		InstabilityBar->SetPercent(InstabilityPercent);
+
+		// Update color based on instability
+		FLinearColor InstabilityColor = GetInstabilityColor(Instability, MaxInstability);
+		InstabilityBar->SetFillColorAndOpacity(InstabilityColor);
+	}
+
+}
+
+void UParcelHUDWidget::SetParcelName(const FText& InName)
+{
+	if (ParcelNameText)
+	{
+		const bool bHasName = !InName.IsEmpty();
+		ParcelNameText->SetVisibility(bHasName ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		ParcelNameText->SetText(InName);
+	}
+}
+
+void UParcelHUDWidget::SetMinimalDisplay(bool bMinimal)
+{
+	bMinimalMode = bMinimal;
+
+	// 내구도/불안정도/캐리어 수는 최소 모드에서 숨김
+	if (DurabilityBar)
+	{
+		DurabilityBar->SetVisibility(bMinimal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+	if (InstabilityBar)
+	{
+		InstabilityBar->SetVisibility(bMinimal ? ESlateVisibility::Collapsed : (bShowInstability ? ESlateVisibility::Visible : ESlateVisibility::Collapsed));
+	}
+	if (CarrierCountText)
+	{
+		CarrierCountText->SetVisibility(bMinimal ? ESlateVisibility::Collapsed : (bShowCarrierCount ? ESlateVisibility::Visible : ESlateVisibility::Collapsed));
+	}
+
+	// 무게/분류는 설정에 따라 유지
+	if (WeightText)
+	{
+		WeightText->SetVisibility(bMinimal ? (bMinimalShowWeight ? ESlateVisibility::Visible : ESlateVisibility::Collapsed)
+										   : (bShowWeight ? ESlateVisibility::Visible : ESlateVisibility::Collapsed));
+	}
+	if (ParcelTypeText)
+	{
+		ParcelTypeText->SetVisibility(bMinimal ? (bMinimalShowClassification ? ESlateVisibility::Visible : ESlateVisibility::Collapsed)
+											   : ESlateVisibility::Visible);
+	}
+	if (ParcelTypeIcon)
+	{
+		ParcelTypeIcon->SetVisibility(bMinimal ? (bMinimalShowClassification ? ESlateVisibility::Visible : ESlateVisibility::Collapsed)
+											   : ESlateVisibility::Visible);
 	}
 }
 
@@ -183,8 +265,12 @@ void UParcelHUDWidget::UpdateCarrierCount(int32 CarrierCount)
 		return;
 	}
 
-	FText CarrierTextContent = FText::Format(FText::FromString(TEXT("Carriers: {0}")), FText::AsNumber(CarrierCount));
-	CarrierCountText->SetText(CarrierTextContent);
+	CarrierCountText->SetVisibility(bShowCarrierCount ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (bShowCarrierCount)
+	{
+		FText CarrierTextContent = FText::Format(FText::FromString(TEXT("운반자 수: {0}")), FText::AsNumber(CarrierCount));
+		CarrierCountText->SetText(CarrierTextContent);
+	}
 
 	if (bEnableDebugLogging)
 	{
@@ -204,7 +290,7 @@ void UParcelHUDWidget::SetHUDVisibility(bool bVisible)
 
 void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState)
 {
-	if (!BackgroundImage)
+	if (!BackgroundBorder)
 	{
 		return;
 	}
@@ -215,22 +301,22 @@ void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState)
 	// Check if parcel is critical
 	if (ParcelState.Durability <= 25.0f)
 	{
-		HUDColor = CriticalColor;
+		HUDColor = HUDStyle.BackgroundCriticalTint;
 	}
 	else if (ParcelState.Durability <= 50.0f)
 	{
-		HUDColor = WarningColor;
+		HUDColor = HUDStyle.BackgroundWarningTint;
 	}
 	else if (ParcelState.Instability > 50.0f)
 	{
-		HUDColor = UnstableColor;
+		HUDColor = HUDStyle.BackgroundWarningTint;
 	}
 	else
 	{
-		HUDColor = HealthyColor;
+		HUDColor = HUDStyle.BackgroundHealthyTint;
 	}
 
-	BackgroundImage->SetColorAndOpacity(HUDColor);
+	BackgroundBorder->SetBrushColor(HUDColor);
 
 	if (bEnableDebugLogging)
 	{
@@ -244,15 +330,15 @@ FLinearColor UParcelHUDWidget::GetDurabilityColor(float Durability, float MaxDur
 
 	if (DurabilityPercent <= 0.25f)
 	{
-		return CriticalColor;
+		return HUDStyle.CriticalColor;
 	}
 	else if (DurabilityPercent <= 0.5f)
 	{
-		return WarningColor;
+		return HUDStyle.WarningColor;
 	}
 	else
 	{
-		return HealthyColor;
+		return HUDStyle.HealthyColor;
 	}
 }
 
@@ -262,15 +348,15 @@ FLinearColor UParcelHUDWidget::GetInstabilityColor(float Instability, float MaxI
 
 	if (InstabilityPercent >= 0.75f)
 	{
-		return UnstableColor;
+		return HUDStyle.UnstableColor;
 	}
 	else if (InstabilityPercent >= 0.5f)
 	{
-		return WarningColor;
+		return HUDStyle.WarningColor;
 	}
 	else
 	{
-		return StableColor;
+		return HUDStyle.StableColor;
 	}
 }
 
@@ -294,22 +380,19 @@ UTexture2D* UParcelHUDWidget::GetClassificationIcon(const FGameplayTag& Classifi
 
 FText UParcelHUDWidget::GetClassificationText(const FGameplayTag& ClassificationTag) const
 {
-	const FGameplayTag FragileTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Fragile"), false);
-	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
-
-	if (ClassificationTag.MatchesTag(FragileTag))
+	// 우선 매핑된 표시 이름 사용
+	if (ClassificationTag.IsValid())
 	{
-		return FText::FromString(TEXT("Fragile"));
+		if (const FText* Found = ClassificationDisplayMap.Find(ClassificationTag.GetTagName()))
+		{
+			return *Found;
+		}
 	}
 
-	if (ClassificationTag.MatchesTag(ContrabandTag))
-	{
-		return FText::FromString(TEXT("Contraband"));
-	}
-
+	// 기본 폴백: 유효 태그면 TagName, 아니면 "Standard"
 	return ClassificationTag.IsValid()
 		? FText::FromName(ClassificationTag.GetTagName())
-		: FText::FromString(TEXT("Standard"));
+		: NSLOCTEXT("ParcelHUD", "ClassificationFallback", "일반");
 }
 
 

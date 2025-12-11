@@ -4,6 +4,7 @@
 #include "BuffComponent.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "TimerManager.h"
 
 // Sets default values for this component's properties
 UBuffComponent::UBuffComponent()

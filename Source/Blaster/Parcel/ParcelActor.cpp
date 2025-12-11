@@ -54,6 +54,7 @@ AParcelActor::AParcelActor()
 	PickupWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	PickupWidget->SetDrawAtDesiredSize(true);
 	
+	bRequiresTwoHandCarry = false;
 
 	// Initialize state
 	bIsAttached = false;
@@ -92,6 +93,7 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, ParcelPrice);
 	DOREPLIFETIME(AParcelActor, ParcelClassificationTag);
 	DOREPLIFETIME(AParcelActor, ParcelItemTag);
+	DOREPLIFETIME(AParcelActor, bRequiresTwoHandCarry);
 }
 
 void AParcelActor::BeginPlay()
@@ -120,6 +122,13 @@ void AParcelActor::BeginPlay()
 	if (ParcelStateComponent)
 	{
 		ParcelStateComponent->OnParcelStateChanged.AddDynamic(this, &AParcelActor::OnParcelStateChanged);		
+	}
+
+	// Derive two-hand carry requirement from available carry sockets
+	if (CarryPointsComponent)
+	{
+		const int32 SocketCount = CarryPointsComponent->GetCarrySockets().Num();
+		bRequiresTwoHandCarry = SocketCount >= 2;
 	}
 
 	// Initialize HUD widget
@@ -268,35 +277,25 @@ bool AParcelActor::ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntim
 
 bool AParcelActor::TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const
 {
-	if (!ParcelDataAsset)
+	// 1) DataAsset RowName 우선
+	if (ParcelDefinitionRowName.ParcelData && ParcelDefinitionRowName.RowName != NAME_None)
 	{
+		if (ParcelDefinitionRowName.ParcelData->GetParcelConfigByName(ParcelDefinitionRowName.RowName, OutConfig))
+		{
+			return true;
+		}
 		if (bLogWarnings)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] ParcelDataAsset is not assigned on %s"), *GetName());
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Invalid ParcelDefinitionRowName %s on %s"), *ParcelDefinitionRowName.RowName.ToString(), *GetName());
 		}
-		return false;
 	}
 
-	if (!ParcelDefinitionTag.IsValid())
+	// 2) 기존 Tag 경로 제거 → 실패
+	if (bLogWarnings)
 	{
-		if (bLogWarnings)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] ParcelDefinitionTag is not set on %s"), *GetName());
-		}
-		return false;
+		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] No valid Parcel definition on %s (RowName/DataAsset)"), *GetName());
 	}
-
-	if (!ParcelDataAsset->GetParcelConfigByTag(ParcelDefinitionTag, OutConfig))
-	{
-		if (bLogWarnings)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Failed to resolve parcel config for tag %s on %s"),
-				*ParcelDefinitionTag.ToString(), *GetName());
-		}
-		return false;
-	}
-
-	return true;
+	return false;
 }
 
 void AParcelActor::ApplyParcelConfigVisuals(const FParcelConfig& Config)
@@ -324,6 +323,13 @@ void AParcelActor::ApplyParcelConfigVisuals(const FParcelConfig& Config)
 		DefaultUnpackagedMesh = OriginalMesh;
 	}
 
+	// 초기 스폰/에디터에서는 PackageOnSpawn 값을 초기 패키징 상태로 사용
+	if (!HasActorBegunPlay())
+	{
+		bIsPackaged = PackageOnSpawn;
+		bIsItem = !bIsPackaged;
+	}
+
 	UpdateMeshForCurrentPackagingState();
 }
 
@@ -336,7 +342,7 @@ bool AParcelActor::UpdateMeshForCurrentPackagingState()
 
 	UStaticMesh* TargetMesh = nullptr;
 
-	if (bIsPackaged || PackageOnSpawn)
+	if (bIsPackaged)
 	{
 		TargetMesh = PackagedMesh;
 		bIsPackaged = TargetMesh != nullptr;
@@ -692,8 +698,8 @@ void AParcelActor::UpdateHUDWidget()
 		return;
 	}
 
-	// Update HUD visibility based on attachment state
-	bool bShouldShowHUD = bIsAttached;
+	// Update HUD visibility based on attachment/타겟 상태
+	const bool bShouldShowHUD = bIsAttached || bIsTargetedByLocalPlayer;
 	if (HUDWidgetComponent)
 	{
 		HUDWidgetComponent->SetVisibility(bShouldShowHUD);
@@ -703,6 +709,11 @@ void AParcelActor::UpdateHUDWidget()
 	{
 		// Update HUD with current parcel state
 		FParcelState CurrentState = ParcelStateComponent->GetParcelState();
+		if (HUDWidget)
+		{
+			HUDWidget->SetParcelName(FText::FromString(ParcelConfig.ParcelName));
+		}
+		HUDWidget->SetMinimalDisplay(bIsAttached); // 들고 있을 땐 최소 정보만
 		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ClassificationTag);
 	}
 }
@@ -732,6 +743,12 @@ void AParcelActor::SetHUDWidgetClass(TSubclassOf<UParcelHUDWidget> WidgetClass)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] HUD widget class set to: %s"), *WidgetClass->GetName());
 	}
+}
+
+void AParcelActor::SetTargetedByLocalPlayer(bool bTargeted)
+{
+	bIsTargetedByLocalPlayer = bTargeted;
+	UpdateHUDWidget();
 }
 
 void AParcelActor::HandleParcelMeshHit(
@@ -802,25 +819,24 @@ void AParcelActor::StabilizePhysics()
 }
 
 // InteractableInterface Implementation
-bool AParcelActor::OnInteract_Implementation(ACharacter* Interactor)
+void AParcelActor::OnInteract_Implementation(ACharacter* Interactor)
 {
 	if (!Interactor)
 	{
-		return false;
-	}	
+		return;
+	}
 
 	// 일반 택배인 경우 운반
 	if (!CanBeAttached())
 	{
-		return false;
+		return;
 	}
 
 	// RequestAttach 호출
 	RequestAttach(Interactor, FName("CarrySocket"));
-	return true;
 }
 
-bool AParcelActor::CanInteract_Implementation(ACharacter* Interactor) const
+bool AParcelActor::CanInteract_Implementation(ACharacter* Interactor)
 {
 	if (!Interactor)
 	{
@@ -830,7 +846,7 @@ bool AParcelActor::CanInteract_Implementation(ACharacter* Interactor) const
 	return CanBeAttached();
 }
 
-FText AParcelActor::GetInteractText_Implementation() const
+FText AParcelActor::GetInteractText_Implementation()
 {
 	// 아이템인 경우
 	if (bIsItem)
@@ -1057,6 +1073,12 @@ bool AParcelActor::Handle_UseItem(ACharacter* User)
 			*UEnum::GetValueAsString(ItemType),
 			User ? *User->GetName() : TEXT("None"),
 			bSuccess ? TEXT("Yes") : TEXT("No"));
+	}
+
+	// Special item hook (BP can drive story/effects)
+	if (bSuccess && (bIsSpecialItem || SpecialItemTags.Num() > 0))
+	{
+		BP_OnSpecialItemUsed(User);
 	}
 
 	return bSuccess;

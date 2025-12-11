@@ -17,6 +17,9 @@
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
+#include "TimerManager.h"
+#include "GameFramework/DamageType.h"
+
 
 
 AProjectile::AProjectile()
