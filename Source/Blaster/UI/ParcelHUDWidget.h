@@ -140,6 +140,11 @@ protected:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel HUD")
 	FText GetClassificationText(const FGameplayTag& ClassificationTag) const;
 
+	/**
+	 * Extract the last part of a gameplay tag (e.g., "Pickpacker.Parcel.Classification.Standard" -> "Standard")
+	 */
+	FString GetTagLastPart(const FGameplayTag& Tag) const;
+
 public:
 	// UI Components
 	UPROPERTY(meta = (BindWidget))

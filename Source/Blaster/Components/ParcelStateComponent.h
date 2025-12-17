@@ -8,6 +8,8 @@
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "ParcelStateComponent.generated.h"
 
+class AParcelActor;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelStateChanged, const FParcelState&, NewState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelDurabilityChanged, float, OldDurability, float, NewDurability);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelInstabilityChanged, float, OldInstability, float, NewInstability);
@@ -159,6 +161,11 @@ protected:
 	 */
 	float CalculateDamage(float BaseDamage, const FString& DamageSource);
 
+	/**
+	 * Update leak state and progress
+	 */
+	void UpdateLeakState(float DeltaTime);
+
 public:
 	// Delegates
 	UPROPERTY(BlueprintAssignable, Category = "Parcel State")
@@ -236,6 +243,13 @@ protected:
 	// Current two-person carry state
 	UPROPERTY()
 	bool bIsTwoPersonCarry = false;
+
+	// Leak state tracking
+	UPROPERTY()
+	bool bIsLeaking = false;
+
+	UPROPERTY()
+	float LeakProgress = 0.0f;
 
 	// Debug settings
 	UPROPERTY(EditAnywhere, Category = "Debug")

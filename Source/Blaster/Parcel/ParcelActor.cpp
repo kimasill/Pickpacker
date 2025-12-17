@@ -21,9 +21,17 @@
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
-#include "Blaster/Components/PlayerInventoryComponent.h"  // 추가
+#include "Blaster/Components/PlayerInventoryComponent.h"
 #include "GameplayTagsManager.h"
 #include "Engine/StaticMesh.h"
+#include "Blaster/Parcel/ParcelAVLibrary.h"
+#include "Sound/SoundBase.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "Components/AudioComponent.h"
+#include "Components/DecalComponent.h"
+#include "Sound/SoundCue.h"
+#include "Blaster/Gate/GateActor.h"
 
 AParcelActor::AParcelActor()
 {
@@ -63,6 +71,12 @@ AParcelActor::AParcelActor()
 	DropStabilizeTime = 1.0f;
 	DropImpulseMultiplier = 1.0f;
 	bEnableDebugLogging = true;
+
+	// Initialize impact damage properties
+	MinImpactSpeedForDamage = 10.0f;
+	MinImpactImpulseForDamage = 100.0f;
+	ImpactDamageCooldown = 0.5f;
+	LastImpactTime = 0.0;
 }
 
 void AParcelActor::OnConstruction(const FTransform& Transform)
@@ -92,7 +106,6 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, ItemType);
 	DOREPLIFETIME(AParcelActor, ParcelPrice);
 	DOREPLIFETIME(AParcelActor, ParcelClassificationTag);
-	DOREPLIFETIME(AParcelActor, ParcelItemTag);
 	DOREPLIFETIME(AParcelActor, bRequiresTwoHandCarry);
 }
 
@@ -161,6 +174,7 @@ void AParcelActor::BeginPlay()
 			{
 				MeshComponent->SetSimulatePhysics(true);
 				MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				MeshComponent->SetNotifyRigidBodyCollision(true);
 			}
 		}
 		else
@@ -208,11 +222,10 @@ void AParcelActor::InitializeParcel(const FParcelConfig& Config)
 		ParcelTags.AddTag(ParcelClassificationTag);
 	}
 
-	ParcelItemTag = FGameplayTag();
-	if (Config.ItemTag.IsValid())
+	// Add ItemId from ItemData to ParcelTags if valid
+	if (Config.ItemData.ItemId.IsValid())
 	{
-		ParcelItemTag = Config.ItemTag;
-		ParcelTags.AddTag(ParcelItemTag);
+		ParcelTags.AddTag(Config.ItemData.ItemId);
 	}
 
 	if (Config.ParcelTag.IsValid())
@@ -278,15 +291,15 @@ bool AParcelActor::ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntim
 bool AParcelActor::TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const
 {
 	// 1) DataAsset RowName 우선
-	if (ParcelDefinitionRowName.ParcelData && ParcelDefinitionRowName.RowName != NAME_None)
+	if (ParcelDataAsset && ParcelDefinitionRowName != NAME_None)
 	{
-		if (ParcelDefinitionRowName.ParcelData->GetParcelConfigByName(ParcelDefinitionRowName.RowName, OutConfig))
+		if (ParcelDataAsset->GetParcelConfigByName(ParcelDefinitionRowName, OutConfig))
 		{
 			return true;
 		}
 		if (bLogWarnings)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Invalid ParcelDefinitionRowName %s on %s"), *ParcelDefinitionRowName.RowName.ToString(), *GetName());
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Invalid ParcelDefinitionRowName %s on %s"), *ParcelDefinitionRowName.ToString(), *GetName());
 		}
 	}
 
@@ -460,7 +473,7 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 
 		// Broadcast attach event
 		Multicast_ParcelAttached(Carrier, SocketId);
-
+		Multicast_PlayParcelEffect(FName("PickUp"), GetActorLocation());
 		if (bEnableDebugLogging)
 		{
 			UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server attach successful - Carrier: %s, Socket: %s"),
@@ -525,6 +538,7 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 
 	// Broadcast drop event
 	Multicast_ParcelDropped(DroppingCarrier, DropLocation);
+	Multicast_PlayParcelEffect(FName("PutDown"), DropLocation);
 
 	if (ABlasterCharacter* BlasterCarrier = Cast<ABlasterCharacter>(DroppingCarrier))
 	{
@@ -629,6 +643,50 @@ void AParcelActor::Multicast_ParcelDropped_Implementation(ACharacter* Carrier, F
     }
 }
 
+void AParcelActor::Multicast_PlayParcelEffect_Implementation(FName EventKey, FVector Location)
+{
+	if (!ParcelDataAsset)
+	{
+		return;
+	}
+
+	// Resolve and play sound
+	if (USoundBase* Sound = UParcelAVLibrary::ResolveSound(ParcelConfig, ParcelDataAsset, EventKey))
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, Location);
+	}
+
+	// Resolve and spawn VFX
+	// VFX Map: Spill_Start and Spill_Loop both use "Spill" key
+	FName VfxKey = EventKey;
+	if (EventKey == FName("Spill_Start") || EventKey == FName("Spill_Loop"))
+	{
+		VfxKey = FName("Spill");
+	}
+	
+	if (UNiagaraSystem* Vfx = UParcelAVLibrary::ResolveVfx(ParcelConfig, ParcelDataAsset, VfxKey))
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), Vfx, Location);
+	}
+
+	// Spawn decal for spill events
+	if (EventKey == FName("Spill_Start") || EventKey == FName("Spill_Loop"))
+	{
+		FName DecalKey = FName("Spill_Decal");
+		if (UMaterialInterface* DecalMaterial = UParcelAVLibrary::ResolveDecal(ParcelConfig, ParcelDataAsset, DecalKey))
+		{
+			UDecalComponent* Decal = UGameplayStatics::SpawnDecalAtLocation(
+				GetWorld(),
+				DecalMaterial,
+				FVector(60.0f, 60.0f, 60.0f),
+				Location,
+				FRotator::ZeroRotator,
+				30.0f
+			);
+		}
+	}
+}
+
 void AParcelActor::NotifyBeginOverlap(AActor* OverlappedActor, AActor* OtherActor)
 {
     const APawn* Pawn = Cast<APawn>(OtherActor);
@@ -673,6 +731,24 @@ void AParcelActor::HandleParcelBroken()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Parcel broken! Classification: %s"),
 		*ParcelConfig.ClassificationTag.ToString());
+
+	// Stop any active loop effects
+	EndLeakLoop();
+
+	// Play break effect
+	if (HasAuthority())
+	{
+		FVector BreakLocation = GetActorLocation();
+		Multicast_PlayParcelEffect(FName("Break"), BreakLocation);
+
+		// Check if spill should start on break
+		float SpillThresh = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("SpillOnDropThresh"), 0.0f);
+		if (SpillThresh > 0.0f)
+		{
+			Multicast_PlayParcelEffect(FName("Spill_Start"), BreakLocation);
+			BeginLeakLoop();
+		}
+	}
 
 	// Detach if attached
 	if (bIsAttached)
@@ -751,6 +827,30 @@ void AParcelActor::SetTargetedByLocalPlayer(bool bTargeted)
 	UpdateHUDWidget();
 }
 
+TArray<FName> AParcelActor::GetParcelRowOptions() const
+{
+	TArray<FName> Options;
+	if (!ParcelDataAsset)
+	{
+		return Options;
+	}
+
+	const int32 Num = ParcelDataAsset->ParcelConfigs.Num();
+	Options.Reserve(Num);
+	for (int32 Index = 0; Index < Num; ++Index)
+	{
+		const FParcelConfig& Config = ParcelDataAsset->ParcelConfigs[Index];
+		FString Label = Config.ParcelName;
+		if (Label.IsEmpty())
+		{
+			Label = Config.ParcelTag.IsValid() ? Config.ParcelTag.ToString() : FString::Printf(TEXT("Parcel_%d"), Index);
+		}
+		Options.Add(FName(*Label));
+	}
+
+	return Options;
+}
+
 void AParcelActor::HandleParcelMeshHit(
 	UPrimitiveComponent* HitComponent,
 	AActor* OtherActor,
@@ -758,23 +858,65 @@ void AParcelActor::HandleParcelMeshHit(
 	FVector NormalImpulse,
 	const FHitResult& Hit)
 {
-	if (!HasAuthority() || !ParcelStateComponent)
-	{
-		return;
-	}
+	if (!HasAuthority() || !ParcelStateComponent) return;
 
-	const float ImpactForce = NormalImpulse.Size();
-	if (ImpactForce <= KINDA_SMALL_NUMBER)
-	{
-		return;
-	}
+    const float RawImpulse = NormalImpulse.Size();
+    if (RawImpulse <= KINDA_SMALL_NUMBER) return;
 
-	ParcelStateComponent->ApplyImpactDamage(ImpactForce, TEXT("Impact"));
+    if (bIsAttached) return;
 
-	if (ParcelStateComponent->IsBroken())
-	{
-		HandleParcelBroken();
-	}
+    const float CurrentSpeed = MeshComponent ? MeshComponent->GetPhysicsLinearVelocity().Size() : 0.0f;
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    const bool bBelowMotionThreshold =
+        (CurrentSpeed < MinImpactSpeedForDamage) &&
+        (RawImpulse < MinImpactImpulseForDamage) &&
+        CarryPointsComponent->GetOccupiedSocketCount() == 0;
+    if (bBelowMotionThreshold) return;
+
+    if ((Now - LastImpactTime) < ImpactDamageCooldown) return;
+    LastImpactTime = Now;
+
+    // 1) 스파이크 상한 (프레임 당 최대 임펄스 제한)
+    const float MaxImpulsePerHit = 5000.0f; // 필요 시 튜닝 (예: 3k~10k)
+    const float ClampedImpulse = FMath::Min(RawImpulse, MaxImpulsePerHit);
+
+    // 2) Z축 과대 임펄스 완화 (바닥 충돌 스파이크 억제)
+    const float ZBias = 0.5f; // Z 기여도를 절반으로 축소
+    const FVector BiasedImpulse(
+        NormalImpulse.X,
+        NormalImpulse.Y,
+        NormalImpulse.Z * ZBias
+    );
+    const float BiasedMagnitude = BiasedImpulse.Size();
+
+    // 3) 속도 기반 보정 (속도에 비례한 데미지로 제한)
+    const float VelocityScale = FMath::Clamp(CurrentSpeed, 0.0f, 3000.0f);
+    const float VelocityWeighted = FMath::Min(BiasedMagnitude, VelocityScale * 50.0f);
+
+    // 최종 유효 임펄스: 임계치 차감 후 사용
+    const float EffectiveImpact = FMath::Max(0.0f,
+        FMath::Min(ClampedImpulse, VelocityWeighted) - MinImpactImpulseForDamage);
+    if (EffectiveImpact <= 0.0f) return;
+
+    ParcelStateComponent->ApplyImpactDamage(EffectiveImpact, TEXT("Impact"));
+
+    FName ImpactKey = EffectiveImpact < 300.0f ? FName("Impact_Light")
+                     : EffectiveImpact < 900.0f ? FName("Impact_Med")
+                     : FName("Impact_Heavy");
+
+    Multicast_PlayParcelEffect(ImpactKey, Hit.ImpactPoint);
+
+    const float SpillThresh = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("SpillOnDropThresh"), 0.0f);
+    if (SpillThresh > 0.0f && EffectiveImpact >= SpillThresh)
+    {
+        Multicast_PlayParcelEffect(FName("Spill_Start"), Hit.ImpactPoint);
+        BeginLeakLoop();
+    }
+
+    if (ParcelStateComponent->IsBroken())
+    {
+        HandleParcelBroken();
+    }
 }
 
 void AParcelActor::ConfigureDropPhysics(const FVector& Impulse)
@@ -826,14 +968,13 @@ void AParcelActor::OnInteract_Implementation(ACharacter* Interactor)
 		return;
 	}
 
-	// 일반 택배인 경우 운반
 	if (!CanBeAttached())
 	{
 		return;
 	}
 
-	// RequestAttach 호출
 	RequestAttach(Interactor, FName("CarrySocket"));
+	return;
 }
 
 bool AParcelActor::CanInteract_Implementation(ACharacter* Interactor)
@@ -1034,36 +1175,60 @@ bool AParcelActor::Handle_UseItem(ACharacter* User)
 
 	// 아이템 타입별 사용 효과 처리
 	bool bSuccess = false;
+	bool bUsedOnGate = false;
+
+	// 게이트 타겟이 있으면 우선 해제 시도
+	if (ABlasterCharacter* BlasterUser = Cast<ABlasterCharacter>(User))
+	{
+		if (UInteractionComponent* InteractionComp = BlasterUser->GetInteractionComponent())
+		{
+			if (AActor* Target = InteractionComp->GetCurrentTarget())
+			{
+				if (AGateActor* Gate = Cast<AGateActor>(Target))
+				{
+					bSuccess = Gate->TryUseItemWithGate(this, User);
+					bUsedOnGate = bSuccess;
+				}
+			}
+		}
+	}
 
 	switch (ItemType)
 	{
 	case EItemType::Key:
 		// 열쇠 사용 - 블루프린트에서 구현 가능하도록 이벤트 브로드캐스트
+		if (!bSuccess)
+		{
+			bSuccess = true;
+		}
 		OnItemUsed.Broadcast(User, ItemType);
-		bSuccess = true;
 		break;
 
 	case EItemType::Tool:
 		// 도구 사용 - 시스템 파훼 등
+		if (!bSuccess)
+		{
+			bSuccess = true;
+		}
 		OnItemUsed.Broadcast(User, ItemType);
-		bSuccess = true;
 		break;
 
 	case EItemType::Consumable:
 		// 소비 아이템 사용
-		OnItemUsed.Broadcast(User, ItemType);
-		bSuccess = true;
-		if (ItemData.bConsumedOnUse)
+		if (!bSuccess)
 		{
-			// 아이템 소비 처리
-			Destroy();
+			bSuccess = true;
 		}
+		OnItemUsed.Broadcast(User, ItemType);
 		break;
 
 	default:
 		// 다른 타입은 블루프린트에서 처리
+		if (!bSuccess)
+		{
+			bSuccess = true;
+		}
 		OnItemUsed.Broadcast(User, ItemType);
-		bSuccess = true;
 		break;
 	}
 
@@ -1081,6 +1246,89 @@ bool AParcelActor::Handle_UseItem(ACharacter* User)
 		BP_OnSpecialItemUsed(User);
 	}
 
+	// 소비/내구도 처리
+	if (bSuccess)
+	{
+		if (ItemData.bConsumedOnUse || ItemData.ConsumePolicy == EItemConsumePolicy::ConsumeOnce)
+		{
+			Destroy();
+		}
+		else if (ItemData.ConsumePolicy == EItemConsumePolicy::DurabilityReduction && ItemData.DurabilityConsumeValue > 0.0f && ParcelStateComponent)
+		{
+			ParcelStateComponent->ApplyDamage(ItemData.DurabilityConsumeValue, TEXT("ItemUse"));
+		}
+	}
+
 	return bSuccess;
+}
+
+void AParcelActor::BeginLeakLoop()
+{
+	if (!ParcelDataAsset || ActiveLoopAudioComponent || ActiveLoopVfxComponent)
+	{
+		return; // Already active or no data asset
+	}
+
+	FVector SpawnLocation = GetActorLocation();
+
+	// Spawn loop audio component
+	if (USoundBase* LoopSound = UParcelAVLibrary::ResolveSound(ParcelConfig, ParcelDataAsset, FName("Leak_Loop")))
+	{
+		ActiveLoopAudioComponent = UGameplayStatics::SpawnSoundAttached(
+			LoopSound,
+			MeshComponent,
+			NAME_None,
+			FVector::ZeroVector,
+			EAttachLocation::KeepWorldPosition,
+			false,
+			1.0f,
+			1.0f,
+			0.0f,
+			nullptr,
+			nullptr,
+			true
+		);
+	}
+
+	// Spawn loop VFX component
+	// VFX Map: Use "Spill" key for loop (unified with Spill_Start)
+	if (UNiagaraSystem* LoopVfx = UParcelAVLibrary::ResolveVfx(ParcelConfig, ParcelDataAsset, FName("Spill")))
+	{
+		ActiveLoopVfxComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+			LoopVfx,
+			MeshComponent,
+			NAME_None,
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			EAttachLocation::KeepWorldPosition,
+			true
+		);
+	}
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Leak loop started"));
+	}
+}
+
+void AParcelActor::EndLeakLoop()
+{
+	if (ActiveLoopAudioComponent)
+	{
+		ActiveLoopAudioComponent->Stop();
+		ActiveLoopAudioComponent->DestroyComponent();
+		ActiveLoopAudioComponent = nullptr;
+	}
+
+	if (ActiveLoopVfxComponent)
+	{
+		ActiveLoopVfxComponent->DestroyComponent();
+		ActiveLoopVfxComponent = nullptr;
+	}
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Leak loop ended"));
+	}
 }
 

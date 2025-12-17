@@ -21,10 +21,10 @@ UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	CurrentClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
 	CurrentParcelState = FParcelState();
 
-	// 기본 분류 표시 매핑
-	ClassificationDisplayMap.Add(FName("Parcel-Classification.Standard"), NSLOCTEXT("ParcelHUD", "ClassificationStandard", "일반"));
-	ClassificationDisplayMap.Add(FName("Parcel-Classification.Fragile"), NSLOCTEXT("ParcelHUD", "ClassificationFragile", "취급주의"));
-	ClassificationDisplayMap.Add(FName("Parcel-Classification.Contraband"), NSLOCTEXT("ParcelHUD", "ClassificationContraband", "특수"));
+	// 기본 분류 표시 매핑 (태그의 마지막 부분만 키로 사용)
+	ClassificationDisplayMap.Add(FName("Standard"), NSLOCTEXT("ParcelHUD", "ClassificationStandard", "일반"));
+	ClassificationDisplayMap.Add(FName("Fragile"), NSLOCTEXT("ParcelHUD", "ClassificationFragile", "취급주의"));
+	ClassificationDisplayMap.Add(FName("Contraband"), NSLOCTEXT("ParcelHUD", "ClassificationContraband", "특수"));
 }
 
 void UParcelHUDWidget::NativeConstruct()
@@ -360,17 +360,45 @@ FLinearColor UParcelHUDWidget::GetInstabilityColor(float Instability, float MaxI
 	}
 }
 
+FString UParcelHUDWidget::GetTagLastPart(const FGameplayTag& Tag) const
+{
+	if (!Tag.IsValid())
+	{
+		return FString();
+	}
+
+	// 태그의 마지막 부분 추출 (예: Pickpacker.Parcel.Classification.Standard -> Standard)
+	FString TagString = Tag.ToString();
+	
+	// 점(.) 또는 하이픈(-)으로 분리하여 마지막 부분 추출
+	int32 LastDotIndex = TagString.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+	int32 LastHyphenIndex = TagString.Find(TEXT("-"), ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+	
+	int32 LastSeparatorIndex = FMath::Max(LastDotIndex, LastHyphenIndex);
+	if (LastSeparatorIndex != INDEX_NONE && LastSeparatorIndex < TagString.Len() - 1)
+	{
+		return TagString.Mid(LastSeparatorIndex + 1);
+	}
+	
+	// 구분자가 없으면 전체 태그 이름 사용
+	return TagString;
+}
+
 UTexture2D* UParcelHUDWidget::GetClassificationIcon(const FGameplayTag& ClassificationTag) const
 {
-	const FGameplayTag FragileTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Fragile"), false);
-	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
+	if (!ClassificationTag.IsValid())
+	{
+		return StandardIcon;
+	}
 
-	if (ClassificationTag.MatchesTag(FragileTag))
+	FString LastPart = GetTagLastPart(ClassificationTag);
+
+	// 마지막 부분으로 아이콘 결정
+	if (LastPart.Equals(TEXT("Fragile"), ESearchCase::IgnoreCase))
 	{
 		return FragileIcon;
 	}
-
-	if (ClassificationTag.MatchesTag(ContrabandTag))
+	else if (LastPart.Equals(TEXT("Contraband"), ESearchCase::IgnoreCase))
 	{
 		return ContrabandIcon;
 	}
@@ -380,19 +408,23 @@ UTexture2D* UParcelHUDWidget::GetClassificationIcon(const FGameplayTag& Classifi
 
 FText UParcelHUDWidget::GetClassificationText(const FGameplayTag& ClassificationTag) const
 {
-	// 우선 매핑된 표시 이름 사용
-	if (ClassificationTag.IsValid())
+	if (!ClassificationTag.IsValid())
 	{
-		if (const FText* Found = ClassificationDisplayMap.Find(ClassificationTag.GetTagName()))
-		{
-			return *Found;
-		}
+		return NSLOCTEXT("ParcelHUD", "ClassificationFallback", "일반");
 	}
 
-	// 기본 폴백: 유효 태그면 TagName, 아니면 "Standard"
-	return ClassificationTag.IsValid()
-		? FText::FromName(ClassificationTag.GetTagName())
-		: NSLOCTEXT("ParcelHUD", "ClassificationFallback", "일반");
+	// 태그의 마지막 부분 추출 (예: Pickpacker.Parcel.Classification.Standard -> Standard)
+	FString LastPart = GetTagLastPart(ClassificationTag);
+
+	// 마지막 부분으로 매핑 검색
+	FName LastPartName = FName(*LastPart);
+	if (const FText* Found = ClassificationDisplayMap.Find(LastPartName))
+	{
+		return *Found;
+	}
+
+	// 매핑을 찾지 못한 경우 마지막 부분을 그대로 표시
+	return FText::FromString(LastPart);
 }
 
 

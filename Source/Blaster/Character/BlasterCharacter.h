@@ -14,7 +14,10 @@
 #include "Blaster/BlasterTypes/CombatState.h"
 #include "Blaster/BlasterTypes/Team.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "InputActionValue.h"
 #include "BlasterCharacter.generated.h"
+
+class UInputAction;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
 
@@ -132,6 +135,52 @@ protected:
 	void AimButtonReleased();
 	void GrenadeButtonPressed();
 	void InventoryInteractionButtonPressed();
+	void EquipInventoryItem(int32 SlotIndex);
+
+	/** Enhanced Input: Single inventory action (put carried parcel into inventory) */
+	void OnInventoryAction(const FInputActionValue& Value);
+
+	/** Enhanced Input: Inventory slot actions (1-9) */
+	void OnInventorySlotOne(const FInputActionValue& Value);
+	void OnInventorySlotTwo(const FInputActionValue& Value);
+	void OnInventorySlotThree(const FInputActionValue& Value);
+	void OnInventorySlotFour(const FInputActionValue& Value);
+	void OnInventorySlotFive(const FInputActionValue& Value);
+	void OnInventorySlotSix(const FInputActionValue& Value);
+	void OnInventorySlotSeven(const FInputActionValue& Value);
+	void OnInventorySlotEight(const FInputActionValue& Value);
+	void OnInventorySlotNine(const FInputActionValue& Value);
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventoryInputAction;
+	/** Enhanced Input: Inventory slot input actions */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotOneAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotTwoAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotThreeAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotFourAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotFiveAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotSixAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotSevenAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotEightAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InventorySlotNineAction;
 	void AimOffset(float DeltaTime);
 	void CalculateAO_Pitch();
 	void SimProxiesTurn();
@@ -334,6 +383,14 @@ private:
 
 	/** 처벌 시 카메라 회전 처리 */
 	void RotateCameraToPunisher(float DeltaTime);
+
+	/**
+	 * Update movement speed based on carried parcel weight
+	 */
+	void UpdateMovementSpeedFromCarriedParcel();
+
+	/** Cached original max walk speed for weight calculations */
+	float CachedOriginalMaxWalkSpeed = -1.0f;
 
 	bool bRotateRootBone;
 	float TurnThreshold = 0.5f; // Threshold to start turning in place

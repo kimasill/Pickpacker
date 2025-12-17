@@ -7,6 +7,7 @@
 #include "MultiplayerSessionsSubsystem.h"
 #include "GameFramework/GameModeBase.h"
 #include "Blaster/Character/BlasterCharacter.h"
+#include "Engine/GameInstance.h"
 
 void UReturnToMainMenu::MenuSetup()
 {

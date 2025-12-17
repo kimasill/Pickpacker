@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "DA_ItemData.generated.h"
 
 /**
@@ -18,6 +19,17 @@ enum class EItemType : uint8
 	Evidence	UMETA(DisplayName = "Evidence"),
 	Consumable	UMETA(DisplayName = "Consumable"),
 	Unknown		UMETA(DisplayName = "Unknown")
+};
+
+/**
+ * Item 소비 정책
+ */
+UENUM(BlueprintType)
+enum class EItemConsumePolicy : uint8
+{
+	None,               // 소비/내구도 감소 없음
+	ConsumeOnce,        // 한 번 사용 시 완전 소비
+	DurabilityReduction // 내구도 감소 값 사용
 };
 
 /**
@@ -45,6 +57,10 @@ struct BLASTER_API FItemData
 {
 	GENERATED_BODY()
 
+	/** Item gameplay identifier (tag based) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	FGameplayTag ItemId;
+
 	/** Item type */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
 	EItemType ItemType = EItemType::Unknown;
@@ -65,16 +81,36 @@ struct BLASTER_API FItemData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
 	bool bConsumedOnUse = false;
 
+	/** Gameplay tags describing what this item can do (UseAction.*) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	FGameplayTagContainer UseActions;
+
+	/** 사용 소비 정책 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	EItemConsumePolicy ConsumePolicy = EItemConsumePolicy::None;
+
+	/** 소비 정책이 DurabilityReduction일 때 감소값 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data", meta = (EditCondition = "ConsumePolicy == EItemConsumePolicy::DurabilityReduction", EditConditionHides))
+	float DurabilityConsumeValue = 0.0f;
+
+	/** 사용 쿨다운(초) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
+	float UseCooldown = 0.0f;
+
 	/** Special properties for item effects (replication/RPC safe) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
 	TArray<FItemProperty> ItemProperties;
 
 	FItemData()
 	{
+		ItemId = FGameplayTag();
 		ItemType = EItemType::Unknown;
 		ItemName = TEXT("Default Item");
 		bIsUsable = false;
 		bConsumedOnUse = false;
+		ConsumePolicy = EItemConsumePolicy::None;
+		DurabilityConsumeValue = 0.0f;
+		UseCooldown = 0.0f;
 	}
 };
 

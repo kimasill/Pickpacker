@@ -18,6 +18,8 @@
 #include "Components/Image.h"
 #include "Blaster/HUD/ReturnToMainMenu.h"
 #include "Blaster/BlasterTypes/Announcement.h"
+#include "Blaster/UI/InventoryWidget.h"
+#include "Blaster/Parcel/ParcelActor.h"
 
 void ABlasterPlayerController::BroadcastElim(APlayerState* Attacker, APlayerState* Victim)
 {
@@ -464,6 +466,19 @@ void ABlasterPlayerController::SetHUDAnnouncementCountdown(float CountdownTime)
 		FString CountdownText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
 		BlasterHUD->Announcement->WarmupTime->SetText(FText::FromString(CountdownText));
 	}
+}
+
+void ABlasterPlayerController::UpdateInventoryWidget(const TArray<AParcelActor*>& Items)
+{
+	// DEPRECATED: This method is no longer used. 
+	// Inventory widgets now listen to PlayerInventoryComponent::OnInventoryUpdated delegate events directly.
+	// Keeping for backwards compatibility but this should not be called.
+	
+	// Old implementation (disabled):
+	// if (CharacterOverlay && CharacterOverlay->InventoryWidget)
+	// {
+	//     CharacterOverlay->InventoryWidget->UpdateInventory(Items);
+	// }
 }
 
 void ABlasterPlayerController::SetHUDGrenades(int32 Grenades)

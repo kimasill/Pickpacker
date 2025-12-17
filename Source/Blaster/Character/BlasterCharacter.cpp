@@ -34,10 +34,16 @@
 #include "Blaster/Library/PickpackerSuspicionLibrary.h"
 #include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
 #include "Components/InputComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
+#include "InputAction.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Animation/AnimInstance.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Blaster/Components/ParcelStateComponent.h"
+#include "Blaster/Parcel/ParcelActor.h"
 
 ABlasterCharacter::ABlasterCharacter()
 {
@@ -475,6 +481,8 @@ void ABlasterCharacter::BeginPlay()
 
 	if (PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson) ToggleHeadMesh(true);
 	
+	// Reset cached speed on begin play
+	// This will be set in UpdateMovementSpeedFromCarriedParcel() on first tick
 }
 
 void ABlasterCharacter::Tick(float DeltaTime)
@@ -485,6 +493,7 @@ void ABlasterCharacter::Tick(float DeltaTime)
 	HideCameraIfCharacterClose();
 	HideCarriedCameraIfCharacterClose();
 	RotateCameraToPunisher(DeltaTime);
+	UpdateMovementSpeedFromCarriedParcel();
 	PollInit();
 }
 
@@ -537,8 +546,53 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ABlasterCharacter::FireButtonPressed);
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ABlasterCharacter::FireButtonReleased);
 	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &ABlasterCharacter::ReloadButtonPressed);
-	PlayerInputComponent->BindAction("ThrowGrenade", IE_Pressed, this, &ABlasterCharacter::GrenadeButtonPressed);
-	PlayerInputComponent->BindAction("InventoryInteraction", IE_Pressed, this, &ABlasterCharacter::InventoryInteractionButtonPressed);
+	PlayerInputComponent->BindAction("ThrowGrenade", IE_Pressed, this, &ABlasterCharacter::GrenadeButtonPressed);	
+	
+	// Enhanced Input: Bind inventory slot actions (1-9)
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		// Single inventory action: put carried parcel into inventory
+		if (InventoryInputAction)
+		{
+			EnhancedInputComponent->BindAction(InventoryInputAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnInventoryAction);
+		}
+		if (InventorySlotOneAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotOneAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotOne);
+		}
+		if (InventorySlotTwoAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotTwoAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotTwo);
+		}
+		if (InventorySlotThreeAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotThreeAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotThree);
+		}
+		if (InventorySlotFourAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotFourAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotFour);
+		}
+		if (InventorySlotFiveAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotFiveAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotFive);
+		}
+		if (InventorySlotSixAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotSixAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotSix);
+		}
+		if (InventorySlotSevenAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotSevenAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotSeven);
+		}
+		if (InventorySlotEightAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotEightAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotEight);
+		}
+		if (InventorySlotNineAction)
+		{
+			EnhancedInputComponent->BindAction(InventorySlotNineAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnInventorySlotNine);
+		}
+	}
 }
 
 void ABlasterCharacter::PostInitializeComponents()
@@ -969,10 +1023,185 @@ void ABlasterCharacter::TurnInPlace(float DeltaTime)
 void ABlasterCharacter::InventoryInteractionButtonPressed()
 {
 	if (bDisableGameplay) return;
-	if (InteractionComponent)
+	// Enhanced input inventory action now routed to OnInventoryAction
+	OnInventoryAction(FInputActionValue());
+}
+
+void ABlasterCharacter::EquipInventoryItem(int32 SlotIndex)
+{
+	if (bDisableGameplay) return;
+	
+	// Equip item from inventory (inventory interaction key is separate)
+	if (PlayerInventoryComponent)
 	{
-		InteractionComponent->InventoryInteract();
+		PlayerInventoryComponent->EquipItemFromInventory(SlotIndex);
 	}
+}
+
+// Enhanced Input: Inventory slot handlers
+void ABlasterCharacter::OnInventorySlotOne(const FInputActionValue& Value)
+{
+	EquipInventoryItem(0);
+}
+
+void ABlasterCharacter::OnInventorySlotTwo(const FInputActionValue& Value)
+{
+	EquipInventoryItem(1);
+}
+
+void ABlasterCharacter::OnInventorySlotThree(const FInputActionValue& Value)
+{
+	EquipInventoryItem(2);
+}
+
+void ABlasterCharacter::OnInventorySlotFour(const FInputActionValue& Value)
+{
+	EquipInventoryItem(3);
+}
+
+void ABlasterCharacter::OnInventorySlotFive(const FInputActionValue& Value)
+{
+	EquipInventoryItem(4);
+}
+
+void ABlasterCharacter::OnInventorySlotSix(const FInputActionValue& Value)
+{
+	EquipInventoryItem(5);
+}
+
+void ABlasterCharacter::OnInventorySlotSeven(const FInputActionValue& Value)
+{
+	EquipInventoryItem(6);
+}
+
+void ABlasterCharacter::OnInventorySlotEight(const FInputActionValue& Value)
+{
+	EquipInventoryItem(7);
+}
+
+void ABlasterCharacter::OnInventorySlotNine(const FInputActionValue& Value)
+{
+	EquipInventoryItem(8);
+}
+
+void ABlasterCharacter::OnInventoryAction(const FInputActionValue& Value)
+{
+    if (bDisableGameplay) return;
+
+    if (!InteractionComponent || !PlayerInventoryComponent)
+    {
+        return;
+    }
+
+    // If carrying a parcel, put into inventory (auto slot)
+    if (AParcelActor* Carried = InteractionComponent->GetCarriedParcel())
+    {
+        if (PlayerInventoryComponent->PutCarriedParcelIntoInventory(-1))
+        {
+            InteractionComponent->SetCarriedParcel(nullptr);
+        }
+        return;
+    }
+
+    // If not carrying, nothing to do here (taking from inventory uses slot keys)
+}
+
+void ABlasterCharacter::UpdateMovementSpeedFromCarriedParcel()
+{
+	if (!InteractionComponent || !GetCharacterMovement())
+	{
+		return;
+	}
+
+	// Get base speed from Buff component or use default
+	float BaseSpeed = 600.0f; // Default walk speed
+	if (Buff && Buff->InitialBaseSpeed > 0.0f)
+	{
+		BaseSpeed = Buff->InitialBaseSpeed;
+	}
+	
+	// Cache original speed if not already cached
+	if (CachedOriginalMaxWalkSpeed < 0.0f)
+	{
+		CachedOriginalMaxWalkSpeed = BaseSpeed;
+	}
+
+	// Calculate total weight from carried parcel and inventory
+	float TotalWeight = 0.0f;
+	
+	// Weight from carried parcel
+	AParcelActor* CarriedParcel = InteractionComponent->GetCarriedParcel();
+	if (CarriedParcel)
+	{
+		if (UParcelStateComponent* ParcelState = CarriedParcel->GetParcelStateComponent())
+		{
+			const FParcelState& State = ParcelState->GetParcelState();
+			TotalWeight += State.Weight;
+		}
+	}
+
+	// Weight from inventory parcels
+	if (PlayerInventoryComponent)
+	{
+		const TArray<AParcelActor*>& InventoryItems = PlayerInventoryComponent->GetCollectedItems();
+		for (AParcelActor* Item : InventoryItems)
+		{
+			if (Item && Item->GetParcelStateComponent())
+			{
+				const FParcelState& State = Item->GetParcelStateComponent()->GetParcelState();
+				TotalWeight += State.Weight;
+			}
+		}
+	}
+
+	// Calculate speed multiplier based on total weight
+	// Use same logic as ParcelStateComponent::GetMovementSpeedMultiplier()
+	float SpeedMultiplier = 1.0f;
+	
+	if (TotalWeight > 0.0f)
+	{
+		// Use same weight thresholds as ParcelStateComponent
+		const float MediumWeightThreshold = 10.0f;
+		const float HeavyWeightThreshold = 20.0f;
+		const float MediumMovementPenalty = 0.9f; // 10% reduction
+		const float HeavyMovementPenalty = 0.75f; // 25% reduction
+		
+		// Calculate base multiplier from total weight
+		if (TotalWeight >= HeavyWeightThreshold)
+		{
+			SpeedMultiplier = HeavyMovementPenalty;
+		}
+		else if (TotalWeight >= MediumWeightThreshold)
+		{
+			SpeedMultiplier = MediumMovementPenalty;
+		}
+		
+		// If carrying a parcel with two-person carry bonus, apply it
+		if (CarriedParcel && CarriedParcel->GetParcelStateComponent())
+		{
+			UParcelStateComponent* ParcelState = CarriedParcel->GetParcelStateComponent();
+			
+			// Check if two-person carry is active (this affects the carried parcel's multiplier)
+			// GetEffectiveMovementSpeedMultiplier includes two-person bonus
+			float CarriedParcelBaseMultiplier = ParcelState->GetMovementSpeedMultiplier();
+			float CarriedParcelEffectiveMultiplier = ParcelState->GetEffectiveMovementSpeedMultiplier();
+			
+			// If two-person carry is active, the effective multiplier is better
+			// We need to apply this bonus to the total weight calculation
+			if (CarriedParcelEffectiveMultiplier > CarriedParcelBaseMultiplier)
+			{
+				// Two-person carry is active, apply bonus
+				// The bonus improves movement speed, so we adjust the multiplier upward
+				float TwoPersonBonus = CarriedParcelEffectiveMultiplier / CarriedParcelBaseMultiplier;
+				SpeedMultiplier *= TwoPersonBonus;
+			}
+		}
+	}
+
+	// Apply speed multiplier to base speed
+	float NewSpeed = CachedOriginalMaxWalkSpeed * SpeedMultiplier;
+	GetCharacterMovement()->MaxWalkSpeed = NewSpeed;
+	GetCharacterMovement()->MaxWalkSpeedCrouched = NewSpeed * 0.5f; // Crouch speed is typically half
 }
 
 void ABlasterCharacter::HideCameraIfCharacterClose()

@@ -7,8 +7,11 @@
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "Components/ScrollBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "Components/Image.h"
 #include "InventoryWidget.generated.h"
 
 class UInventoryItemSlotWidget;
@@ -37,7 +40,7 @@ public:
 	 * Add item to inventory display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void AddItemToDisplay(AParcelActor* Item);
+	void AddItemToDisplay(AParcelActor* Item, int32 SlotIndex);
 
 	/**
 	 * Remove item from inventory display
@@ -51,20 +54,42 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetInventoryVisibility(bool bVisible);
 
+	/**
+	 * Get slot widget at index
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UInventoryItemSlotWidget* GetSlotWidgetAt(int32 Index) const;
+
+protected:
+	/**
+	 * Handle inventory updated event from PlayerInventoryComponent
+	 */
+	UFUNCTION()
+	void HandleInventoryUpdated(const TArray<AParcelActor*>& Items, int32 Count);
+
+private:
+	/** PlayerInventoryComponent reference for event binding */
+	UPROPERTY()
+	class UPlayerInventoryComponent* PlayerInventoryComponent;
+
 public:
-	/** Scroll box for inventory items */
+	/** Vertical box for inventory items (vertical list UI) */
 	UPROPERTY(meta = (BindWidget))
-	UScrollBox* InventoryScrollBox;
+	UVerticalBox* InventoryVerticalBox;
 
 	/** Item slot widget class */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	TSubclassOf<UInventoryItemSlotWidget> ItemSlotWidgetClass;
 
+	/** Maximum number of slots to display */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+	int32 MaxDisplaySlots = 9;
+
 protected:
 	/**
 	 * Create item slot widget
 	 */
-	UInventoryItemSlotWidget* CreateItemSlot(AParcelActor* Item);
+	UInventoryItemSlotWidget* CreateItemSlot(AParcelActor* Item, int32 SlotIndex);
 
 private:
 	/** Current item slots */
@@ -89,7 +114,7 @@ public:
 	 * Set item data
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
-	void SetItem(AParcelActor* Item);
+	void SetItem(AParcelActor* Item, int32 SlotIndex);
 
 	/**
 	 * Get item
@@ -106,9 +131,9 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ItemTypeText;
 
-	/** Item description text */
+	/** Key text (1-9) */
 	UPROPERTY(meta = (BindWidget))
-	UTextBlock* ItemDescriptionText;
+	UTextBlock* KeyText;
 
 protected:
 	UFUNCTION()

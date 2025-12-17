@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Styling/SlateBrush.h"
+#include "GameplayTagContainer.h"
 #include "InteractionUIData.generated.h"
 
 UENUM(BlueprintType)
@@ -57,6 +58,18 @@ struct BLASTER_API FInteractionUIData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Visual")
 	bool bHighlight = false;
+
+	// Gate 요구 조건 표시용: 필요한 UseAction 태그 모음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Gate")
+	FGameplayTagContainer RequiredUseActions;
+
+	// 플레이어가 조건을 만족하는지 여부 (UI 빠른 표시용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Gate")
+	bool bPlayerHasRequiredItem = false;
+
+	// 미충족 요구사항 텍스트
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction|Gate")
+	FText MissingRequirementsText;
 };
 
 

@@ -12,8 +12,10 @@
 #include "Blaster/Components/ParcelStateComponent.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/Interaction/InteractionUIData.h"
+#include "Blaster/Gate/GateActor.h"
 #include "Blaster/UI/InteractionPromptWidget.h"
 #include "Camera/CameraComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -365,7 +367,15 @@ void UInteractionComponent::UpdateTarget()
         }
         CurrentTarget = NewTarget;
         SetParcelTargetedFlag(CurrentTarget.Get(), true);
-        if (!CanInteract()) return;
+
+        // CanInteract가 false면 UI/하이라이트 제거 후 종료
+        if (!CanInteract())
+        {
+            HideInteractionWidget();
+            SetCustomDepth(CurrentTarget.Get(), false);
+            OnTargetChanged.Broadcast(PreviousTarget.Get(), CurrentTarget.Get());
+            return;
+        }
 
         if (CurrentTarget.IsValid())
         {
@@ -395,7 +405,13 @@ void UInteractionComponent::UpdateTarget()
     }
     else if (CurrentTarget.IsValid())
     {
-        // If actor is self-handling UI we should not enforce our widget. Re-evaluate request flag.
+        if (!CanInteract())
+        {
+            HideInteractionWidget();
+            SetCustomDepth(CurrentTarget.Get(), false);
+            return;
+        }
+
         bool bHandled = false;
         UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass());
         if (InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
@@ -546,27 +562,27 @@ void UInteractionComponent::InventoryInteract()
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
     ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OwnerCharacter); if (!BlasterCharacter || !BlasterCharacter->GetPlayerInventoryComponent()) return;
     UPlayerInventoryComponent* Inventory = BlasterCharacter->GetPlayerInventoryComponent();
+    // If carrying, put into inventory (auto slot)
     if (IsValid(CarriedParcel))
     {
         if (CarriedParcel->IsPackaged()) { UE_LOG(LogTemp, Warning, TEXT("[InteractionComponent] Cannot put packaged parcel into inventory")); return; }
         if (CarriedParcel->IsItem())
         {
-            if (Inventory->CollectItem(CarriedParcel)) { SetCarriedParcel(nullptr); UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Put parcel into inventory")); }
-        }
-    }
-    else
-    {
-        const TArray<AParcelActor*> Items = Inventory->GetCollectedItems();
-        if (Items.Num() > 0)
-        {
-            AParcelActor* First = Items[0];
-            if (First && Inventory->RemoveItem(First))
+            if (Inventory->PutCarriedParcelIntoInventory(-1))
             {
-                SetCarriedParcel(First);
-                First->RequestAttach(OwnerCharacter, FName("CarrySocket"));
-                UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Took parcel from inventory"));
+                SetCarriedParcel(nullptr);
+                UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Put parcel into inventory"));
             }
         }
+        return;
+    }
+
+    // Not carrying: equip first inventory item (if any)
+    AParcelActor* Equipped = Inventory->EquipItemFromInventory(0);
+    if (Equipped)
+    {
+        SetCarriedParcel(Equipped);
+        UE_LOG(LogTemp, Log, TEXT("[InteractionComponent] Took parcel from inventory (auto slot 0)"));
     }
 }
 
@@ -652,19 +668,13 @@ void UInteractionComponent::HandleCarriedParcelChanged(AParcelActor* LastParcel)
     {
         ClearShelfPlacementPreview();
 
-        // Clear movement penalty when dropping parcel
-        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
-        {
-            ClearParcelMovementPenalty(OwnerCharacter);
-        }
+        // Movement penalty is now handled by BlasterCharacter::UpdateMovementSpeedFromCarriedParcel()
+        // No need to clear here as it's updated every tick
     }
     else
     {
-        // Apply movement penalty when picking up parcel
-        if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
-        {
-            ApplyParcelMovementPenalty(OwnerCharacter, CarriedParcel);
-        }
+        // Movement penalty is now handled by BlasterCharacter::UpdateMovementSpeedFromCarriedParcel()
+        // No need to apply here as it's updated every tick
     }
 }
 
@@ -974,6 +984,32 @@ bool UInteractionComponent::GatherInteractionUIData(AActor* TargetActor, FIntera
             OutData.CurrentCredits = GameState->GetTeamCredits();
         }
     }
+
+	// Gate 요구 조건 보완 표시
+	if (AGateActor* Gate = Cast<AGateActor>(TargetActor))
+	{
+		FGameplayTagContainer CombinedUseActions = OutData.RequiredUseActions;
+		for (const FGateCondition& Condition : Gate->GetRequiredConditions())
+		{
+			CombinedUseActions.AppendTags(Condition.RequiredUseActions);
+		}
+		OutData.RequiredUseActions = CombinedUseActions;
+
+		if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+		{
+			const bool bMeets = Gate->DoesPlayerMeetConditions(OwnerCharacter);
+			OutData.bPlayerHasRequiredItem = bMeets;
+			if (!bMeets && OutData.MissingRequirementsText.IsEmpty())
+			{
+				OutData.MissingRequirementsText = FText::FromString(TEXT("필요한 아이템/액션이 없습니다"));
+			}
+		}
+
+		if (OutData.InteractionType == EInteractionType::None)
+		{
+			OutData.InteractionType = EInteractionType::Use;
+		}
+	}
 
     // 기본 텍스트 확보
     if (OutData.ActionText.IsEmpty() && InteractableObj && InteractableObj->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))

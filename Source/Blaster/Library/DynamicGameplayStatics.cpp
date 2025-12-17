@@ -2,23 +2,33 @@
 
 
 #include "Library/DynamicGameplayStatics.h"
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "UObject/Interface.h"
+#include "Components/ActorComponent.h"
 
 UObject* UDynamicGameplayStatics::GetActorOrComponentWithInterface(AActor* InActor, TSubclassOf<UInterface> InterfaceClass)
 {
-	if (!InActor || !InterfaceClass)
-	{
-		return nullptr;
-	}
+    if (InActor == nullptr || !InterfaceClass)
+    {
+        return nullptr;
+    }
 
+    // If actor implements the interface, return it
     if (InActor->GetClass()->ImplementsInterface(InterfaceClass))
     {
-        return InActor;
+        return Cast<UObject>(InActor);
     }
 
+    // Search components implementing the interface
     TArray<UActorComponent*> Components = InActor->GetComponentsByInterface(InterfaceClass);
-    if (Components.Num() > 0)
+    for (UActorComponent* Comp : Components)
     {
-        return Components[0];
+        if (Comp)
+        {
+            return Cast<UObject>(Comp);
+        }
     }
+
     return nullptr;
 }

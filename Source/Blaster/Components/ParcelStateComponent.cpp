@@ -7,6 +7,8 @@
 #include "Blaster/DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
 #include "Blaster/Components/InstabilityFactorComponent.h"
+#include "Blaster/Parcel/ParcelActor.h"
+#include "Blaster/Parcel/ParcelAVLibrary.h"
 
 namespace ParcelClassification
 {
@@ -101,6 +103,12 @@ void UParcelStateComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 	{
 		UpdateInstability(DeltaTime);		
 	}
+
+	// Update leak state
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UpdateLeakState(DeltaTime);
+	}
 }
 
 void UParcelStateComponent::InitializeParcel(const FParcelConfig& Config)
@@ -168,35 +176,50 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 
 void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
 {
-	if (ImpactForce <= ImpactDamageThreshold)
-	{
-		if (bEnableDebugLogging)
-		{
-			UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelStateComponent] Impact damage below threshold - Force: %.2f, Threshold: %.2f"),
-				ImpactForce, ImpactDamageThreshold);
-		}
-		return;
-	}
+    if (ImpactForce <= ImpactDamageThreshold)
+    {
+        if (bEnableDebugLogging)
+        {
+            UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelStateComponent] Impact damage below threshold - Force: %.2f, Threshold: %.2f"),
+                ImpactForce, ImpactDamageThreshold);
+        }
+        return;
+    }
 
-	// Base damage scales with over-threshold impulse; classification adjusts multiplier
-	float Multiplier = 1.0f;
-	if (IsFragileClassification())
-	{
-		Multiplier = FragileImpactMultiplier;
-	}
-	else if (IsContrabandClassification())
-	{
-		Multiplier = 1.5f;
-	}
+    // Base damage scales with over-threshold impulse; classification adjusts multiplier
+    float Multiplier = 1.0f;
+    if (IsFragileClassification())
+    {
+        Multiplier = FragileImpactMultiplier; // keep classification behavior
+    }
+    else if (IsContrabandClassification())
+    {
+        Multiplier = 1.5f;
+    }
 
-	const float DamageAmount = (ImpactForce - ImpactDamageThreshold) * 0.1f * Multiplier;
-	ApplyDamage(DamageAmount, FString::Printf(TEXT("Impact_%s"), *ImpactSource));
+    const float OverThreshold = FMath::Max(0.0f, ImpactForce - ImpactDamageThreshold);
 
-	if (bEnableDebugLogging)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage applied - Force: %.2f, Threshold: %.2f, Damage: %.2f, Multiplier: %.2f, Source: %s"),
-			ImpactForce, ImpactDamageThreshold, DamageAmount, Multiplier, *ImpactSource);
-	}
+    // Soften small impacts: reduce scaling and apply sqrt for gentle ramp-up
+    const float SoftScaled = FMath::Sqrt(OverThreshold) * 0.5f; // sqrt dampens small values; 0.5 scales overall
+
+    float DamageAmount = SoftScaled * Multiplier;
+
+    // Weight-based scaling: lighter parcels take less damage, heavier more
+    const float Weight = CurrentState.Weight;
+    const float WeightFactor = FMath::Clamp(Weight / 10.0f, 0.5f, 2.0f); // tune reference weight (10.0)
+    DamageAmount *= WeightFactor;
+
+    // Cap per-impact damage to 20% of current durability to avoid instant break on minor hits
+    const float MaxPerImpact = FMath::Max(5.0f, CurrentState.Durability * 0.2f);
+    DamageAmount = FMath::Min(DamageAmount, MaxPerImpact);
+
+    ApplyDamage(DamageAmount, FString::Printf(TEXT("Impact_%s"), *ImpactSource));
+
+    if (bEnableDebugLogging)
+    {
+        UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage applied - Force: %.2f, Threshold: %.2f, Over: %.2f, Damage: %.2f, Multiplier: %.2f, Source: %s"),
+            ImpactForce, ImpactDamageThreshold, OverThreshold, DamageAmount, Multiplier, *ImpactSource);
+    }
 }
 
 void UParcelStateComponent::UpdateInstability(float DeltaTime)
@@ -412,4 +435,86 @@ void UParcelStateComponent::SetInternalItemData(const FItemData& ItemData)
 
 	InternalItemData = ItemData;
 	OnRep_InternalItemData();
+}
+
+void UParcelStateComponent::UpdateLeakState(float DeltaTime)
+{
+	if (IsBroken())
+	{
+		return; // Don't leak if already broken
+	}
+
+	float LeakRate = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("LeakRate"), 0.0f);
+	if (LeakRate <= 0.0f)
+	{
+		// No leak configured, stop if currently leaking
+		if (bIsLeaking)
+		{
+			bIsLeaking = false;
+			LeakProgress = 0.0f;
+			if (AParcelActor* Parcel = Cast<AParcelActor>(GetOwner()))
+			{
+				Parcel->EndLeakLoop();
+			}
+		}
+		return;
+	}
+
+	// Check if leak should start (based on durability threshold or special property)
+	float LeakStartThresh = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("LeakStartDurability"), 100.0f);
+	bool ShouldLeak = CurrentState.Durability <= LeakStartThresh;
+
+	if (ShouldLeak && !bIsLeaking)
+	{
+		// Start leaking
+		bIsLeaking = true;
+		LeakProgress = 0.0f;
+		if (AParcelActor* Parcel = Cast<AParcelActor>(GetOwner()))
+		{
+			Parcel->BeginLeakLoop();
+		}
+
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Leak started - Durability: %.2f, Threshold: %.2f"),
+				CurrentState.Durability, LeakStartThresh);
+		}
+	}
+	else if (!ShouldLeak && bIsLeaking)
+	{
+		// Stop leaking
+		bIsLeaking = false;
+		LeakProgress = 0.0f;
+		if (AParcelActor* Parcel = Cast<AParcelActor>(GetOwner()))
+		{
+			Parcel->EndLeakLoop();
+		}
+
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Leak stopped - Durability: %.2f"),
+				CurrentState.Durability);
+		}
+	}
+
+	if (bIsLeaking)
+	{
+		// Update leak progress
+		LeakProgress += LeakRate * DeltaTime;
+
+		// Apply suspicion per second if configured
+		float SuspicionPerSec = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("SuspicionPerSec"), 0.0f);
+		if (SuspicionPerSec > 0.0f)
+		{
+			// Note: Suspicion is typically handled by game state, but we can trigger events here
+			// For now, we'll just track it - actual suspicion application should be handled elsewhere
+		}
+
+		// Optionally reduce durability over time due to leak
+		float LeakDamagePerSec = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("LeakDamagePerSec"), 0.0f);
+		if (LeakDamagePerSec > 0.0f)
+		{
+			ApplyDamage(LeakDamagePerSec * DeltaTime, TEXT("Leak"));
+		}
+	}
 }

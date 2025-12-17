@@ -11,6 +11,7 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemCollected, class AParcelActor*, Item, int32, NewCount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemRemoved, class AParcelActor*, Item, int32, NewCount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemUsed, class AParcelActor*, Item, EItemType, ItemType);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryUpdated, const TArray<class AParcelActor*>&, Items, int32, Count);
 
 /**
  * Player Inventory Component - Manages player's collected items (unpackaged parcels)
@@ -43,6 +44,20 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool UseItem(AParcelActor* Item);
+
+	/**
+	 * Equip an item from inventory to hand (removes from inventory and attaches to character)
+	 * @param SlotIndex Index of the item in inventory (0-based)
+	 * @return The item that was equipped, or nullptr if failed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	AParcelActor* EquipItemFromInventory(int32 SlotIndex);
+
+	/**
+	 * Get item at specific slot index
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	AParcelActor* GetItemAtSlot(int32 SlotIndex) const;
 
 	/**
 	 * Check if player has a specific item type
@@ -97,6 +112,23 @@ public:
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Inventory Settings")
 	int32 MaxInventorySize = 4;
 
+	/**
+	 * Put currently carried parcel into inventory (if there's space)
+	 * @param SlotIndex Target slot index (0-based), or -1 for first available slot
+	 * @return True if successfully moved to inventory
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool PutCarriedParcelIntoInventory(int32 SlotIndex = -1);
+
+	/**
+	 * Collect item and automatically attach to character (for convenience)
+	 * @param Item Item to collect
+	 * @param bAttachToHand If true, also attach to character's hand
+	 * @return True if successfully collected
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool CollectItemAndAttach(AParcelActor* Item, bool bAttachToHand = true);
+
 	/** Events */
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemCollected OnItemCollected;
@@ -106,6 +138,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemUsed OnItemUsed;
+
+	/** Called when inventory is updated (items added/removed) */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
+	FOnInventoryUpdated OnInventoryUpdated;
 
 protected:
 	/**
@@ -127,10 +163,27 @@ protected:
 	void Server_UseItem(AParcelActor* Item);
 
 	/**
+	 * Server RPC for equipping item from inventory
+	 */
+	UFUNCTION(Server, Reliable, Category = "Inventory")
+	void Server_EquipItemFromInventory(int32 SlotIndex);
+
+	/**
+	 * Server RPC for putting carried parcel into inventory
+	 */
+	UFUNCTION(Server, Reliable, Category = "Inventory")
+	void Server_PutCarriedParcelIntoInventory(int32 SlotIndex);
+
+	/**
 	 * Replication callback for collected items
 	 */
 	UFUNCTION()
 	void OnRep_CollectedItems();
+
+	/**
+	 * Update inventory UI
+	 */
+	void UpdateInventoryUI();
 
 private:
 	/** Collected items (unpackaged parcels) */

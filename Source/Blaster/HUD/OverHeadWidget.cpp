@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "OverHeadWidget.h"
 #include "Components/TextBlock.h"
+#include "GameFramework/Pawn.h"
 
 void UOverHeadWidget::SetDisplayText(FString TextToDisplay)
 {

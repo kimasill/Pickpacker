@@ -104,10 +104,6 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	FGameplayTag GetClassificationTag() const { return ParcelClassificationTag; }
 
-	/** Item gameplay tag */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
-	FGameplayTag GetItemTag() const { return ParcelItemTag; }
-
 	/** Price earned when submitted */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
 	int32 GetParcelPrice() const { return ParcelPrice; }
@@ -241,6 +237,12 @@ protected:
 	void Multicast_ParcelDropped(ACharacter* Carrier, FVector DropLocation);
 
 	/**
+	 * Multicast RPC for playing parcel audio/VFX effects
+	 */
+	UFUNCTION(NetMulticast, Reliable, Category = "Parcel|AV")
+	void Multicast_PlayParcelEffect(FName EventKey, FVector Location);
+
+	/**
 	 * Handle parcel state changes
 	 */
 	UFUNCTION()
@@ -324,9 +326,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
 	UDA_ParcelData* ParcelDataAsset = nullptr;
 
-	// DataAsset 안의 Row를 직접 선택 (우선 사용)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true"))
-	FParcelRowNamePicker ParcelDefinitionRowName;
+	// DataAsset 안의 ParcelConfigs 중 하나를 선택 (ParcelName으로 드롭다운)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", GetOptions = "GetParcelRowOptions"))
+	FName ParcelDefinitionRowName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	FParcelConfig ParcelConfig;
@@ -345,6 +347,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
 	float DropImpulseMultiplier = 1.0f;
 
+	// 충격 판정 최소 조건 및 쿨다운
+	UPROPERTY(EditAnywhere, Category = "Parcel|Damage")
+	float MinImpactSpeedForDamage = 75.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Parcel|Damage")
+	float MinImpactImpulseForDamage = 80.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Parcel|Damage")
+	float ImpactDamageCooldown = 0.15f;
 	// State tracking
 	UPROPERTY(Replicated)
 	bool bIsAttached = false;
@@ -383,10 +394,6 @@ protected:
 	/** Classification gameplay tag */
 	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Tags")
 	FGameplayTag ParcelClassificationTag;
-
-	/** Item gameplay tag */
-	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Tags")
-	FGameplayTag ParcelItemTag;
 
 	// Item properties (포장되지 않은 택배 = 아이템)
 	/** Whether this parcel is an item (unpackaged state) */
@@ -460,10 +467,34 @@ private:
 	USkeletalMeshComponent* ParcelMesh;
 
 	UPROPERTY()
+	float LastImpactTime = -100.0f;
+
+	UPROPERTY()
 	TWeakObjectPtr<AShelfActor> OccupyingShelf;
 
 	UPROPERTY()
-	int32 OccupyingShelfSlotIndex = INDEX_NONE;	
+	int32 OccupyingShelfSlotIndex = INDEX_NONE;
+
+	/** Active loop audio component for spill/leak effects */
+	UPROPERTY()
+	class UAudioComponent* ActiveLoopAudioComponent = nullptr;
+
+	/** Active loop Niagara component for spill/leak effects */
+	UPROPERTY()
+	class UNiagaraComponent* ActiveLoopVfxComponent = nullptr;
+
+public:
+	/**
+	 * Begin leak/spill loop effects
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel|AV")
+	void BeginLeakLoop();
+
+	/**
+	 * End leak/spill loop effects
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel|AV")
+	void EndLeakLoop();
 
 public:
 	FORCEINLINE UStaticMeshComponent* GetParcelMesh() const { return MeshComponent; }
@@ -482,4 +513,11 @@ private:
 	// Whether to use two-hand carry animations (derived from carry socket count)
 	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Carry")
 	bool bRequiresTwoHandCarry = false;
+
+public:
+    /**
+     * Provide row options for ParcelDefinitionRowName based on ParcelDataAsset contents
+     */
+    UFUNCTION(BlueprintCallable, Category = "Parcel|Config")
+    TArray<FName> GetParcelRowOptions() const;
 };

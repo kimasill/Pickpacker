@@ -538,7 +538,7 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 
 	FGameplayTagContainer ParcelTags = Parcel->GetParcelTags();
 	const bool bParcelPackaged = Parcel->IsPackaged();
-	const FGameplayTag ParcelItemTag = Parcel->GetItemTag();
+	const FGameplayTag ParcelItemId = Parcel->GetItemData().ItemId;
 
 	for (FActiveOrderState& Order : ActiveOrders)
 	{
@@ -576,8 +576,8 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 		return true;
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] No matching order for parcel '%s' (Packaged=%s, ItemTag=%s, Tags=%s)"),
-		*Parcel->GetName(), bParcelPackaged ? TEXT("true") : TEXT("false"), *ParcelItemTag.ToString(), *ParcelTags.ToStringSimple());
+	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] No matching order for parcel '%s' (Packaged=%s, ItemId=%s, Tags=%s)"),
+		*Parcel->GetName(), bParcelPackaged ? TEXT("true") : TEXT("false"), *ParcelItemId.ToString(), *ParcelTags.ToStringSimple());
 	return false;
 }
 

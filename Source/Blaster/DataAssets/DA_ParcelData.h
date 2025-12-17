@@ -9,6 +9,9 @@
 #include "DA_ParcelData.generated.h"
 
 class UStaticMesh;
+class USoundBase;
+class UNiagaraSystem;
+class UMaterialInterface;
 
 /**
  * Parcel Configuration - Defines parcel properties and behavior
@@ -46,14 +49,6 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
 	float ProcessingTime = 3.0f;
 
-	/** Required input tags (what stations can process this) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
-	FGameplayTagContainer RequiredInputTags;
-
-	/** Output tags (what this parcel produces) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
-	FGameplayTagContainer OutputTags;
-
 	/** Special properties */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
 	TMap<FString, float> SpecialProperties;
@@ -66,10 +61,6 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Tags")
 	FGameplayTag ClassificationTag;
 
-	/** Item tag (ex: Parcel-Item.Chemicals) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Tags")
-	FGameplayTag ItemTag;
-
 	/** Unpackaged mesh (what players see when it is open) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Appearance")
 	TSoftObjectPtr<UStaticMesh> UnpackagedMeshAsset;
@@ -81,6 +72,18 @@ struct BLASTER_API FParcelConfig
 	/** Default item data contained inside the parcel */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
 	FItemData ItemData;
+
+	/** Audio overrides for this parcel (overrides global audio) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|AV")
+	TMap<FName, TSoftObjectPtr<USoundBase>> AudioOverrides;
+
+	/** VFX overrides for this parcel (overrides global VFX) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|AV")
+	TMap<FName, TSoftObjectPtr<UNiagaraSystem>> VfxOverrides;
+
+	/** Decal overrides for this parcel (overrides global decals) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|AV")
+	TMap<FName, TSoftObjectPtr<UMaterialInterface>> DecalOverrides;
 
 	FParcelConfig()
 	{
@@ -112,6 +115,18 @@ public:
 	/** Global parcel parameters */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Global Parameters")
 	TMap<FString, float> GlobalParameters;
+
+	/** Global audio map (key: event name, value: sound asset) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Global Parameters|AV")
+	TMap<FName, TSoftObjectPtr<USoundBase>> GlobalAudioMap;
+
+	/** Global VFX map (key: event name, value: Niagara system) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Global Parameters|AV")
+	TMap<FName, TSoftObjectPtr<UNiagaraSystem>> GlobalVfxMap;
+
+	/** Global decal map (key: event name, value: decal material) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Global Parameters|AV")
+	TMap<FName, TSoftObjectPtr<UMaterialInterface>> GlobalDecalMap;
 
 	/**
 	 * Get parcel config by tag
