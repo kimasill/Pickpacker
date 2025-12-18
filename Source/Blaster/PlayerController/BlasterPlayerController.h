@@ -46,6 +46,10 @@ public:
 	FHighPingDelegate HighPingDelegate; // Delegate for high ping events
 
 	void BroadcastElim(APlayerState* Attacker, APlayerState* Victim);
+
+	/** 엔딩 중 입력 차단 */
+	UFUNCTION(BlueprintCallable, Category = "Ending")
+	void SetInputBlocked(bool bBlocked);
 protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();
@@ -157,6 +161,13 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void ServerReportPingStatus(bool bHighPing); // Server reports high ping status
+
+	/** 엔딩 중 입력 차단 상태 */
+	UPROPERTY()
+	bool bEndingInputBlocked = false;
+
+	UFUNCTION(Client, Reliable)
+	void ClientSetInputBlocked(bool bBlocked);
 
 
 	UPROPERTY(EditAnywhere)

@@ -6,6 +6,7 @@
 #include "GameFramework/GameState.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
+#include "Blaster/Components/EscapeProgressComponent.h"
 #include "PickpackerGameState.generated.h"
 
 class UAnchorRuntimeSubsystem;
@@ -38,6 +39,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Ending")
+	UEscapeProgressComponent* GetEscapeProgressComponent() const { return EscapeProgressComponent; }
 
 	/**
 	 * Set the level variant data (Server Only)
@@ -265,6 +269,10 @@ private:
 	/** Cached anchor subsystem reference */
 	UPROPERTY()
 	UAnchorRuntimeSubsystem* AnchorSubsystem = nullptr;
+
+	/** 엔딩/월드 진행도 관리 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Ending", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UEscapeProgressComponent> EscapeProgressComponent;
 
 	/** 게임 시간 시스템 변수 */
 	

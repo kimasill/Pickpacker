@@ -5,39 +5,6 @@
 
 UDA_ItemData::UDA_ItemData()
 {
-	// Initialize with default item configs
-	FItemData KeyItem;
-	KeyItem.ItemId = FGameplayTag::RequestGameplayTag(TEXT("Item.Key"), false);
-	KeyItem.ItemType = EItemType::Key;
-	KeyItem.ItemName = TEXT("Key");
-	KeyItem.ItemDescription = FText::FromString(TEXT("A key that can unlock doors"));
-	KeyItem.bIsUsable = true;
-	KeyItem.bConsumedOnUse = false;
-	KeyItem.ConsumePolicy = EItemConsumePolicy::None;
-	KeyItem.UseActions.AddTag(FGameplayTag::RequestGameplayTag(TEXT("UseAction.Key.Open.MaintenanceDoor"), false));
-	ItemConfigs.Add(KeyItem);
-
-	FItemData ToolItem;
-	ToolItem.ItemId = FGameplayTag::RequestGameplayTag(TEXT("Item.Tool"), false);
-	ToolItem.ItemType = EItemType::Tool;
-	ToolItem.ItemName = TEXT("Tool");
-	ToolItem.ItemDescription = FText::FromString(TEXT("A tool for disabling systems"));
-	ToolItem.bIsUsable = true;
-	ToolItem.bConsumedOnUse = false;
-	ToolItem.ConsumePolicy = EItemConsumePolicy::DurabilityReduction;
-	ToolItem.DurabilityConsumeValue = 10.0f;
-	ToolItem.UseActions.AddTag(FGameplayTag::RequestGameplayTag(TEXT("UseAction.Tool.PryOpen"), false));
-	ToolItem.UseActions.AddTag(FGameplayTag::RequestGameplayTag(TEXT("UseAction.Tool.Unscrew"), false));
-	ItemConfigs.Add(ToolItem);
-
-	FItemData InformationItem;
-	InformationItem.ItemId = FGameplayTag::RequestGameplayTag(TEXT("Item.Information"), false);
-	InformationItem.ItemType = EItemType::Information;
-	InformationItem.ItemName = TEXT("Information");
-	InformationItem.ItemDescription = FText::FromString(TEXT("Information document"));
-	InformationItem.bIsUsable = false;
-	InformationItem.ConsumePolicy = EItemConsumePolicy::None;
-	ItemConfigs.Add(InformationItem);
 }
 
 bool UDA_ItemData::GetItemDataByType(EItemType ItemType, FItemData& OutItemData) const

@@ -2,6 +2,7 @@
 
 #include "PickpackerGameMode.h"
 #include "Blaster/GameState/PickpackerGameState.h"
+#include "Blaster/Components/EscapeProgressComponent.h"
 #include "Blaster/Escape/EscapeZoneActor.h"
 #include "Engine/World.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
@@ -170,6 +171,25 @@ void APickpackerGameMode::CheckGameEndConditions()
 	{
 		OnGameOver(TEXT("Suspicion reached maximum!"));
 		return;
+	}
+
+	// 모든 플레이어 사망 실패 엔딩
+	if (UEscapeProgressComponent* Progress = PickpackerGameState->GetEscapeProgressComponent())
+	{
+		int32 AlivePlayers = 0;
+		for (APlayerState* PS : PickpackerGameState->PlayerArray)
+		{
+			if (PS && PS->GetPawn())
+			{
+				++AlivePlayers;
+			}
+		}
+
+		if (AlivePlayers == 0 && Progress->GetCurrentEndingId().IsNone())
+		{
+			Progress->StartEndingById(TEXT("Ending_Fail_AllDead"));
+			return;
+		}
 	}
 
 	// Check if all players escaped (handled by EscapeZoneActor)

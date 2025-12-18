@@ -3,6 +3,7 @@
 #include "PickpackerGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "TimerManager.h"
 #include "Blaster/Subsystem/AnchorRuntimeSubsystem.h"
 
 APickpackerGameState::APickpackerGameState()
@@ -19,6 +20,8 @@ APickpackerGameState::APickpackerGameState()
 	PrimaryActorTick.bCanEverTick = true; // 게임 시간 업데이트를 위해 Tick 활성화
 	TeamCredits = 0;
 	LastReplicatedTeamCredits = 0;
+
+	EscapeProgressComponent = CreateDefaultSubobject<UEscapeProgressComponent>(TEXT("EscapeProgressComponent"));
 }
 
 void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

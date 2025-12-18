@@ -131,9 +131,8 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ItemTypeText;
 
-	/** Key text (1-9) */
 	UPROPERTY(meta = (BindWidget))
-	UTextBlock* KeyText;
+	UImage* KeyIcon;
 
 protected:
 	UFUNCTION()
@@ -143,5 +142,8 @@ private:
 	/** Item reference */
 	UPROPERTY()
 	TWeakObjectPtr<AParcelActor> Item;
+
+	/** Slot index */
+	FName SlotActionName;
 };
 

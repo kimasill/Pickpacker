@@ -202,6 +202,7 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ABlasterCharacter, bDisableGameplay);
 	DOREPLIFETIME(ABlasterCharacter, CurrentSuspiciousBehavior);
 	DOREPLIFETIME(ABlasterCharacter, bBeingPunished);
+	DOREPLIFETIME(ABlasterCharacter, bEndingInProgress);
 }
 
 void ABlasterCharacter::OnRep_ReplicatedMovement()
@@ -216,6 +217,17 @@ void ABlasterCharacter::Elim(bool bPlayerLeftGame)
 	DropOrDestroyWeapons();
 	MulticastElim(bPlayerLeftGame);
 	
+}
+
+void ABlasterCharacter::SetEndingInProgress(bool bInProgress)
+{
+	bEndingInProgress = bInProgress;
+	bDisableGameplay = bInProgress;
+
+	if (bEndingInProgress && GetCharacterMovement())
+	{
+		GetCharacterMovement()->DisableMovement();
+	}
 }
 
 void ABlasterCharacter::MulticastElim_Implementation(bool bPlayerLeftGame)
@@ -768,7 +780,7 @@ void ABlasterCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const 
 
 void ABlasterCharacter::MoveForward(float Value)
 {
-	if (bDisableGameplay || bBeingPunished) return;
+	if (bDisableGameplay || bBeingPunished || bEndingInProgress) return;
 	if (Controller != nullptr && Value != 0.f)
 	{
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -779,7 +791,7 @@ void ABlasterCharacter::MoveForward(float Value)
 
 void ABlasterCharacter::MoveRight(float Value)
 {
-	if (bDisableGameplay || bBeingPunished) return;
+	if (bDisableGameplay || bBeingPunished || bEndingInProgress) return;
 	if (Controller != nullptr && Value != 0.f)
 	{
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);

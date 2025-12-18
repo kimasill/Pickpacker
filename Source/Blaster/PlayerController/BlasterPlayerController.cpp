@@ -734,3 +734,34 @@ FString ABlasterPlayerController::GetTeamsInfoText(ABlasterGameState* BlasterGam
 
 	return InfoTextString;
 }
+
+void ABlasterPlayerController::SetInputBlocked(bool bBlocked)
+{
+	bEndingInputBlocked = bBlocked;
+
+	SetIgnoreMoveInput(bBlocked);
+	SetIgnoreLookInput(bBlocked);
+
+	if (ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn()))
+	{
+		BlasterCharacter->SetEndingInProgress(bBlocked);
+	}
+
+	if (!IsLocalController())
+	{
+		ClientSetInputBlocked(bBlocked);
+	}
+}
+
+void ABlasterPlayerController::ClientSetInputBlocked_Implementation(bool bBlocked)
+{
+	bEndingInputBlocked = bBlocked;
+
+	SetIgnoreMoveInput(bBlocked);
+	SetIgnoreLookInput(bBlocked);
+
+	if (ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn()))
+	{
+		BlasterCharacter->SetEndingInProgress(bBlocked);
+	}
+}

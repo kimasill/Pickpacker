@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "Blaster/BlasterTypes/TurningInPlace.h"
+#include "Blaster/DataAssets/DA_ItemData.h"
 #include "BlasterAnimInstance.generated.h"
 
 /**
@@ -105,15 +106,12 @@ private:
 	UPROPERTY(BlueprintReadOnly, Category = "Carry IK", meta = (AllowPrivateAccess = "true"))
 	FTransform ParcelRightHandIKTransform;
 
-	/** 손 모양 애니메이션 포즈 사용 여부 */
-	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
-	bool bUseHandPoseAnimation;
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK", meta = (AllowPrivateAccess = "true"))
+	bool bUseLeftHandIK;
 
-	/** 손 모양 포즈 블렌드 가중치 (0.0 ~ 1.0) */
-	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
-	float HandPoseBlendWeight;
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK", meta = (AllowPrivateAccess = "true"))
+	bool bUseRightHandIK;
 
-	/** 작은 물체 여부 */
-	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Hand Pose", meta = (AllowPrivateAccess = "true"))
-	bool bIsSmallObject;
+	UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Grip", meta = (AllowPrivateAccess = "true"))
+	EGripType CurrentCarryGripType;
 };

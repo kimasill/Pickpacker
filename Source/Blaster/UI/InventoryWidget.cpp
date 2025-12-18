@@ -14,31 +14,41 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/Texture2D.h"
 #include "UObject/UnrealType.h"
+#include "InputLibrary.h"
+
+namespace
+{
+    static const TArray<FName> SlotActionNames = {
+        TEXT("1"), TEXT("2"), TEXT("3"),
+        TEXT("4"), TEXT("5"), TEXT("6"),
+        TEXT("7"), TEXT("8"), TEXT("9")
+    };
+}
 
 UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
+    : Super(ObjectInitializer)
 {
 }
 
 void UInventoryWidget::NativeConstruct()
 {
-	Super::NativeConstruct();
+    Super::NativeConstruct();
 
-	// Find and bind to PlayerInventoryComponent's OnInventoryUpdated event
-	if (APlayerController* PC = GetOwningPlayer())
-	{
-		if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn()))
-		{
-			PlayerInventoryComponent = Character->GetPlayerInventoryComponent();
-			if (PlayerInventoryComponent)
-			{
-				PlayerInventoryComponent->OnInventoryUpdated.AddDynamic(this, &UInventoryWidget::HandleInventoryUpdated);
-				
-				// Update with current inventory immediately
-				HandleInventoryUpdated(PlayerInventoryComponent->GetCollectedItems(), PlayerInventoryComponent->GetInventoryCount());
-			}
-		}
-	}
+    // Find and bind to PlayerInventoryComponent's OnInventoryUpdated event
+    if (APlayerController* PC = GetOwningPlayer())
+    {
+        if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn()))
+        {
+            PlayerInventoryComponent = Character->GetPlayerInventoryComponent();
+            if (PlayerInventoryComponent)
+            {
+                PlayerInventoryComponent->OnInventoryUpdated.AddDynamic(this, &UInventoryWidget::HandleInventoryUpdated);
+                
+                // Update with current inventory immediately
+                HandleInventoryUpdated(PlayerInventoryComponent->GetCollectedItems(), PlayerInventoryComponent->GetInventoryCount());
+            }
+        }
+    }
 }
 
 void UInventoryWidget::NativeDestruct()
@@ -166,6 +176,7 @@ UInventoryItemSlotWidget::UInventoryItemSlotWidget(const FObjectInitializer& Obj
 void UInventoryItemSlotWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	// Bind use action
 }
 
 void UInventoryItemSlotWidget::SetItem(AParcelActor* InItem, int32 SlotIndex)
@@ -174,6 +185,10 @@ void UInventoryItemSlotWidget::SetItem(AParcelActor* InItem, int32 SlotIndex)
 
 	if (!Item.IsValid())
 	{
+		if (KeyIcon)
+		{
+			KeyIcon->SetBrushFromTexture(nullptr);
+		}
 		return;
 	}
 
@@ -189,23 +204,37 @@ void UInventoryItemSlotWidget::SetItem(AParcelActor* InItem, int32 SlotIndex)
 	if (ItemTypeText)
 	{
 		FString TypeString = UEnum::GetValueAsString(ItemData.ItemType);
-		// Remove enum prefix if present (e.g., "EItemType::" -> "")
 		TypeString.RemoveFromStart(TEXT("EItemType::"));
 		ItemTypeText->SetText(FText::FromString(TypeString));
 	}
 
-	// Set key text (1-9)
-	if (KeyText)
+	// Set key icon (1-9)
+	if (KeyIcon)
 	{
-		// SlotIndex is 0-based, display as 1-9
-		int32 KeyNumber = SlotIndex + 1;
+		const int32 KeyNumber = SlotIndex + 1;
 		if (KeyNumber >= 1 && KeyNumber <= 9)
 		{
-			KeyText->SetText(FText::FromString(FString::Printf(TEXT("%d"), KeyNumber)));
+			const int32 IconIndex = KeyNumber - 1;
+			if (SlotActionNames.IsValidIndex(IconIndex))
+			{
+				const FKey ActionKey(SlotActionNames[IconIndex]);
+				if (UTexture2D* IconTexture = UInputLibrary::GetIconForKey(ActionKey))
+				{
+					KeyIcon->SetBrushFromTexture(IconTexture);
+				}
+				else
+				{
+					KeyIcon->SetBrushFromTexture(nullptr);
+				}
+			}
+			else
+			{
+				KeyIcon->SetBrushFromTexture(nullptr);
+			}
 		}
 		else
 		{
-			KeyText->SetText(FText::GetEmpty());
+			KeyIcon->SetBrushFromTexture(nullptr);
 		}
 	}
 }

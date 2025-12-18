@@ -72,12 +72,22 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Punishment")
 	bool bBeingPunished = false;
 
+	/** 엔딩 진행 중 여부 */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Ending")
+	bool bEndingInProgress = false;
+
 	UFUNCTION(BlueprintImplementableEvent)
 	void ShowSniperScopeWidget(bool bShowSniperScope);
 	void UpdateHUDHealth();
 	void UpdateHUDShield();
 	void UpdateHUDAmmo();
 	void SpawnDefaultWeapon();
+
+	UFUNCTION(BlueprintCallable, Category = "Ending")
+	void SetEndingInProgress(bool bInProgress);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Ending")
+	bool IsEndingInProgress() const { return bEndingInProgress; }
 
 
 	UPROPERTY()

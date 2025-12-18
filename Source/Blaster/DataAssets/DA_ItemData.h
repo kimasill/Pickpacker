@@ -22,6 +22,25 @@ enum class EItemType : uint8
 };
 
 /**
+ * Grip Type Enumeration
+ */
+UENUM(BlueprintType)
+enum class EGripType : uint8
+{
+    None        UMETA(DisplayName = "None"),
+    Handle      UMETA(DisplayName = "Handle"),
+	Table		UMETA(DisplayName = "Table"),
+	Tiny		UMETA(DisplayName = "Tiny"),
+	Can			UMETA(DisplayName = "Close"),
+	Wide		UMETA(DisplayName = "Wide"),
+    Pistol      UMETA(DisplayName = "Pistol"),
+    Rifle       UMETA(DisplayName = "Rifle"),
+    Box         UMETA(DisplayName = "Box"),
+    Round       UMETA(DisplayName = "Round"),
+    Custom      UMETA(DisplayName = "Custom")
+};
+
+/**
  * Item 소비 정책
  */
 UENUM(BlueprintType)
@@ -101,6 +120,9 @@ struct BLASTER_API FItemData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data")
 	TArray<FItemProperty> ItemProperties;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Data|Grip")
+	EGripType GripType = EGripType::None;
+
 	FItemData()
 	{
 		ItemId = FGameplayTag();
@@ -111,6 +133,7 @@ struct BLASTER_API FItemData
 		ConsumePolicy = EItemConsumePolicy::None;
 		DurabilityConsumeValue = 0.0f;
 		UseCooldown = 0.0f;
+		GripType = EGripType::None;
 	}
 };
 

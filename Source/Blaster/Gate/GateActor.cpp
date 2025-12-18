@@ -4,6 +4,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Blaster/Components/EscapeProgressComponent.h"
+#include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "Blaster/Interaction/InteractionUIData.h"
@@ -277,6 +279,25 @@ void AGateActor::UnlockGate(ACharacter* InstigatorCharacter)
 	for (const TPair<FGameplayTag, bool>& Pair : UnlockResult.WorldFlagsToSet)
 	{
 		WorldFlagState.Add(Pair.Key, Pair.Value);
+	}
+
+	// EscapeProgress 시스템으로 월드 플래그 전달
+	if (HasAuthority())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (APickpackerGameState* GS = World->GetGameState<APickpackerGameState>())
+			{
+				if (UEscapeProgressComponent* Progress = GS->GetEscapeProgressComponent())
+				{
+					for (const TPair<FGameplayTag, bool>& Pair : UnlockResult.WorldFlagsToSet)
+					{
+						Progress->SetWorldFlag(Pair.Key, Pair.Value ? 1 : 0);
+					}
+					Progress->EvaluateEndings();
+				}
+			}
+		}
 	}
 
 	// 추가 효과(사운드/애니메이션)는 BP에서 처리하도록 UnlockAction 태그를 노출

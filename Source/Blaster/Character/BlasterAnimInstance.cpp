@@ -81,30 +81,30 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	{
 		bEnableIK = CarryIKComp->IsIKEnabled();
 		if (bEnableIK)
-		{			
+		{
 			ParcelLeftHandIKTransform = CarryIKComp->GetLeftHandIKTransform();
 			ParcelRightHandIKTransform = CarryIKComp->GetRightHandIKTransform();
-			
-			// 손 모양 포즈 정보 가져오기
-			bUseHandPoseAnimation = CarryIKComp->ShouldUseHandPoseAnimation();
-			HandPoseBlendWeight = CarryIKComp->GetHandPoseBlendWeight();
-			bIsSmallObject = CarryIKComp->IsSmallObject();
+			bUseLeftHandIK = CarryIKComp->HasLeftHandTarget();
+			bUseRightHandIK = CarryIKComp->HasRightHandTarget();
+			CurrentCarryGripType = CarryIKComp->GetCurrentGripType();
 		}
 		else
 		{
 			ParcelLeftHandIKTransform = FTransform::Identity;
 			ParcelRightHandIKTransform = FTransform::Identity;
-			bUseHandPoseAnimation = false;
-			HandPoseBlendWeight = 0.0f;
-			bIsSmallObject = false;
+			bUseLeftHandIK = false;
+			bUseRightHandIK = false;
+			CurrentCarryGripType = EGripType::None;
 		}
 	}
 	else
 	{
 		bEnableIK = false;
-		bUseHandPoseAnimation = false;
-		HandPoseBlendWeight = 0.0f;
-		bIsSmallObject = false;
+		ParcelLeftHandIKTransform = FTransform::Identity;
+		ParcelRightHandIKTransform = FTransform::Identity;
+		bUseLeftHandIK = false;
+		bUseRightHandIK = false;
+		CurrentCarryGripType = EGripType::None;
 	}
 
 	// Update animation flags based on character state
