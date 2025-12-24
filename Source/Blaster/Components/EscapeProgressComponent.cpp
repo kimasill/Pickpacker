@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 #include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
@@ -178,8 +179,39 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 	// 모든 플레이어 입력 차단 및 HUD 전환 트리거
 	BroadcastInputBlock(true);
 
-	// 엔딩 시퀀스 재생
-	Multicast_PlayEndingSequence(EndingData->EndingSequence);
+	// 레벨 전환 전 시퀀스가 있는 경우 먼저 재생
+	if (EndingData->TransitionSequence)
+	{
+		// 레벨 전환 정보 저장
+		if (!EndingData->EndingLevel.IsNull())
+		{
+			PendingLevelPath = EndingData->EndingLevel.GetLongPackageName();
+		}
+		PendingEndingSequence = EndingData->EndingSequence;
+		
+		// 전환 시퀀스 재생
+		Multicast_PlayTransitionSequence(EndingData->TransitionSequence);
+	}
+	else
+	{
+		// 전환 시퀀스가 없으면 바로 레벨 전환 또는 엔딩 시퀀스 재생
+		if (EndingData->EndingLevel.IsNull())
+		{
+			Multicast_PlayEndingSequence(EndingData->EndingSequence);
+		}
+		else
+		{
+			const FString LevelPath = EndingData->EndingLevel.GetLongPackageName();
+			if (LevelPath.IsEmpty())
+			{
+				Multicast_PlayEndingSequence(EndingData->EndingSequence);
+			}
+			else if (UWorld* World = GetWorld())
+			{
+				World->ServerTravel(LevelPath, true);
+			}
+		}
+	}
 }
 
 void UEscapeProgressComponent::BroadcastInputBlock(bool bBlocked)
@@ -215,6 +247,63 @@ void UEscapeProgressComponent::Multicast_PlayEndingSequence_Implementation(ULeve
 	}
 }
 
+void UEscapeProgressComponent::Multicast_PlayTransitionSequence_Implementation(ULevelSequence* Sequence)
+{
+	if (!Sequence || !GetWorld())
+	{
+		return;
+	}
+
+	ALevelSequenceActor* OutActor = nullptr;
+	FMovieSceneSequencePlaybackSettings Settings;
+	Settings.bPauseAtEnd = true;
+
+	if (ULevelSequencePlayer* Player = ULevelSequencePlayer::CreateLevelSequencePlayer(GetWorld(), Sequence, Settings, OutActor))
+	{
+		// 서버에서만 시퀀스 완료 콜백 바인딩 (레벨 전환은 서버에서만 실행)
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			CurrentSequencePlayer = Player;
+			Player->OnFinished.AddDynamic(this, &UEscapeProgressComponent::OnTransitionSequenceFinished);
+		}
+		
+		Player->Play();
+	}
+}
+
+void UEscapeProgressComponent::OnTransitionSequenceFinished()
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	// 전환 시퀀스 완료 후 레벨 전환 또는 엔딩 시퀀스 재생
+	if (!PendingLevelPath.IsEmpty())
+	{
+		// 레벨 전환
+		if (UWorld* World = GetWorld())
+		{
+			World->ServerTravel(PendingLevelPath, true);
+		}
+	}
+	else if (PendingEndingSequence)
+	{
+		// 레벨이 없으면 엔딩 시퀀스 재생
+		Multicast_PlayEndingSequence(PendingEndingSequence);
+	}
+
+	// 정리
+	PendingLevelPath.Empty();
+	PendingEndingSequence = nullptr;
+	
+	if (CurrentSequencePlayer)
+	{
+		CurrentSequencePlayer->OnFinished.RemoveDynamic(this, &UEscapeProgressComponent::OnTransitionSequenceFinished);
+		CurrentSequencePlayer = nullptr;
+	}
+}
+
 void UEscapeProgressComponent::OnRep_CurrentEndingId()
 {
 	// 클라이언트에서 엔딩 시작 시 입력 차단
@@ -223,5 +312,18 @@ void UEscapeProgressComponent::OnRep_CurrentEndingId()
 		BroadcastInputBlock(true);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

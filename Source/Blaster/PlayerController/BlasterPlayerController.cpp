@@ -20,6 +20,7 @@
 #include "Blaster/BlasterTypes/Announcement.h"
 #include "Blaster/UI/InventoryWidget.h"
 #include "Blaster/Parcel/ParcelActor.h"
+#include "LevelSequence.h"
 
 void ABlasterPlayerController::BroadcastElim(APlayerState* Attacker, APlayerState* Victim)
 {
@@ -58,10 +59,16 @@ void ABlasterPlayerController::ClientElimAnnouncement_Implementation(APlayerStat
 		}
 	}
 }
-
 void ABlasterPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 1인칭 시점 Pitch 제한 설정 (-80 ~ +80도)
+	if (PlayerCameraManager)
+	{
+		PlayerCameraManager->ViewPitchMin = -80.0f;
+		PlayerCameraManager->ViewPitchMax = 80.0f;
+	}
 
 	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
 	ServerCheckMatchState();
@@ -751,6 +758,21 @@ void ABlasterPlayerController::SetInputBlocked(bool bBlocked)
 	{
 		ClientSetInputBlocked(bBlocked);
 	}
+}
+
+void ABlasterPlayerController::ClientPlayEndingSequence_Implementation(const TSoftObjectPtr<ULevelSequence>& SequenceAsset)
+{
+    TSoftObjectPtr<ULevelSequence> SequencePtr = SequenceAsset;
+    if (SequencePtr.IsNull())
+    {
+        return;
+    }
+
+    ULevelSequence* Sequence = SequencePtr.LoadSynchronous();
+    if (Sequence)
+    {
+        BP_PlayEndingSequence(Sequence);
+    }
 }
 
 void ABlasterPlayerController::ClientSetInputBlocked_Implementation(bool bBlocked)

@@ -38,6 +38,7 @@ void UCarryIKComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
     DOREPLIFETIME(UCarryIKComponent, bIKEnabled);
     DOREPLIFETIME(UCarryIKComponent, AttachedParcel);
 	DOREPLIFETIME(UCarryIKComponent, CurrentSocketName);
+    DOREPLIFETIME(UCarryIKComponent, CurrentGripType);
 }
 
 void UCarryIKComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -224,6 +225,12 @@ void UCarryIKComponent::RefreshGripType()
     if (!AttachedParcel)
     {
         CurrentGripType = EGripType::None;
+        return;
+    }
+
+    const AActor* OwnerActor = GetOwner();
+    if (!OwnerActor || !OwnerActor->HasAuthority())
+    {
         return;
     }
 

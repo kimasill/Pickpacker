@@ -36,13 +36,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
 	int32 RequiredAuthorizedPlayers = 0;
 
-	/** 엔딩 시퀀스 */
+	/** 레벨 전환 전 재생할 시퀀스 (옵션) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	TObjectPtr<ULevelSequence> TransitionSequence = nullptr;
+
+	/** 엔딩 시퀀스 (레벨 전환 후 재생) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
 	TObjectPtr<ULevelSequence> EndingSequence = nullptr;
+
+	/** 엔딩 전용 레벨(옵션, 설정 시 서버 트래블) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	TSoftObjectPtr<UWorld> EndingLevel;
 
 	/** 엔딩 메시지 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
 	FText EndingMessage;
 };
+
+
+
+
+
+
 
 

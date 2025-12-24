@@ -18,13 +18,15 @@
 #include "BlasterCharacter.generated.h"
 
 class UInputAction;
+class UPrimitiveComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
 
 UENUM(BlueprintType)
 enum class EPerspective : uint8 {
 	EPT_FirstPerson UMETA(DisplayName = "FirstPerson"),
-	EPT_ThirdPerson UMETA(DisplayName = "ThirdPerson")
+	EPT_ThirdPerson UMETA(DisplayName = "ThirdPerson"),
+	EPT_Sequence UMETA(DisplayName = "Sequence")
 };
 
 USTRUCT(BlueprintType)
@@ -34,6 +36,21 @@ struct FPerspectiveSettings {
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	EPerspective Perspective = EPerspective::EPT_FirstPerson;
+};
+
+USTRUCT(BlueprintType)
+struct FDebugCollisionVisibilitySettings
+{
+	GENERATED_BODY()
+
+public:
+	/** Toggle all hit collision boxes at once */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug|Collision")
+	bool bShowHitCollisionBoxes = false;
+
+	/** Optional per-component overrides keyed by component name */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug|Collision")
+	TMap<FName, bool> ComponentVisibilities;
 };
 
 UCLASS()
@@ -48,6 +65,7 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PostInitializeComponents() override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 
 	/**
 	* Play Montages
@@ -122,6 +140,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FPerspectiveSettings PerspectiveSettings;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug|Collision")
+	FDebugCollisionVisibilitySettings DebugCollisionVisibility;
+
+	UFUNCTION(BlueprintCallable, Category = "Debug|Collision")
+	void RefreshDebugCollisionVisibility();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Socket")
 	FName CarrySocketName = FName("CarrySocket");
@@ -315,10 +339,11 @@ public:
 #pragma endregion
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
-	class USpringArmComponent* CameraBoom;
-
-	UPROPERTY(VisibleAnywhere, Category = Camera)
 	class UCameraComponent* FollowCamera;
+
+	/** 1인칭 카메라 높이 (눈 위치) */
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float EyeHeight = 64.f;
 		
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UWidgetComponent* OverHeadWidget;
@@ -562,4 +587,10 @@ public:
 	FORCEINLINE bool IsHoldingTheFlag() const;
 	ETeam GetTeam();
 	void SetHoldingTheFlag(bool bHoldingFlag);
+
+private:
+	void ApplyDebugCollisionVisibility();
+	UPrimitiveComponent* FindDebugPrimitiveByName(const FName ComponentName) const;
+	bool IsPerspectiveFirstPerson() const;
+	bool IsPerspectiveThirdPersonLike() const;
 };

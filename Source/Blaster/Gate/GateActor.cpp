@@ -164,11 +164,36 @@ bool AGateActor::PlayerSatisfiesConditions(ACharacter* User, const FGateConditio
 		}
 	}
 
-	// 월드 플래그 요구
+	// 월드 플래그 요구: 전역(EscapeProgress) 우선, 없으면 로컬(WorldFlagState) 확인
 	if (Condition.RequiredWorldFlag.IsValid())
 	{
-		const bool* FlagValue = WorldFlagState.Find(Condition.RequiredWorldFlag);
-		if (!FlagValue || !(*FlagValue))
+		bool bHasFlagValue = false;
+		bool bFlagEnabled = false;
+
+		if (const UWorld* World = GetWorld())
+		{
+			if (const APickpackerGameState* GS = World->GetGameState<APickpackerGameState>())
+			{
+				if (const UEscapeProgressComponent* Progress = GS->GetEscapeProgressComponent())
+				{
+					const int32 Value = Progress->GetWorldFlag(Condition.RequiredWorldFlag);
+					bHasFlagValue = true;
+					bFlagEnabled = Value != 0;
+				}
+			}
+		}
+
+		// 전역에서 못 찾으면 로컬 플래그로 보조 확인
+		if (!bHasFlagValue)
+		{
+			if (const bool* LocalFlag = WorldFlagState.Find(Condition.RequiredWorldFlag))
+			{
+				bHasFlagValue = true;
+				bFlagEnabled = *LocalFlag;
+			}
+		}
+
+		if (!bHasFlagValue || !bFlagEnabled)
 		{
 			return false;
 		}

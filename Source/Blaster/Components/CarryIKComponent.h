@@ -106,7 +106,7 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
     bool bHasRightHandTarget = false;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Carry IK|Grip")
+    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Carry IK|Grip")
     EGripType CurrentGripType = EGripType::None;
 
     UFUNCTION()

@@ -2,7 +2,6 @@
 
 
 #include "BlasterCharacter.h"
-#include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/WidgetComponent.h"
@@ -11,6 +10,7 @@
 #include "Blaster/BlasterComponents/CombatComponent.h"
 #include "Blaster/BlasterComponents/BuffComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "BlasterAnimInstance.h"
 #include "Blaster/Blaster.h"
@@ -49,22 +49,10 @@ ABlasterCharacter::ABlasterCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(GetCapsuleComponent());
-	CameraBoom->TargetArmLength = 0.f;
-	CameraBoom->bUsePawnControlRotation = true;
-
-	CameraBoom->bEnableCameraRotationLag = true;
-	CameraBoom->CameraRotationLagSpeed = 12.f; // 8~15 사이에서 취향 조정
-	CameraBoom->bEnableCameraLag = false;      // 위치 랙은 1인칭에서 일반적으로 비활성
-
+	// 1인칭 카메라를 Capsule에 직접 부착 (SpringArm 제거)
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-
-	// 3rd person view
-	//FollowCamera->bUsePawnControlRotation = false;
-
-	// 1st person view
+	FollowCamera->SetupAttachment(GetCapsuleComponent());
+	FollowCamera->SetRelativeLocation(FVector(0.f, 0.f, EyeHeight));
 	FollowCamera->bUsePawnControlRotation = true;
 
 
@@ -190,6 +178,12 @@ ABlasterCharacter::ABlasterCharacter()
 			Box.Value->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 	}
+}
+
+void ABlasterCharacter::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	ApplyDebugCollisionVisibility();
 }
 
 void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -491,10 +485,23 @@ void ABlasterCharacter::BeginPlay()
 		AttachedGrenade->SetVisibility(false);
 	}
 
-	if (PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson) ToggleHeadMesh(true);
+	ToggleHeadMesh(IsPerspectiveFirstPerson());
+	ApplyDebugCollisionVisibility();
 	
-	// Reset cached speed on begin play
-	// This will be set in UpdateMovementSpeedFromCarriedParcel() on first tick
+	// 1인칭 카메라 EyeHeight 설정
+	if (FollowCamera)
+	{
+		FollowCamera->SetRelativeLocation(FVector(0.f, 0.f, EyeHeight));
+	}
+	
+	// Mesh 회전 설정: Mesh는 Controller 회전을 따르지 않도록 설정 (카메라 흔들림 방지)
+	if (GetMesh())
+	{
+		// SkeletalMeshComponent에는 컨트롤러 회전 플래그가 없으므로 World/Relative 회전을 유지하도록 기본값 사용
+		GetMesh()->SetUsingAbsoluteRotation(false);
+	}
+ 	
+ 	// Reset cached speed on begin play
 }
 
 void ABlasterCharacter::Tick(float DeltaTime)
@@ -1292,47 +1299,127 @@ void ABlasterCharacter::HideCarriedCameraIfCharacterClose()
 }
 
 void ABlasterCharacter::ToggleHeadMesh(bool bHideHeadMesh)
-{	
-	if (IsLocallyControlled())
-	{
-		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
-		{
-			if (bHideHeadMesh) {
-				auto HideIfExists = [SkeletalMesh](FName BoneName)
-					{
-						if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
-						{
-							// hide rendering of the bone
-							SkeletalMesh->HideBoneByName(BoneName, EPhysBodyOp::PBO_None);
-						}
-					};
-				HideIfExists(FName("head"));
-				HideIfExists(FName("hair_front"));
-				HideIfExists(FName("hair_back"));
-				HideIfExists(FName("neck_01"));
+{
+    if (IsLocallyControlled())
+    {
+        if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+        {
+            if (bHideHeadMesh) {
+                auto HideIfExists = [SkeletalMesh](FName BoneName)
+                    {
+                        if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+                        {
+                            // hide rendering of the bone
+                            SkeletalMesh->HideBoneByName(BoneName, EPhysBodyOp::PBO_None);
+                        }
+                    };
+                HideIfExists(FName("head"));
+                HideIfExists(FName("hair_front"));
+                HideIfExists(FName("hair_back"));
+                HideIfExists(FName("neck_01"));
 
-				SkeletalMesh->SetCastHiddenShadow(true);
-			}
-			else if (!bHideHeadMesh)
-			{
-				auto UnhideIfExists = [SkeletalMesh](FName BoneName)
-					{
-						if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
-						{
-							// unhide rendering of the bone
-							SkeletalMesh->UnHideBoneByName(BoneName);
-						}
-					};
-				UnhideIfExists(FName("head"));
-				UnhideIfExists(FName("hair_front"));
-				UnhideIfExists(FName("hair_back"));
-				UnhideIfExists(FName("neck_01"));
-				SkeletalMesh->SetCastHiddenShadow(false);
-			}
-		}
-	}
+                SkeletalMesh->SetCastHiddenShadow(true);
+            }
+            else if (!bHideHeadMesh)
+            {
+                auto UnhideIfExists = [SkeletalMesh](FName BoneName)
+                    {
+                        if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+                        {
+                            // unhide rendering of the bone
+                            SkeletalMesh->UnHideBoneByName(BoneName);
+                        }
+                    };
+                UnhideIfExists(FName("head"));
+                UnhideIfExists(FName("hair_front"));
+                UnhideIfExists(FName("hair_back"));
+                UnhideIfExists(FName("neck_01"));
+                SkeletalMesh->SetCastHiddenShadow(false);
+            }
+        }
+    }
 }
 
+void ABlasterCharacter::RefreshDebugCollisionVisibility()
+{
+    ApplyDebugCollisionVisibility();
+}
+
+void ABlasterCharacter::ApplyDebugCollisionVisibility()
+{
+    auto ApplyVisibility = [](UPrimitiveComponent* Component, bool bShouldShow)
+    {
+        if (!Component) return;
+        Component->SetHiddenInGame(!bShouldShow);
+        Component->SetVisibility(bShouldShow, true);
+    };
+
+    const bool bDefaultShow = DebugCollisionVisibility.bShowHitCollisionBoxes;
+
+    for (TPair<FName, UBoxComponent*>& Pair : HitCollisionBoxes)
+    {
+        UBoxComponent* BoxComponent = Pair.Value;
+        if (!BoxComponent) continue;
+
+        bool bShouldShow = bDefaultShow;
+        if (const bool* Override = DebugCollisionVisibility.ComponentVisibilities.Find(Pair.Key))
+        {
+            bShouldShow = *Override;
+        }
+
+        ApplyVisibility(BoxComponent, bShouldShow);
+    }
+
+    for (const TPair<FName, bool>& OverridePair : DebugCollisionVisibility.ComponentVisibilities)
+    {
+        if (HitCollisionBoxes.Contains(OverridePair.Key))
+        {
+            continue;
+        }
+
+        if (UPrimitiveComponent* OverrideComponent = FindDebugPrimitiveByName(OverridePair.Key))
+        {
+            ApplyVisibility(OverrideComponent, OverridePair.Value);
+        }
+    }
+}
+
+UPrimitiveComponent* ABlasterCharacter::FindDebugPrimitiveByName(const FName ComponentName) const
+{
+    if (ComponentName.IsNone())
+    {
+        return nullptr;
+    }
+
+    if (UBoxComponent* const* HitBox = HitCollisionBoxes.Find(ComponentName))
+    {
+        return *HitBox;
+    }
+
+    TInlineComponentArray<UPrimitiveComponent*> PrimitiveComponents;
+    GetComponents(PrimitiveComponents);
+
+    for (UPrimitiveComponent* Component : PrimitiveComponents)
+    {
+        if (Component && Component->GetFName() == ComponentName)
+        {
+            return Component;
+        }
+    }
+
+    return nullptr;
+}
+
+bool ABlasterCharacter::IsPerspectiveFirstPerson() const
+{
+    return PerspectiveSettings.Perspective == EPerspective::EPT_FirstPerson;
+}
+
+bool ABlasterCharacter::IsPerspectiveThirdPersonLike() const
+{
+    return PerspectiveSettings.Perspective == EPerspective::EPT_ThirdPerson ||
+        PerspectiveSettings.Perspective == EPerspective::EPT_Sequence;
+}
 
 
 void ABlasterCharacter::OnRep_Health(float LastHealth)

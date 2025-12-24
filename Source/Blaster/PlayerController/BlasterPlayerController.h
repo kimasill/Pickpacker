@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+
+class ULevelSequence;
+
 #include "BlasterPlayerController.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHighPingDelegate, bool, bHighPing);
@@ -50,6 +53,12 @@ public:
 	/** 엔딩 중 입력 차단 */
 	UFUNCTION(BlueprintCallable, Category = "Ending")
 	void SetInputBlocked(bool bBlocked);
+
+	UFUNCTION(Client, Reliable)
+	void ClientPlayEndingSequence(const TSoftObjectPtr<ULevelSequence>& SequenceAsset);
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
+	void BP_PlayEndingSequence(ULevelSequence* Sequence);
+
 protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();

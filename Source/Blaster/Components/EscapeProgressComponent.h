@@ -8,6 +8,7 @@
 class UDA_EndingData;
 class APlayerState;
 class ULevelSequence;
+class ULevelSequencePlayer;
 class ABlasterPlayerController;
 
 USTRUCT(BlueprintType)
@@ -85,6 +86,13 @@ protected:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEndingSequence(ULevelSequence* Sequence);
 
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayTransitionSequence(ULevelSequence* Sequence);
+
+	/** 전환 시퀀스 완료 후 레벨 전환 실행 */
+	UFUNCTION()
+	void OnTransitionSequenceFinished();
+
 protected:
 	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Data")
 	TArray<TObjectPtr<UDA_EndingData>> EndingDataAssets;
@@ -107,8 +115,26 @@ protected:
 private:
 	TSet<TWeakObjectPtr<APlayerState>> AuthorizedPlayers;
 
+	/** 전환 시퀀스 재생 후 레벨 전환을 위한 데이터 저장 */
+	FString PendingLevelPath;
+	TObjectPtr<ULevelSequence> PendingEndingSequence = nullptr;
+	TObjectPtr<ULevelSequencePlayer> CurrentSequencePlayer = nullptr;
+
 	FWorldFlagEntry* FindWorldFlagEntry(const FGameplayTag& Flag);
 	const FWorldFlagEntry* FindWorldFlagEntry(const FGameplayTag& Flag) const;
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
