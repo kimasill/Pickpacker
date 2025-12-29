@@ -6,6 +6,8 @@
 #include "GameFramework/PlayerController.h"
 
 class ULevelSequence;
+class UUserWidget;
+class UInputAction;
 
 #include "BlasterPlayerController.generated.h"
 
@@ -59,11 +61,16 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
 	void BP_PlayEndingSequence(ULevelSequence* Sequence);
 
+
 protected:
 	virtual void BeginPlay() override;
 	void SetHUDTime();
 	void PollInit(); // Polls for the BlasterHUD and CharacterOverlay widgets
 	virtual void SetupInputComponent() override;
+
+	/** 로비 설정 패널 토글 (키 바인딩 필요: "LobbyPanel") */
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void ToggleLobbySettingsPanel();
 
 	/**
 	* Sync time between server and client
@@ -119,9 +126,25 @@ private:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	TSubclassOf<class UUserWidget> ReturnToMainMenuWidget; // Widget class for return to main menu
 
+	/** 로비 설정 패널 위젯 */
+	UPROPERTY(EditAnywhere, Category = "Lobby|UI")
+	TSubclassOf<class UUserWidget> LobbySettingsWidgetClass;
+
+	UPROPERTY()
+	class UUserWidget* LobbySettingsWidget;
+
+	bool bLobbySettingsOpen = false;
+
 	class UReturnToMainMenu* ReturnToMainMenu;
 
 	bool bReturnToMainMenuOpen = false; // Flag to check if the return to main menu widget is open
+
+	/** Enhanced Input Actions */
+	UPROPERTY(EditDefaultsOnly, Category = "Input|UI")
+	TObjectPtr<UInputAction> QuitAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input|UI")
+	TObjectPtr<UInputAction> LobbyPanelAction;
 
 	UPROPERTY()
 	class ABlasterGameMode* BlasterGameMode;

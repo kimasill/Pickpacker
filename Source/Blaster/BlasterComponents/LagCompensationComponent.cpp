@@ -21,8 +21,8 @@ void ULagCompensationComponent::BeginPlay()
 	Super::BeginPlay();
 
 	FFramePackage Package;
-	SaveFramePackage(Package);
-	ShowFramePackage(Package, FColor::Orange);
+	//SaveFramePackage(Package);
+	//ShowFramePackage(Package, FColor::Orange);
 }
 
 FFramePackage ULagCompensationComponent::InterpBetweenFrames(const FFramePackage& OlderFrame, const FFramePackage& YoungerFrame, float HitTime)

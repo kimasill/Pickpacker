@@ -2,6 +2,7 @@
 #include "OverHeadWidget.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
+#include "Slate/SlateBrushAsset.h"
 
 void UOverHeadWidget::SetDisplayText(FString TextToDisplay)
 {
@@ -13,6 +14,13 @@ void UOverHeadWidget::SetDisplayText(FString TextToDisplay)
 
 void UOverHeadWidget::ShowPlayerNetRole(APawn* InPawn)
 {
+	// nullptr ì²´í¬ ì¶”ê°€
+	if (!InPawn)
+	{
+		SetDisplayText(TEXT("No Pawn"));
+		return;
+	}
+
 	ENetRole RemoteRole = InPawn->GetLocalRole();
 	FString Role;
 	switch (RemoteRole)
@@ -34,8 +42,38 @@ void UOverHeadWidget::ShowPlayerNetRole(APawn* InPawn)
 	SetDisplayText(RemoteRoleString);
 }
 
+void UOverHeadWidget::SetPlayerName(const FString& PlayerName)
+{
+	if (PlayerNameText)
+	{
+		PlayerNameText->SetText(FText::FromString(PlayerName));
+	}
+	else if (DisplayText)
+	{
+		// PlayerNameTextê°€ ì—†ìœ¼ë©´ DisplayTextì— í‘œì‹œ
+		DisplayText->SetText(FText::FromString(PlayerName));
+	}
+}
+
+void UOverHeadWidget::SetReadyStatus(bool bReady)
+{
+	if (ReadyStatusText)
+	{
+		FString Status = bReady ? TEXT("âœ“ Ready") : TEXT("Not Ready");
+		FLinearColor Color = bReady ? FLinearColor(0.0f, 1.0f, 0.0f, 1.0f) : FLinearColor(1.0f, 0.0f, 0.0f, 1.0f);
+		ReadyStatusText->SetText(FText::FromString(Status));
+		ReadyStatusText->SetColorAndOpacity(FSlateColor(Color));
+	}
+}
+
+void UOverHeadWidget::SetPlayerInfo(const FString& PlayerName, bool bReady)
+{
+	SetPlayerName(PlayerName);
+	SetReadyStatus(bReady);
+}
+
 void UOverHeadWidget::NativeDestruct()
 {
-	RemoveFromParent(); // ºÎ¸ð¿¡°Ô¼­ ¶¼¾î³»´Â Ã³¸®
-	Super::NativeDestruct(); // ºÎ¸ð Å¬·¡½ºÀÇ NativeDestruct
+	RemoveFromParent(); // ï¿½Î¸ð¿¡°Ô¼ï¿½ ï¿½ï¿½ï¿½î³»ï¿½ï¿½ Ã³ï¿½ï¿½
+	Super::NativeDestruct(); // ï¿½Î¸ï¿½ Å¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ NativeDestruct
 }

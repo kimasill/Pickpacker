@@ -14,6 +14,15 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FMultiplayerOnFindSessionsComplete, const T
 DECLARE_MULTICAST_DELEGATE_OneParam(FMultiplayerOnJoinSessionComplete, EOnJoinSessionCompleteResult::Type Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMultiplayerOnDestroySessionComplete, bool, bWasSuccessful);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMultiplayerOnStartSessionComplete, bool, bWasSuccessful);
+
+UENUM(BlueprintType)
+enum class ESessionVisibility : uint8
+{
+	Private     UMETA(DisplayName = "Private"),      // 검색 불가, 초대 전용
+	Friends     UMETA(DisplayName = "Friends"),      // 검색 불가, 친구 합류 허용
+	InviteOnly  UMETA(DisplayName = "InviteOnly"),   // 검색 불가, 초대 전용
+	Public      UMETA(DisplayName = "Public")        // 검색 가능
+};
 /**
  * 
  */
@@ -23,11 +32,13 @@ class MULTIPLAYERSESSIONS_API UMultiplayerSessionsSubsystem : public UGameInstan
 	GENERATED_BODY()
 public:
 	UMultiplayerSessionsSubsystem();
-	void CreateSession(int32 NumPublicConnections, FString MatchType);
+	void CreateSession(int32 NumPublicConnections, FString MatchType, const FString& SessionTitle = TEXT(""), ESessionVisibility Visibility = ESessionVisibility::Private, const FString& SelectedMap = TEXT(""), const FString& GameMode = TEXT(""));
 	void FindSessions(int32 MaxSearchResults);
 	void JoinSession(const FOnlineSessionSearchResult& SessionResult);
 	void StartSession();
 	void DestroySession();
+	void UpdateSessionVisibility(ESessionVisibility NewVisibility);
+	void UpdateSessionSettings(int32 NumPublicConnections, const FString& MatchType, const FString& SessionTitle, ESessionVisibility Visibility, const FString& SelectedMap, const FString& GameMode);
 
 	// Delegate to bind to the CreateSession function
 	FMultiplayerOnCreateSessionComplete MultiplayerOnCreateSessionComplete;
@@ -66,8 +77,18 @@ private:
 	bool bCreateSessionOnDestroy{ false }; // Flag to check if we need to create a session after destroying one
 	int32 LastNumPublicConnections; // Store the last number of public connections for session creation
 	FString LastMatchType; // Store the last match type for session creation
+	FString DesiredSessionTitle; // Store the desired session title for the next session creation
+	ESessionVisibility LastSessionVisibility = ESessionVisibility::Public; // Store visibility for recreation
+	FString LastSelectedMap;
+	FString LastGameMode;
 
 public:
 	int32 DesiredNumPublicConnections{ }; // Desired number of public connections for the next session creation
 	FString DesiredMatchType{ }; // Desired match type for the next session creation
+	ESessionVisibility DesiredSessionVisibility = ESessionVisibility::Public; // Desired visibility for the next session creation
+	FString DesiredSelectedMap;
+	FString DesiredGameMode;
+
+	// Utility to read session title from search result
+	static FString ExtractSessionTitle(const FOnlineSessionSearchResult& SessionResult);
 };

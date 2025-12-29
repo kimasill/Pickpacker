@@ -46,6 +46,10 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_Lives, VisibleAnywhere, Category = "Lives")
 	int32 Lives = 3;
 
+	/** 로비 준비 상태 */
+	UPROPERTY(ReplicatedUsing = OnRep_IsReady, VisibleAnywhere, Category = "Lobby")
+	bool bIsReady = false;
+
 	UFUNCTION()
 	void OnRep_Team();
 
@@ -54,6 +58,9 @@ private:
 
 	UFUNCTION()
 	void OnRep_Lives(int32 OldLives);
+
+	UFUNCTION()
+	void OnRep_IsReady();
 
 public:
 	FORCEINLINE ETeam GetTeam() const { return Team; }
@@ -92,4 +99,17 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLivesChanged, int32, NewLives, int32, OldLives);
 	UPROPERTY(BlueprintAssignable, Category = "Lives|Events")
 	FOnLivesChanged OnLivesChanged;
+
+	/** 로비 준비 상태 가져오기 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Lobby")
+	bool IsReady() const { return bIsReady; }
+
+	/** 로비 준비 상태 설정 (서버에서만) */
+	UFUNCTION(BlueprintCallable, Category = "Lobby")
+	void SetReadyStatus(bool bReady);
+
+	/** 이벤트: 준비 상태 변경 */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnReadyStatusChanged, bool, bNewReady, bool, bOldReady);
+	UPROPERTY(BlueprintAssignable, Category = "Lobby|Events")
+	FOnReadyStatusChanged OnReadyStatusChanged;
 };

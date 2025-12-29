@@ -21,6 +21,8 @@
 #include "Sound/SoundCue.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Blaster/PlayerState/BlasterPlayerState.h"
+#include "Blaster/HUD/OverHeadWidget.h"
+#include "Blaster/GameMode/LobbyGameMode.h"
 #include "Blaster/Weapon/WeaponTypes.h"
 #include "Components/BoxComponent.h"
 #include "Blaster/BlasterComponents/LagCompensationComponent.h"
@@ -502,6 +504,54 @@ void ABlasterCharacter::BeginPlay()
 	}
  	
  	// Reset cached speed on begin play
+
+	// OverHeadWidget 업데이트 (로비에서 플레이어 이름과 준비 상태 표시)
+	// 약간의 지연을 두어 PlayerState가 완전히 초기화된 후 업데이트
+	FTimerHandle TempHandle;
+	GetWorld()->GetTimerManager().SetTimer(
+		TempHandle,
+		this,
+		&ABlasterCharacter::UpdateOverheadWidget,
+		0.1f,
+		false
+	);
+}
+
+void ABlasterCharacter::UpdateOverheadWidget()
+{
+	if (!OverHeadWidget)
+	{
+		return;
+	}
+
+	UOverHeadWidget* Widget = Cast<UOverHeadWidget>(OverHeadWidget->GetWidget());
+	if (!Widget)
+	{
+		return;
+	}
+
+	APlayerState* PS = GetPlayerState();
+	if (!PS)
+	{
+		return;
+	}
+
+	// 플레이어 이름 설정
+	FString PlayerName = PS->GetPlayerName();
+	if (PlayerName.IsEmpty())
+	{
+		PlayerName = TEXT("Player");
+	}
+
+	// 준비 상태 확인
+	bool bIsReady = false;
+	if (ABlasterPlayerState* BlasterPS = Cast<ABlasterPlayerState>(PS))
+	{
+		bIsReady = BlasterPS->IsReady();
+	}
+
+	// 위젯 업데이트
+	Widget->SetPlayerInfo(PlayerName, bIsReady);
 }
 
 void ABlasterCharacter::Tick(float DeltaTime)
@@ -551,26 +601,54 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ABlasterCharacter::Jump);
-
-	PlayerInputComponent->BindAxis("MoveForward", this, &ABlasterCharacter::MoveForward);
-	PlayerInputComponent->BindAxis("MoveRight", this, &ABlasterCharacter::MoveRight);
-	PlayerInputComponent->BindAxis("Turn", this, &ABlasterCharacter::Turn);
-	PlayerInputComponent->BindAxis("LookUp", this, &ABlasterCharacter::LookUp);
-
-	PlayerInputComponent->BindAction("Equip", IE_Pressed, this, &ABlasterCharacter::EquipButtonPressed);
-	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ABlasterCharacter::CrouchButtonPressed);
-	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &ABlasterCharacter::AimButtonPressed);
-	PlayerInputComponent->BindAction("Aim", IE_Released, this, &ABlasterCharacter::AimButtonReleased);
-	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ABlasterCharacter::FireButtonPressed);
-	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ABlasterCharacter::FireButtonReleased);
-	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &ABlasterCharacter::ReloadButtonPressed);
-	PlayerInputComponent->BindAction("ThrowGrenade", IE_Pressed, this, &ABlasterCharacter::GrenadeButtonPressed);	
-	
-	// Enhanced Input: Bind inventory slot actions (1-9)
+	// Enhanced Input으로 전환
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		// Single inventory action: put carried parcel into inventory
+		// Movement action (2D Vector - WASD)
+		if (MovementAction)
+		{
+			EnhancedInputComponent->BindAction(MovementAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnMovement);
+		}
+		
+		// Look action (2D Vector - Mouse X/Y)
+		if (LookAction)
+		{
+			EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnLook);
+		}
+		
+		// Combat actions
+		if (JumpAction)
+		{
+			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnJumpAction);
+		}
+		if (EquipAction)
+		{
+			EnhancedInputComponent->BindAction(EquipAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnEquipAction);
+		}
+		if (CrouchAction)
+		{
+			EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnCrouchAction);
+		}
+		if (ReloadAction)
+		{
+			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnReloadAction);
+		}
+		if (AimAction)
+		{
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnAimAction);
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &ABlasterCharacter::OnAimActionReleased);
+		}
+		if (FireAction)
+		{
+			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnFireAction);
+			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Completed, this, &ABlasterCharacter::OnFireActionReleased);
+		}
+		if (GrenadeAction)
+		{
+			EnhancedInputComponent->BindAction(GrenadeAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnGrenadeAction);
+		}
+		
+		// Inventory actions
 		if (InventoryInputAction)
 		{
 			EnhancedInputComponent->BindAction(InventoryInputAction, ETriggerEvent::Started, this, &ABlasterCharacter::OnInventoryAction);
@@ -869,6 +947,76 @@ void ABlasterCharacter::CrouchButtonPressed()
 	}
 }
 
+// Enhanced Input handlers
+void ABlasterCharacter::OnMovement(const FInputActionValue& Value)
+{
+	// 2D Vector 입력 처리 (WASD 등)
+	const FVector2D MovementVector = Value.Get<FVector2D>();
+	
+	// X축: 전후 이동 (W/S)
+	MoveForward(MovementVector.Y);
+	
+	// Y축: 좌우 이동 (A/D)
+	MoveRight(MovementVector.X);
+}
+
+void ABlasterCharacter::OnLook(const FInputActionValue& Value)
+{
+	// 2D Vector 입력 처리 (마우스 X/Y)
+	const FVector2D LookVector = Value.Get<FVector2D>();
+	
+	// X축: 좌우 회전 (마우스 X)
+	Turn(LookVector.X);
+	
+	// Y축: 상하 회전 (마우스 Y)
+	LookUp(LookVector.Y);
+}
+
+void ABlasterCharacter::OnJumpAction(const FInputActionValue& Value)
+{
+	Jump();
+}
+
+void ABlasterCharacter::OnEquipAction(const FInputActionValue& Value)
+{
+	EquipButtonPressed();
+}
+
+void ABlasterCharacter::OnCrouchAction(const FInputActionValue& Value)
+{
+	CrouchButtonPressed();
+}
+
+void ABlasterCharacter::OnReloadAction(const FInputActionValue& Value)
+{
+	ReloadButtonPressed();
+}
+
+void ABlasterCharacter::OnAimAction(const FInputActionValue& Value)
+{
+	AimButtonPressed();
+}
+
+void ABlasterCharacter::OnAimActionReleased(const FInputActionValue& Value)
+{
+	AimButtonReleased();
+}
+
+void ABlasterCharacter::OnFireAction(const FInputActionValue& Value)
+{
+	FireButtonPressed();
+}
+
+void ABlasterCharacter::OnFireActionReleased(const FInputActionValue& Value)
+{
+	FireButtonReleased();
+}
+
+void ABlasterCharacter::OnGrenadeAction(const FInputActionValue& Value)
+{
+	GrenadeButtonPressed();
+}
+
 void ABlasterCharacter::ReloadButtonPressed()
 {
 	if (Combat && Combat->bHoldingTheFlag) return;
@@ -995,6 +1143,47 @@ void ABlasterCharacter::Jump()
 	{
 		Super::Jump();
 	}
+}
+
+void ABlasterCharacter::Crouch(bool bClientSimulation)
+{
+	if (Combat && Combat->bHoldingTheFlag) return;
+	if (bDisableGameplay) return;
+	if (bIsCrouched) return;
+	
+	// 앉기 몽타주 재생
+	if (CrouchMontage)
+	{
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			AnimInstance->Montage_Play(CrouchMontage);
+		}
+	}
+}
+
+void ABlasterCharacter::UnCrouch(bool bClientSimulation)
+{
+	if (!bIsCrouched) return;
+	
+	// 앉기 해제 몽타주 재생
+	if (UnCrouchMontage)
+	{
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			AnimInstance->Montage_Play(UnCrouchMontage);
+		}
+	}
+}
+
+void ABlasterCharacter::FinishFolding()
+{	
+	Super::Crouch();
+}
+void ABlasterCharacter::FinishUnFolding()
+{
+	Super::UnCrouch();
 }
 
 void ABlasterCharacter::FireButtonPressed()
@@ -1374,8 +1563,8 @@ void ABlasterCharacter::ApplyDebugCollisionVisibility()
     {
         if (HitCollisionBoxes.Contains(OverridePair.Key))
         {
-            continue;
-        }
+			continue;
+		}
 
         if (UPrimitiveComponent* OverrideComponent = FindDebugPrimitiveByName(OverridePair.Key))
         {
@@ -1579,12 +1768,6 @@ bool ABlasterCharacter::IsLocallyReloading()
 {
 	if (Combat == nullptr) return false;
 	return Combat->bLocallyReloading;
-}
-
-bool ABlasterCharacter::IsHoldingTheFlag() const
-{
-	if (Combat == nullptr) return false;
-	return Combat->bHoldingTheFlag;	
 }
 
 ETeam ABlasterCharacter::GetTeam()

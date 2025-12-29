@@ -15,6 +15,7 @@ void ABlasterPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	DOREPLIFETIME(ABlasterPlayerState, Team);
 	DOREPLIFETIME(ABlasterPlayerState, PersonalSuspicion);
 	DOREPLIFETIME(ABlasterPlayerState, Lives);
+	DOREPLIFETIME(ABlasterPlayerState, bIsReady);
 }
 
 void ABlasterPlayerState::AddToScore(float ScoreAmount)
@@ -164,4 +165,43 @@ void ABlasterPlayerState::OnRep_PersonalSuspicion(float OldSuspicion)
 void ABlasterPlayerState::OnRep_Lives(int32 OldLives)
 {
 	OnLivesChanged.Broadcast(Lives, OldLives);
+}
+
+void ABlasterPlayerState::SetReadyStatus(bool bReady)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	bool bOldReady = bIsReady;
+	bIsReady = bReady;
+
+	UE_LOG(LogTemp, Log, TEXT("[BlasterPlayerState] Player %s ready status: %s -> %s"),
+		*GetPlayerName(), bOldReady ? TEXT("Ready") : TEXT("Not Ready"), bReady ? TEXT("Ready") : TEXT("Not Ready"));
+
+	OnReadyStatusChanged.Broadcast(bIsReady, bOldReady);
+}
+
+void ABlasterPlayerState::OnRep_IsReady()
+{
+	// 자신의 캐릭터 위젯 업데이트
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+	if (BlasterCharacter)
+	{
+		BlasterCharacter->UpdateOverheadWidget();
+	}
+
+	// 모든 클라이언트에서 모든 플레이어의 위젯 업데이트
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		for (TActorIterator<ABlasterCharacter> It(World); It; ++It)
+		{
+			if (ABlasterCharacter* LocalCharacter = *It)
+			{
+				LocalCharacter->UpdateOverheadWidget();
+			}
+		}
+	}
 }

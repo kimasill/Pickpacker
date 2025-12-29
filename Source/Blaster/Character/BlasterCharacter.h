@@ -12,6 +12,7 @@
 #include "Blaster/Interfaces/InteractWithCrosshairInterface.h"
 #include "Components/TimelineComponent.h"
 #include "Blaster/BlasterTypes/CombatState.h"
+#include "Blaster/BlasterComponents/CombatComponent.h"
 #include "Blaster/BlasterTypes/Team.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "InputActionValue.h"
@@ -66,6 +67,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PostInitializeComponents() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
+
+	/** OverHeadWidget 업데이트 (플레이어 이름, 준비 상태 등) */
+	UFUNCTION(BlueprintCallable, Category = "Lobby")
+	void UpdateOverheadWidget();
 
 	/**
 	* Play Montages
@@ -158,10 +163,12 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	
+	// Legacy input functions (deprecated, kept for compatibility)
 	void MoveForward(float Value);
 	void MoveRight(float Value);
 	void Turn(float Value);
-	void LookUp(float Value); // Revert to simple AddControllerPitchInput
+	void LookUp(float Value);
 	void EquipButtonPressed();
 	void CrouchButtonPressed();
 	void ReloadButtonPressed();
@@ -170,6 +177,23 @@ protected:
 	void GrenadeButtonPressed();
 	void InventoryInteractionButtonPressed();
 	void EquipInventoryItem(int32 SlotIndex);
+
+	/** Enhanced Input: Movement actions (2D Vector - WASD) */
+	void OnMovement(const FInputActionValue& Value);
+	
+	/** Enhanced Input: Look actions (2D Vector - Mouse X/Y) */
+	void OnLook(const FInputActionValue& Value);
+	
+	/** Enhanced Input: Combat actions */
+	void OnJumpAction(const FInputActionValue& Value);
+	void OnEquipAction(const FInputActionValue& Value);
+	void OnCrouchAction(const FInputActionValue& Value);
+	void OnReloadAction(const FInputActionValue& Value);
+	void OnAimAction(const FInputActionValue& Value);
+	void OnAimActionReleased(const FInputActionValue& Value);
+	void OnFireAction(const FInputActionValue& Value);
+	void OnFireActionReleased(const FInputActionValue& Value);
+	void OnGrenadeAction(const FInputActionValue& Value);
 
 	/** Enhanced Input: Single inventory action (put carried parcel into inventory) */
 	void OnInventoryAction(const FInputActionValue& Value);
@@ -186,6 +210,36 @@ protected:
 	void OnInventorySlotNine(const FInputActionValue& Value);
 
 public:
+	/** Enhanced Input: Movement input action (2D Vector - WASD) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* MovementAction;
+	
+	/** Enhanced Input: Look input action (2D Vector - Mouse X/Y) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* LookAction;
+	
+	/** Enhanced Input: Combat input actions */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* JumpAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* EquipAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* CrouchAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* ReloadAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* AimAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* FireAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* GrenadeAction;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InventoryInputAction;
 	/** Enhanced Input: Inventory slot input actions */
@@ -219,6 +273,14 @@ public:
 	void CalculateAO_Pitch();
 	void SimProxiesTurn();
 	virtual void Jump() override;
+	virtual void Crouch(bool bClientSimulation = false) override;
+	virtual void UnCrouch(bool bClientSimulation = false) override;
+
+	UFUNCTION(BlueprintCallable)
+	void FinishFolding();
+	UFUNCTION(BlueprintCallable)
+	void FinishUnFolding();
+
 	void FireButtonPressed();
 	void FireButtonReleased();
 	void PlayHitReactMontage();
@@ -391,6 +453,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = Combat)
 	UAnimMontage* SwapMontage;
 	
+	UPROPERTY(EditAnywhere, Category = Combat)
+	UAnimMontage* CrouchMontage;
+	
+	UPROPERTY(EditAnywhere, Category = Combat)
+	UAnimMontage* UnCrouchMontage;
 
 	void HideCameraIfCharacterClose();
 	void HideCarriedCameraIfCharacterClose();
@@ -584,7 +651,7 @@ public:
 
 	bool IsLocallyReloading();
 	FORCEINLINE ULagCompensationComponent* GetLagCompensation() const { return LagCompensation; }
-	FORCEINLINE bool IsHoldingTheFlag() const;
+	FORCEINLINE bool IsHoldingTheFlag() const { return Combat && Combat->bHoldingTheFlag; }
 	ETeam GetTeam();
 	void SetHoldingTheFlag(bool bHoldingFlag);
 

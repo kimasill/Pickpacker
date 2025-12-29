@@ -3,6 +3,7 @@
 
 #include "BlasterPlayerController.h"
 #include "Components/InputComponent.h"
+#include "EnhancedInputComponent.h"
 #include "Blaster/HUD/BlasterHUD.h"
 #include "Blaster/HUD/CharacterOverlay.h"
 #include "Components/ProgressBar.h"
@@ -21,6 +22,7 @@
 #include "Blaster/UI/InventoryWidget.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "LevelSequence.h"
+#include "Blueprint/UserWidget.h"
 
 void ABlasterPlayerController::BroadcastElim(APlayerState* Attacker, APlayerState* Victim)
 {
@@ -556,9 +558,17 @@ void ABlasterPlayerController::PollInit()
 void ABlasterPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-	if (InputComponent)
+	
+	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
-		InputComponent->BindAction("Quit", IE_Pressed, this, &ABlasterPlayerController::ShowReturnToMainMenu);
+		if (QuitAction)
+		{
+			EnhancedInput->BindAction(QuitAction, ETriggerEvent::Started, this, &ABlasterPlayerController::ShowReturnToMainMenu);
+		}
+		if (LobbyPanelAction)
+		{
+			EnhancedInput->BindAction(LobbyPanelAction, ETriggerEvent::Started, this, &ABlasterPlayerController::ToggleLobbySettingsPanel);
+		}
 	}
 }
 void ABlasterPlayerController::ServerRequestServerTime_Implementation(float TimeOfClientRequest)
@@ -580,6 +590,7 @@ float ABlasterPlayerController::GetServerTime()
 	if (HasAuthority()) return GetWorld()->GetTimeSeconds();
 	else return GetWorld()->GetTimeSeconds() + ClientServerDelta;
 }
+
 
 void ABlasterPlayerController::ReceivedPlayer()
 {

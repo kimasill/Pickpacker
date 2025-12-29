@@ -3,8 +3,10 @@
 
 #include "FlagZone.h"
 #include "Components/SphereComponent.h"
+#include "Blaster/BlasterTypes/Team.h"
 #include "Blaster/Weapon/Flag.h"
 #include "Blaster/GameMode/CaptureTheFlagGameMode.h"
+#include "Engine/World.h"
 
 // Sets default values
 AFlagZone::AFlagZone()
