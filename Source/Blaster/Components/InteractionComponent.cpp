@@ -257,6 +257,9 @@ void UInteractionComponent::UpdateTarget()
     // Separate shelf trace channel (only when carrying a parcel)
     const ECollisionChannel ShelfTraceChannel = ECC_GameTraceChannel4;
 
+    // 추가 허용 반경: 약간 벗어난 대상도 선택되도록 캡슐 스윕 사용
+    const float TargetingRadius = 30.0f;
+
     // Build base query params
     FCollisionQueryParams InteractionParams(SCENE_QUERY_STAT(InteractionTargetTrace), false);
     InteractionParams.bReturnPhysicalMaterial = false;
@@ -279,7 +282,19 @@ void UInteractionComponent::UpdateTarget()
     TArray<FHitResult> InteractionHits;
     bool bInteractionTrace = false;
 
+    // 우선 라인 트레이스
     bInteractionTrace = GetWorld() && GetWorld()->LineTraceMultiByChannel(InteractionHits, Start, End, InteractionChannel, InteractionParams);
+
+    // 라인 트레이스에 없으면/보완용으로 좁은 캡슐 스윕 추가
+    if (GetWorld())
+    {
+        TArray<FHitResult> SweepHits;
+        const FCollisionShape Capsule = FCollisionShape::MakeCapsule(TargetingRadius, TargetingRadius);
+        if (GetWorld()->SweepMultiByChannel(SweepHits, Start, End, FQuat::Identity, InteractionChannel, Capsule, InteractionParams))
+        {
+            InteractionHits.Append(SweepHits);
+        }
+    }
     FHitResult ShelfHit;
     bool bShelfHitValid = false;
     if (IsValid(CarriedParcel))
@@ -305,11 +320,11 @@ void UInteractionComponent::UpdateTarget()
         }
     }
 
-    // Select best interactable from primary hits
+    // Select best interactable from primary hits (가장 시선 중심에 가까운 것 우선)
     AActor* NewTarget = nullptr;
-    float BestDistSq = TNumericLimits<float>::Max();
+    float BestAngleScore = TNumericLimits<float>::Max(); // 작은 값이 더 중심
 
-    if (bInteractionTrace)
+    if (InteractionHits.Num() > 0)
     {
         for (const FHitResult& Hit : InteractionHits)
         {
@@ -327,10 +342,13 @@ void UInteractionComponent::UpdateTarget()
                 continue;
             }
 
-            const float DistSq = (Hit.ImpactPoint - Start).SizeSquared();
-            if (DistSq < BestDistSq)
+            const FVector ToHit = (Hit.ImpactPoint - Start).GetSafeNormal();
+            const float AngleCos = FVector::DotProduct(Direction.GetSafeNormal(), ToHit);
+            const float AngleScore = 1.0f - AngleCos; // 0이면 정확히 정중앙
+
+            if (AngleScore < BestAngleScore)
             {
-                BestDistSq = DistSq;
+                BestAngleScore = AngleScore;
                 NewTarget  = HitActor;
             }
         }
@@ -364,6 +382,7 @@ void UInteractionComponent::UpdateTarget()
         if (CurrentTarget.IsValid())
         {
             SetParcelTargetedFlag(CurrentTarget.Get(), false);
+            SetCustomDepth(CurrentTarget.Get(), false);
         }
         CurrentTarget = NewTarget;
         SetParcelTargetedFlag(CurrentTarget.Get(), true);
@@ -456,6 +475,18 @@ void UInteractionComponent::UpdateTarget()
 void UInteractionComponent::Interact()
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
+
+	// 웅크린 상태에서는 새로 줍기 금지 (기존 소지품 드랍은 허용)
+	if (!IsValid(CarriedParcel) && OwnerCharacter->bIsCrouched)
+	{
+		if (AActor* TargetActor = CurrentTarget.Get())
+		{
+			if (TargetActor->IsA(AParcelActor::StaticClass()))
+			{
+				return;
+			}
+		}
+	}
 
     // If carrying a parcel, try placing onto current shelf target using preview transform when available.
     if (IsValid(CarriedParcel))

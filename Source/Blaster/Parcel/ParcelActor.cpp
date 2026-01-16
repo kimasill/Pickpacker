@@ -1,6 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ParcelActor.h"
+#include "UnpackedParcelActor.h"
+#include "PackedParcelActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "Engine/SkeletalMeshSocket.h"
@@ -19,6 +21,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"
@@ -38,6 +41,7 @@ AParcelActor::AParcelActor()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 	SetReplicateMovement(true);
+	bHasUnpacked = false;
 
 	// Create components
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
@@ -107,6 +111,10 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, ParcelPrice);
 	DOREPLIFETIME(AParcelActor, ParcelClassificationTag);
 	DOREPLIFETIME(AParcelActor, bRequiresTwoHandCarry);
+	DOREPLIFETIME(AParcelActor, PackageTargetTag);
+	DOREPLIFETIME(AParcelActor, PackageTargetRowName);
+	DOREPLIFETIME(AParcelActor, PackageRequiredCount);
+	DOREPLIFETIME(AParcelActor, bIsPackageBundle);
 }
 
 void AParcelActor::BeginPlay()
@@ -243,7 +251,18 @@ void AParcelActor::InitializeParcel(const FParcelConfig& Config)
 	{
 		SetItemData(Config.ItemData);
 	}
+	const bool bHasMeaningfulItemData =
+    Config.ItemData.ItemType != EItemType::Unknown ||
+    Config.ItemData.ItemId.IsValid() ||
+    Config.ItemData.GripType != EGripType::None ||
+    Config.ItemData.bIsUsable ||
+    Config.ItemData.UseActions.Num() > 0;
 
+	if (bHasMeaningfulItemData)
+	{
+		SetItemData(Config.ItemData);
+	}
+	
 	bIsItem = !bIsPackaged;
 
 	const FGameplayTag ContrabandTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Contraband"), false);
@@ -288,6 +307,65 @@ bool AParcelActor::ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntim
 	return true;
 }
 
+void AParcelActor::SetMeshPhysics(bool bEnablePhysics)
+{
+
+	// Configure physics for attachment
+	if (MeshComponent)
+	{
+		MeshComponent->SetSimulatePhysics(bEnablePhysics);
+		if (bEnablePhysics)
+		{
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		}
+		else
+		{
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		}
+	}
+}
+
+void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_ParcelData* InParcelDataAsset)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (!InRecipe)
+	{
+		bIsPackageBundle = false;
+		PackageTargetTag = FGameplayTag();
+		PackageTargetRowName = NAME_None;
+		PackageRequiredCount = 0;
+		PackageMeshAsset.Reset();
+		PackageParcelDataAsset = nullptr;
+		PackageContents.Reset();
+		return;
+	}
+
+	bIsPackageBundle = true;
+	PackageTargetTag = InRecipe->TargetParcelTag;
+	PackageTargetRowName = InRecipe->TargetParcelRowName;
+	PackageRequiredCount = InRecipe->RequiredCount;
+	PackageMeshAsset = InRecipe->PackagedMesh;
+	PackageParcelDataAsset = InParcelDataAsset ? InParcelDataAsset : ParcelDataAsset;
+	// Contents는 레시피에서 제거되었으므로 여기서 설정하지 않음 (InitialContents 또는 포장 시 자동 생성)
+	
+	// 메시 업데이트 (포장 메시가 설정되면 즉시 표시)
+	UpdateMeshForCurrentPackagingState();
+
+}
+
+void AParcelActor::SetPackageContents(const TArray<FParcelPackageContent>& InContents)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	PackageContents = InContents;
+}
+
 bool AParcelActor::TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const
 {
 	// 1) DataAsset RowName 우선
@@ -321,11 +399,6 @@ void AParcelActor::ApplyParcelConfigVisuals(const FParcelConfig& Config)
 		OriginalMesh = DefaultUnpackagedMesh;
 	}
 
-	if (!Config.PackagedMeshAsset.IsNull())
-	{
-		PackagedMesh = Config.PackagedMeshAsset.LoadSynchronous();
-	}
-
 	if (!OriginalMesh && MeshComponent)
 	{
 		OriginalMesh = MeshComponent->GetStaticMesh();
@@ -336,13 +409,7 @@ void AParcelActor::ApplyParcelConfigVisuals(const FParcelConfig& Config)
 		DefaultUnpackagedMesh = OriginalMesh;
 	}
 
-	// 초기 스폰/에디터에서는 PackageOnSpawn 값을 초기 패키징 상태로 사용
-	if (!HasActorBegunPlay())
-	{
-		bIsPackaged = PackageOnSpawn;
-		bIsItem = !bIsPackaged;
-	}
-
+	// 서브클래스에서 상태를 결정하므로 여기서는 메시만 업데이트
 	UpdateMeshForCurrentPackagingState();
 }
 
@@ -357,7 +424,7 @@ bool AParcelActor::UpdateMeshForCurrentPackagingState()
 
 	if (bIsPackaged)
 	{
-		TargetMesh = PackagedMesh;
+		TargetMesh = PackageMeshAsset.IsNull() ? nullptr : PackageMeshAsset.LoadSynchronous();
 		bIsPackaged = TargetMesh != nullptr;
 	}
 	else
@@ -414,11 +481,27 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 		return;
 	}
 
+	FName RequestedSocket = SocketId;
+	const bool bGenericSocketRequest = SocketId.IsNone() || SocketId == FName(TEXT("CarrySocket"));
+	const FName CharacterAttachSocket = bGenericSocketRequest ? FName(TEXT("CarrySocket")) : SocketId;
+
+	// Resolve a concrete socket name when a generic one is provided
+	if (CarryPointsComponent && bGenericSocketRequest)
+	{
+		const FName FirstAvailable = CarryPointsComponent->GetFirstAvailableSocketName();
+		if (!FirstAvailable.IsNone())
+		{
+			RequestedSocket = FirstAvailable;
+		}
+	}
+
 	// Try to attach to carry points
-	if (CarryPointsComponent && CarryPointsComponent->TryAttachToSocket(Carrier, SocketId))
+	if (CarryPointsComponent && CarryPointsComponent->TryAttachToSocket(Carrier, RequestedSocket))
 	{
 		bIsAttached = true;
-		CurrentSocketId = SocketId;
+		// Track the actual occupied socket name
+		const FName OccupiedSocket = CarryPointsComponent->GetSocketOccupiedByCharacter(Carrier);
+		CurrentSocketId = !OccupiedSocket.IsNone() ? OccupiedSocket : RequestedSocket;
 		CurrentCarrier = Carrier;
 		SetOwner(Carrier);
 		if (AShelfActor* Shelf = OccupyingShelf.Get())
@@ -429,7 +512,7 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 		// Update parcel state
 		if (ParcelStateComponent)
 		{
-			ParcelStateComponent->SetAttachedState(true, SocketId);
+			ParcelStateComponent->SetAttachedState(true, CurrentSocketId);
 
 			// Check if this is two-person carry
 			bool bIsTwoPersonCarry = CarryPointsComponent && CarryPointsComponent->IsTwoPersonCarry();
@@ -445,39 +528,34 @@ void AParcelActor::Server_RequestAttach_Implementation(ACharacter* Carrier, FNam
 
 			if (UCarryIKComponent* CarryIKComponent = BlasterCarrier->GetCarryIKComponent())
 			{
-				CarryIKComponent->EnableIK(this, SocketId);
+				CarryIKComponent->EnableIK(this, CurrentSocketId);
 			}
 		}
 
 		// Configure physics for attachment
-		if (MeshComponent)
-		{
-			MeshComponent->SetSimulatePhysics(false);
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		}
-
+		SetMeshPhysics(false);
 		// Attach Parcel to character mesh socket
 		USkeletalMeshComponent* CharacterMesh = Carrier->GetMesh();
 		if (CharacterMesh)
 		{
-			const USkeletalMeshSocket* CarrySocket = CharacterMesh->GetSocketByName(SocketId);
+			const USkeletalMeshSocket* CarrySocket = CharacterMesh->GetSocketByName(CharacterAttachSocket);
 			if (CarrySocket)
 			{
 				CarrySocket->AttachActor(this, CharacterMesh);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Socket not found: %s"), *SocketId.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Socket not found: %s"), *CharacterAttachSocket.ToString());
 			}
 		}
 
 		// Broadcast attach event
-		Multicast_ParcelAttached(Carrier, SocketId);
+		Multicast_ParcelAttached(Carrier, CharacterAttachSocket);
 		Multicast_PlayParcelEffect(FName("PickUp"), GetActorLocation());
 		if (bEnableDebugLogging)
 		{
 			UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Server attach successful - Carrier: %s, Socket: %s"),
-				*Carrier->GetName(), *SocketId.ToString());
+				*Carrier->GetName(), *CurrentSocketId.ToString());
 		}
 	}
 	else
@@ -526,12 +604,7 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 		ParcelStateComponent->ApplyTwoPersonCarryBonuses(false); // No longer two-person carry
 	}
 
-	if (MeshComponent)
-	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		MeshComponent->SetSimulatePhysics(true);
-	}
-
+	SetMeshPhysics(true);
 
 	// Configure physics for drop
 	ConfigureDropPhysics(Impulse);
@@ -729,6 +802,12 @@ void AParcelActor::OnParcelStateChanged(const FParcelState& NewState)
 
 void AParcelActor::HandleParcelBroken()
 {
+	// 서버에서만 처리
+	if (!HasAuthority())
+	{
+		return;
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Parcel broken! Classification: %s"),
 		*ParcelConfig.ClassificationTag.ToString());
 
@@ -736,18 +815,15 @@ void AParcelActor::HandleParcelBroken()
 	EndLeakLoop();
 
 	// Play break effect
-	if (HasAuthority())
-	{
-		FVector BreakLocation = GetActorLocation();
-		Multicast_PlayParcelEffect(FName("Break"), BreakLocation);
+	FVector BreakLocation = GetActorLocation();
+	Multicast_PlayParcelEffect(FName("Break"), BreakLocation);
 
-		// Check if spill should start on break
-		float SpillThresh = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("SpillOnDropThresh"), 0.0f);
-		if (SpillThresh > 0.0f)
-		{
-			Multicast_PlayParcelEffect(FName("Spill_Start"), BreakLocation);
-			BeginLeakLoop();
-		}
+	// Check if spill should start on break
+	float SpillThresh = UParcelAVLibrary::GetSpecialProperty(ParcelConfig, TEXT("SpillOnDropThresh"), 0.0f);
+	if (SpillThresh > 0.0f)
+	{
+		Multicast_PlayParcelEffect(FName("Spill_Start"), BreakLocation);
+		BeginLeakLoop();
 	}
 
 	// Detach if attached
@@ -756,7 +832,7 @@ void AParcelActor::HandleParcelBroken()
 		RequestDrop(FVector::ZeroVector);
 	}
 
-	// Broadcast broken event
+	// Broadcast broken event (모든 클라이언트에서 발생하도록)
 	OnParcelBroken.Broadcast(this);
 
 	if (AShelfActor* Shelf = OccupyingShelf.Get())
@@ -764,7 +840,17 @@ void AParcelActor::HandleParcelBroken()
 		Shelf->RemoveParcel(this);
 	}
 
-	Destroy();
+	// 포장된 번들인 경우 언패킹 처리
+	if (bIsPackageBundle)
+	{
+		FTransform OutTransform = GetActorTransform();
+		UnpackAtTransform(OutTransform, true); // 파괴 시 산란
+	}
+	else
+	{
+		// 일반 파슬은 파괴
+		Destroy();
+	}
 }
 
 void AParcelActor::UpdateHUDWidget()
@@ -774,8 +860,8 @@ void AParcelActor::UpdateHUDWidget()
 		return;
 	}
 
-	// Update HUD visibility based on attachment/타겟 상태
-	const bool bShouldShowHUD = bIsAttached || bIsTargetedByLocalPlayer;
+	// 로컬 타깃 상태에서만 표시, 들고 있을 때(bIsAttached)에는 숨김
+	const bool bShouldShowHUD = bIsTargetedByLocalPlayer && !bIsAttached;
 	if (HUDWidgetComponent)
 	{
 		HUDWidgetComponent->SetVisibility(bShouldShowHUD);
@@ -790,7 +876,9 @@ void AParcelActor::UpdateHUDWidget()
 			HUDWidget->SetParcelName(FText::FromString(ParcelConfig.ParcelName));
 		}
 		HUDWidget->SetMinimalDisplay(bIsAttached); // 들고 있을 땐 최소 정보만
-		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ClassificationTag);
+		// ParcelConfig의 BaseDurability를 최대 내구도로 사용
+		const float MaxDurability = ParcelConfig.BaseDurability > 0.0f ? ParcelConfig.BaseDurability : 100.0f;
+		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ClassificationTag, MaxDurability);
 	}
 }
 
@@ -1075,14 +1163,6 @@ void AParcelActor::SetPackaged(bool bPackaged)
 		OriginalMesh = MeshComponent->GetStaticMesh();
 	}
 
-	if (bPackaged && !PackagedMesh)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] PackagedMesh not set, cannot package"));
-		bIsPackaged = bPreviousPackagedState;
-		bIsItem = !bPreviousPackagedState;
-		return;
-	}
-
 	if (!UpdateMeshForCurrentPackagingState())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Failed to update mesh for packaging state"));
@@ -1097,6 +1177,144 @@ void AParcelActor::SetPackaged(bool bPackaged)
 			bPackaged ? TEXT("Packaged") : TEXT("Unpackaged"),
 			bIsItem ? TEXT("Yes") : TEXT("No"));
 	}
+}
+
+void AParcelActor::Destroyed()
+{
+	if (HasAuthority() && bIsPackageBundle && bIsPackaged && !bHasUnpacked)
+	{
+		FTransform ScatterTransform = GetActorTransform();
+		SpawnPackageContents(ScatterTransform, true);
+	}
+	Super::Destroyed();
+}
+
+//-----------------------------------------------
+// Packaging bundle helpers
+//-----------------------------------------------
+
+void AParcelActor::SpawnPackageContents(const FTransform& SpawnTransform, bool bScatterAroundLocation)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (PackageContents.Num() == 0)
+	{
+		return;
+	}
+
+	bHasUnpacked = true;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UDA_ParcelData* DataAssetToUse = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+
+	for (const FParcelPackageContent& Entry : PackageContents)
+	{
+		if (Entry.Count <= 0)
+		{
+			continue;
+		}
+
+		FName RowNameToUse = Entry.ParcelRowName;
+		if (RowNameToUse == NAME_None && PackageTargetRowName != NAME_None)
+		{
+			RowNameToUse = PackageTargetRowName;
+		}
+
+		TSubclassOf<AParcelActor> SpawnClass = Entry.ParcelClass;
+		if (RowNameToUse != NAME_None && DataAssetToUse)
+		{
+			FParcelConfig DummyConfig;
+			if (!DataAssetToUse->GetParcelConfigByName(RowNameToUse, DummyConfig))
+			{
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] Failed to resolve parcel row '%s' for package content on %s"), *RowNameToUse.ToString(), *GetName());
+				}
+				continue;
+			}
+
+			// UnpackedParcelActor를 기본으로 사용
+			if (!SpawnClass)
+			{
+				SpawnClass = AUnpackedParcelActor::StaticClass();
+			}
+		}
+		else if (RowNameToUse != NAME_None && !DataAssetToUse && bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[ParcelActor] No ParcelDataAsset available to resolve row '%s' on %s"),
+				*RowNameToUse.ToString(),
+				*GetName());
+		}
+
+		// 기본 클래스로 UnpackedParcelActor 사용
+		if (!SpawnClass)
+		{
+			SpawnClass = AUnpackedParcelActor::StaticClass();
+		}
+
+		if (!SpawnClass)
+		{
+			continue;
+		}
+
+		for (int32 i = 0; i < Entry.Count; ++i)
+		{
+			FTransform UseTransform = SpawnTransform;
+			if (bScatterAroundLocation)
+			{
+				const FVector RandOffset = FMath::VRand() * FMath::FRandRange(10.f, 60.f);
+				UseTransform.SetLocation(SpawnTransform.GetLocation() + RandOffset);
+			}
+
+			FActorSpawnParameters Params;
+			Params.Owner = this;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			AParcelActor* Spawned = World->SpawnActor<AParcelActor>(SpawnClass, UseTransform, Params);
+			if (Spawned)
+			{
+				if (RowNameToUse != NAME_None && DataAssetToUse)
+				{
+					Spawned->SetParcelDataAsset(DataAssetToUse);
+					Spawned->SetParcelDefinitionRowName(RowNameToUse);
+					// UnpackedParcelActor는 BeginPlay에서 자동 초기화됨
+					if (!Spawned->IsA<AUnpackedParcelActor>())
+					{
+						Spawned->ApplyParcelConfigFromDataAsset(true);
+					}
+				}
+
+				if (bEnableDebugLogging)
+				{
+					UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Spawned content parcel: %s (Row: %s)"), *Spawned->GetName(), *RowNameToUse.ToString());
+				}
+			}
+		}
+	}
+}
+
+void AParcelActor::UnpackAtTransform(const FTransform& OutTransform, bool bScatterAroundLocation)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (bHasUnpacked)
+	{
+		return;
+	}
+
+	SpawnPackageContents(OutTransform, bScatterAroundLocation);
+	Destroy();
 }
 
 void AParcelActor::ClearShelfAssignment(AShelfActor* Shelf)

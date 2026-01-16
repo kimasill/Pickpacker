@@ -26,10 +26,22 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	/**
-	 * 조작 - 포장 모드 스위치 토글
+	 * 조작 - 포장 모드 스위치 토글 (클라이언트에서 호출)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PackagingSwitch")
 	void ToggleSwitch();
+
+	/**
+	 * 서버 RPC - 스위치 토글 요청
+	 */
+	UFUNCTION(Server, Reliable, Category = "PackagingSwitch")
+	void Server_ToggleSwitch();
+
+	/**
+	 * 멀티캐스트 RPC - 모든 클라이언트에 스위치 토글 알림
+	 */
+	UFUNCTION(NetMulticast, Reliable, Category = "PackagingSwitch")
+	void Multicast_OnSwitchToggled(EPackagingMode NewMode);
 
 	/**
 	 * PackagingStationActor 설정

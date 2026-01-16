@@ -88,7 +88,7 @@ void UParcelHUDWidget::NativeDestruct()
 	}
 }
 
-void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag)
+void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag, float MaxDurability)
 {
 	CurrentParcelState = ParcelState;
 	CurrentClassificationTag = ClassificationTag;
@@ -115,12 +115,12 @@ void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const 
 	}
 
 	// Update all UI elements
-	UpdateDurabilityBar(ParcelState.Durability, 100.0f);
+	UpdateDurabilityBar(ParcelState.Durability, MaxDurability);
 	UpdateWeightDisplay(ParcelState.Weight);
 	UpdateInstabilityBar(ParcelState.Instability, 100.0f);
 	UpdateCarrierCount(ParcelState.Carriers.Num());
 	SetClassificationTag(ClassificationTag);
-	UpdateHUDColor(ParcelState);
+	UpdateHUDColor(ParcelState, MaxDurability);
 
 	if (bEnableDebugLogging)
 	{
@@ -288,7 +288,7 @@ void UParcelHUDWidget::SetHUDVisibility(bool bVisible)
 	}
 }
 
-void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState)
+void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState, float MaxDurability)
 {
 	if (!BackgroundBorder)
 	{
@@ -298,12 +298,16 @@ void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState)
 	// Determine overall HUD color based on parcel state
 	FLinearColor HUDColor = FLinearColor::White;
 
+	// 내구도 퍼센트 기준으로 임계/경고 판단
+	const float SafeMax = MaxDurability > 0.0f ? MaxDurability : 100.0f;
+	const float DurabilityPercent = ParcelState.Durability / SafeMax;
+
 	// Check if parcel is critical
-	if (ParcelState.Durability <= 25.0f)
+	if (DurabilityPercent <= 0.25f)
 	{
 		HUDColor = HUDStyle.BackgroundCriticalTint;
 	}
-	else if (ParcelState.Durability <= 50.0f)
+	else if (DurabilityPercent <= 0.5f)
 	{
 		HUDColor = HUDStyle.BackgroundWarningTint;
 	}
@@ -326,7 +330,8 @@ void UParcelHUDWidget::UpdateHUDColor(const FParcelState& ParcelState)
 
 FLinearColor UParcelHUDWidget::GetDurabilityColor(float Durability, float MaxDurability) const
 {
-	float DurabilityPercent = Durability / MaxDurability;
+	const float SafeMax = MaxDurability > 0.0f ? MaxDurability : 100.0f;
+	float DurabilityPercent = Durability / SafeMax;
 
 	if (DurabilityPercent <= 0.25f)
 	{

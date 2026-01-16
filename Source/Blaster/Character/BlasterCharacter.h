@@ -281,6 +281,11 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void FinishUnFolding();
 
+	// 웅크리기/해제 몽타주를 모든 클라이언트에 재생
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastPlayCrouchMontage(bool bCrouching);
+	void PlayCrouchMontageLocal(bool bCrouching);
+
 	void FireButtonPressed();
 	void FireButtonReleased();
 	void PlayHitReactMontage();
@@ -463,6 +468,7 @@ private:
 	void HideCarriedCameraIfCharacterClose();
 
 	void ToggleHeadMesh(bool bHideHeadMesh);
+	void UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy);
 
 	UPROPERTY(EditAnywhere)
 	float CameraThreshold = 200.f; // Distance to hide camera when character is close
@@ -490,6 +496,9 @@ private:
 	 * Update movement speed based on carried parcel weight
 	 */
 	void UpdateMovementSpeedFromCarriedParcel();
+
+	/** Drops currently carried parcel (if any) before entering crouch */
+	void DropCarriedParcelIfAny();
 
 	/** Cached original max walk speed for weight calculations */
 	float CachedOriginalMaxWalkSpeed = -1.0f;
@@ -559,6 +568,10 @@ private:
 	// Dynamic instance that we can change at runtime
 	UPROPERTY(VisibleAnywhere, Category = Elim)
 	UMaterialInstanceDynamic* DynamicDissolveMaterialInstance;
+
+	/** Shadow-only head proxy for first-person (hidden mesh but still casts shadow) */
+	UPROPERTY(VisibleAnywhere, Category = "FirstPerson")
+	USkeletalMeshComponent* HeadShadowProxy = nullptr;
 
 	// Material instance set on the Blueprint, used with the dynamic material instance
 	UPROPERTY(EditAnywhere, Category = Elim)

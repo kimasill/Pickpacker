@@ -53,3 +53,4 @@ void ALobbyReadyZone::UpdateReadyState(AActor* OtherActor, bool bReady)
 	}
 }
 
+

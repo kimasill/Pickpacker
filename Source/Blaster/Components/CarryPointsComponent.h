@@ -37,6 +37,18 @@ public:
 	bool TryAttachToSocket(class ACharacter* Character, const FName& SocketName);
 
 	/**
+	 * Find which socket a character is occupying (if any)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry Points")
+	FName GetSocketOccupiedByCharacter(class ACharacter* Character) const;
+
+	/**
+	 * Get first available socket name (NAME_None if none)
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry Points")
+	FName GetFirstAvailableSocketName() const;
+
+	/**
 	 * Detach character from socket
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Carry Points")
@@ -125,6 +137,9 @@ protected:
 	 * Find socket by name
 	 */
 	int32 FindSocketIndex(const FName& SocketName) const;
+
+	/** Find socket index by occupying character */
+	int32 FindSocketIndexByOccupant(class ACharacter* Character) const;
 
 	/**
 	 * Update socket transforms

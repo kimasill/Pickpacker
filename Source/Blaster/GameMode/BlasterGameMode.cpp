@@ -24,6 +24,15 @@ void ABlasterGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	LevelStartingTime = GetWorld()->GetTimeSeconds(); // Record the time when the level starts
+
+	// 로딩 화면 종료 알림 (로비 → 메인 레벨 전환 완료 시점)
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(*It))
+		{
+			PC->ClientNotifyLevelLoaded();
+		}
+	}
 }	
 
 void ABlasterGameMode::Tick(float DeltaTime)

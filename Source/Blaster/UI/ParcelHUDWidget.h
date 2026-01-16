@@ -64,7 +64,7 @@ public:
 	 * Update parcel state display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
-	void UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag);
+	void UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag, float MaxDurability = 100.0f);
 
 	/**
 	 * Set parcel type display
@@ -106,7 +106,7 @@ public:
 	 * Set HUD color based on parcel state
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
-	void UpdateHUDColor(const FParcelState& ParcelState);
+	void UpdateHUDColor(const FParcelState& ParcelState, float MaxDurability = 100.0f);
 
 	/** 최소 표시 모드 토글 (집은 상태 등) */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")

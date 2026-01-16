@@ -67,7 +67,7 @@ protected:
 	FString DefaultMatchType = TEXT("Industral");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
-	FString DefaultLobbyMap = TEXT("/Game/Maps/EntryMap");
+	FString DefaultLobbyMap = TEXT("/Game/Maps/IndustralMap");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
 	ESessionVisibility DefaultLobbyVisibility;
@@ -75,6 +75,10 @@ protected:
 	/** 로비에서 사용할 기본 Pawn 클래스 (BlasterCharacter) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
 	TSubclassOf<APawn> LobbyPawnClass;
+
+	// 레벨 전환 시 페이드 연출 시간
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
+	float TravelFadeDuration = 0.35f;
 
 private:
 	bool bGameStarting = false;
@@ -84,4 +88,13 @@ private:
 
 	// 준비 인원 집계 및 자동 시작 처리
 	void UpdateReadyCountsAndMaybeStart();
+
+	// 게임 시작 시 사용할 대상 맵을 결정
+	FString ResolveTargetMap() const;
+
+	// 레벨 트래블용 페이드 및 지연 트래블 처리
+	void StartFadeOnAllPlayers(bool bFadeOut) const;
+	void DoServerTravelWithFade(const FString& TravelPath);
+
+	FTimerHandle TravelTimerHandle;
 };

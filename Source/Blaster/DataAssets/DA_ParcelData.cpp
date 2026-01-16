@@ -72,6 +72,28 @@ bool UDA_ParcelData::GetParcelConfigByName(const FName& RowName, FParcelConfig& 
 	return false;
 }
 
+TArray<FName> UDA_ParcelData::GetParcelRowOptions() const
+{
+	TArray<FName> Options;
+	const int32 Num = ParcelConfigs.Num();
+	Options.Reserve(Num);
+
+	for (int32 Index = 0; Index < Num; ++Index)
+	{
+		const FParcelConfig& Config = ParcelConfigs[Index];
+		FString Label = Config.ParcelName;
+		if (Label.IsEmpty())
+		{
+			Label = Config.ParcelTag.IsValid()
+				? Config.ParcelTag.ToString()
+				: FString::Printf(TEXT("Parcel_%d"), Index);
+		}
+		Options.Add(FName(*Label));
+	}
+
+	return Options;
+}
+
 float UDA_ParcelData::GetGlobalParameter(const FString& ParameterName, float DefaultValue) const
 {
 	if (const float* Value = GlobalParameters.Find(ParameterName))

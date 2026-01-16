@@ -23,6 +23,8 @@
 #include "Blaster/Parcel/ParcelActor.h"
 #include "LevelSequence.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 void ABlasterPlayerController::BroadcastElim(APlayerState* Attacker, APlayerState* Victim)
 {
@@ -61,6 +63,13 @@ void ABlasterPlayerController::ClientElimAnnouncement_Implementation(APlayerStat
 		}
 	}
 }
+ABlasterPlayerController::ABlasterPlayerController()
+{
+	LoadingTextMap.Add(TEXT("Booting"), TEXT("시스템 부팅 중.."));
+	LoadingTextMap.Add(TEXT("Ready"), TEXT("곧 작동을 시작합니다"));
+	LoadingTextMap.Add(TEXT("Error"), TEXT("시스템 오류 -"));
+}
+
 void ABlasterPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -569,6 +578,10 @@ void ABlasterPlayerController::SetupInputComponent()
 		{
 			EnhancedInput->BindAction(LobbyPanelAction, ETriggerEvent::Started, this, &ABlasterPlayerController::ToggleLobbySettingsPanel);
 		}
+		if(PanelAction)
+		{
+			EnhancedInput->BindAction(PanelAction, ETriggerEvent::Started, this, &ABlasterPlayerController::TogglePanel);
+		}
 	}
 }
 void ABlasterPlayerController::ServerRequestServerTime_Implementation(float TimeOfClientRequest)
@@ -768,6 +781,162 @@ void ABlasterPlayerController::SetInputBlocked(bool bBlocked)
 	if (!IsLocalController())
 	{
 		ClientSetInputBlocked(bBlocked);
+	}
+}
+
+void ABlasterPlayerController::ClientShowLoadingScreen_Implementation()
+{
+	ShowLoadingScreen();
+}
+
+void ABlasterPlayerController::ClientShowLoadingScreenWithKey_Implementation(FName TextKey, FName CompleteTextKey, float CompleteTextDelay)
+{
+	ShowLoadingScreenWithKey(TextKey, CompleteTextKey, CompleteTextDelay);
+}
+
+void ABlasterPlayerController::ClientNotifyLevelLoaded_Implementation()
+{
+	HandlePostLoadMap(GetWorld());
+}
+
+void ABlasterPlayerController::ClientHideLoadingScreen_Implementation()
+{
+	HideLoadingScreen();
+}
+
+void ABlasterPlayerController::ShowLoadingScreenWithKey(FName TextKey, FName CompleteTextKey, float CompleteTextDelay)
+{
+	SetLoadingTextKey(TextKey);
+	PendingCompleteTextKey = CompleteTextKey;
+	PendingCompleteTextDelay = CompleteTextDelay;
+	ShowLoadingScreen();
+}
+
+void ABlasterPlayerController::SetLoadingTextKey(FName TextKey)
+{
+	if (const FString* Found = LoadingTextMap.Find(TextKey))
+	{
+		LoadingText = *Found;
+	}
+	else if (!TextKey.IsNone())
+	{
+		LoadingText = TextKey.ToString();
+	}
+	else if (const FString* DefaultFound = LoadingTextMap.Find(DefaultLoadingTextKey))
+	{
+		LoadingText = *DefaultFound;
+	}
+	else
+	{
+		LoadingText.Empty();
+	}
+}
+
+void ABlasterPlayerController::ShowLoadingScreen()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (LoadingScreenWidget == nullptr && LoadingScreenWidgetClass)
+	{
+		LoadingScreenWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+	}
+
+	if (LoadingScreenWidget && !LoadingScreenWidget->IsInViewport())
+	{
+		LoadingScreenWidget->AddToViewport(1000);
+	}
+
+	if (LoadingText.IsEmpty())
+	{
+		SetLoadingTextKey(DefaultLoadingTextKey);
+	}
+	UpdateLoadingScreenText();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LoadingCompleteTimerHandle);
+	}
+
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+
+	FInputModeUIOnly InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
+	bShowMouseCursor = false;
+}
+
+void ABlasterPlayerController::HideLoadingScreen()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (LoadingScreenWidget && LoadingScreenWidget->IsInViewport())
+	{
+		LoadingScreenWidget->RemoveFromParent();
+	}
+
+	SetIgnoreMoveInput(false);
+	SetIgnoreLookInput(false);
+
+	FInputModeGameOnly InputMode;
+	SetInputMode(InputMode);
+}
+
+void ABlasterPlayerController::HandlePostLoadMap(UWorld* LoadedWorld)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (!PendingCompleteTextKey.IsNone() && PendingCompleteTextDelay > 0.0f)
+	{
+		SetLoadingTextKey(PendingCompleteTextKey);
+		UpdateLoadingScreenText();
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				LoadingCompleteTimerHandle,
+				this,
+				&ABlasterPlayerController::HideLoadingScreen,
+				PendingCompleteTextDelay,
+				false);
+		}
+	}
+	else
+	{
+		HideLoadingScreen();
+	}
+
+	PendingCompleteTextKey = NAME_None;
+	PendingCompleteTextDelay = 0.0f;
+}
+
+void ABlasterPlayerController::UpdateLoadingScreenText()
+{
+	static const FName FuncName(TEXT("SetLoadingText"));
+	if (LoadingScreenWidget)
+	{
+		UFunction* Func = LoadingScreenWidget->FindFunction(FuncName);
+		if (!Func)
+		{
+			return;
+		}
+
+		struct FSetLoadingTextParams
+		{
+			FString LoadingText;
+		};
+		FSetLoadingTextParams Params;
+		Params.LoadingText = LoadingText;
+		LoadingScreenWidget->ProcessEvent(Func, &Params);
 	}
 }
 

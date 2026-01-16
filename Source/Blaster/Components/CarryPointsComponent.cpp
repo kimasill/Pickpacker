@@ -116,6 +116,11 @@ bool UCarryPointsComponent::TryAttachToSocket(ACharacter* Character, const FName
 	}
 
 	int32 SocketIndex = FindSocketIndex(SocketName);
+	// Allow detaching/attaching by character when a generic name is provided
+	if (SocketIndex == INDEX_NONE && bAny)
+	{
+		SocketIndex = FindSocketIndexByOccupant(Character);
+	}
 	if (SocketIndex == INDEX_NONE)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CarryPointsComponent] Socket not found: %s"), *SocketName.ToString());
@@ -152,6 +157,10 @@ bool UCarryPointsComponent::DetachFromSocket(ACharacter* Character, const FName&
 	}
 
 	int32 SocketIndex = FindSocketIndex(SocketName);
+	if (SocketIndex == INDEX_NONE && (SocketName.IsNone() || SocketName == FName(TEXT("CarrySocket"))))
+	{
+		SocketIndex = FindSocketIndexByOccupant(Character);
+	}
 	if (SocketIndex == INDEX_NONE)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CarryPointsComponent] Socket not found: %s"), *SocketName.ToString());
@@ -290,6 +299,41 @@ int32 UCarryPointsComponent::FindSocketIndex(const FName& SocketName) const
 		}
 	}
 	return INDEX_NONE;
+}
+
+int32 UCarryPointsComponent::FindSocketIndexByOccupant(ACharacter* Character) const
+{
+	if (!Character)
+	{
+		return INDEX_NONE;
+	}
+
+	for (int32 i = 0; i < CarrySockets.Num(); ++i)
+	{
+		if (CarrySockets[i].bIsOccupied && CarrySockets[i].OccupyingCharacter == Character)
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
+}
+
+FName UCarryPointsComponent::GetSocketOccupiedByCharacter(ACharacter* Character) const
+{
+	const int32 Index = FindSocketIndexByOccupant(Character);
+	return Index != INDEX_NONE ? CarrySockets[Index].SocketName : NAME_None;
+}
+
+FName UCarryPointsComponent::GetFirstAvailableSocketName() const
+{
+	for (const FCarrySocket& Socket : CarrySockets)
+	{
+		if (!Socket.bIsOccupied)
+		{
+			return Socket.SocketName;
+		}
+	}
+	return NAME_None;
 }
 
 bool UCarryPointsComponent::IsTwoPersonCarry() const

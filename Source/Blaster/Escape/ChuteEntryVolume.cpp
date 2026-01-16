@@ -120,3 +120,14 @@ UEscapeProgressComponent* AChuteEntryVolume::GetEscapeProgress() const
 
 
 
+
+
+
+
+
+
+
+
+
+
+

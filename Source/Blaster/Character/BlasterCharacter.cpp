@@ -35,6 +35,7 @@
 #include "Blaster/Components/PlayerInventoryComponent.h"
 #include "Blaster/Library/PickpackerSuspicionLibrary.h"
 #include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
+#include "Blaster/GameState/LobbyGameState.h"
 #include "Components/InputComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -76,6 +77,18 @@ ABlasterCharacter::ABlasterCharacter()
 	
 	CarryIKComponent = CreateDefaultSubobject<UCarryIKComponent>(TEXT("CarryIKComponent"));
 	PlayerInventoryComponent = CreateDefaultSubobject<UPlayerInventoryComponent>(TEXT("PlayerInventoryComponent"));
+
+	// Shadow-only head proxy (hidden, but casts shadow)
+	HeadShadowProxy = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("HeadShadowProxy"));
+	HeadShadowProxy->SetupAttachment(GetMesh());
+	HeadShadowProxy->SetLeaderPoseComponent(GetMesh());
+	HeadShadowProxy->SetHiddenInGame(true);
+	HeadShadowProxy->SetVisibility(false);
+	HeadShadowProxy->SetCastHiddenShadow(true);
+	HeadShadowProxy->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HeadShadowProxy->SetComponentTickEnabled(false);
+	HeadShadowProxy->bOwnerNoSee = false;
+	HeadShadowProxy->bOnlyOwnerSee = false;
 
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
@@ -540,18 +553,36 @@ void ABlasterCharacter::UpdateOverheadWidget()
 	FString PlayerName = PS->GetPlayerName();
 	if (PlayerName.IsEmpty())
 	{
-		PlayerName = TEXT("Player");
+		PlayerName = FString::Printf(TEXT("플레이어%d"), PS->GetPlayerId());
 	}
 
 	// 준비 상태 확인
 	bool bIsReady = false;
+	const bool bInLobby = GetWorld() && GetWorld()->GetGameState<ALobbyGameState>() != nullptr;
 	if (ABlasterPlayerState* BlasterPS = Cast<ABlasterPlayerState>(PS))
 	{
 		bIsReady = BlasterPS->IsReady();
 	}
+	else
+	{
+		// PlayerState 캐스팅 실패 시에도 기본값 사용 (로비 초기화 타이밍 보완)
+		bIsReady = PS->IsOnlyASpectator() ? false : bIsReady;
+	}
 
 	// 위젯 업데이트
-	Widget->SetPlayerInfo(PlayerName, bIsReady);
+	Widget->SetPlayerName(PlayerName);
+	if (bInLobby)
+	{
+		Widget->SetReadyStatus(bIsReady);
+	}
+	else
+	{
+		// 로비가 아니면 준비 표시를 숨김
+		if (Widget->ReadyStatusText)
+		{
+			Widget->ReadyStatusText->SetText(FText());
+		}
+	}
 }
 
 void ABlasterCharacter::Tick(float DeltaTime)
@@ -943,6 +974,7 @@ void ABlasterCharacter::CrouchButtonPressed()
 	}
 	else
 	{
+		DropCarriedParcelIfAny();
 		Crouch();
 	}
 }
@@ -1150,30 +1182,30 @@ void ABlasterCharacter::Crouch(bool bClientSimulation)
 	if (Combat && Combat->bHoldingTheFlag) return;
 	if (bDisableGameplay) return;
 	if (bIsCrouched) return;
-	
-	// 앉기 몽타주 재생
-	if (CrouchMontage)
+
+	// 상태를 즉시 적용해 캡슐/이동을 맞춤
+	Super::Crouch(bClientSimulation);
+
+	// 몽타주 재생 (서버 → 멀티캐스트)
+	PlayCrouchMontageLocal(true);
+	if (HasAuthority())
 	{
-		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-		if (AnimInstance)
-		{
-			AnimInstance->Montage_Play(CrouchMontage);
-		}
+		MulticastPlayCrouchMontage(true);
 	}
 }
 
 void ABlasterCharacter::UnCrouch(bool bClientSimulation)
 {
 	if (!bIsCrouched) return;
-	
-	// 앉기 해제 몽타주 재생
-	if (UnCrouchMontage)
+
+	// 상태를 먼저 해제
+	Super::UnCrouch(bClientSimulation);
+
+	// 몽타주 재생 (서버 → 멀티캐스트)
+	PlayCrouchMontageLocal(false);
+	if (HasAuthority())
 	{
-		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-		if (AnimInstance)
-		{
-			AnimInstance->Montage_Play(UnCrouchMontage);
-		}
+		MulticastPlayCrouchMontage(false);
 	}
 }
 
@@ -1184,6 +1216,29 @@ void ABlasterCharacter::FinishFolding()
 void ABlasterCharacter::FinishUnFolding()
 {
 	Super::UnCrouch();
+}
+
+void ABlasterCharacter::PlayCrouchMontageLocal(bool bCrouching)
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	if (bCrouching && CrouchMontage)
+	{
+		AnimInstance->Montage_Play(CrouchMontage);
+	}
+	else if (!bCrouching && UnCrouchMontage)
+	{
+		AnimInstance->Montage_Play(UnCrouchMontage);
+	}
+}
+
+void ABlasterCharacter::MulticastPlayCrouchMontage_Implementation(bool bCrouching)
+{
+	PlayCrouchMontageLocal(bCrouching);
 }
 
 void ABlasterCharacter::FireButtonPressed()
@@ -1412,6 +1467,21 @@ void ABlasterCharacter::UpdateMovementSpeedFromCarriedParcel()
 	GetCharacterMovement()->MaxWalkSpeedCrouched = NewSpeed * 0.5f; // Crouch speed is typically half
 }
 
+void ABlasterCharacter::DropCarriedParcelIfAny()
+{
+	if (!InteractionComponent)
+	{
+		return;
+	}
+
+	if (AParcelActor* Carried = InteractionComponent->GetCarriedParcel())
+	{
+		// 드랍 후 서버에서 소켓 정리되도록 요청
+		Carried->RequestDrop(FVector::ZeroVector);
+		ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
+	}
+}
+
 void ABlasterCharacter::HideCameraIfCharacterClose()
 {
 	if (!IsLocallyControlled()) return;
@@ -1493,38 +1563,93 @@ void ABlasterCharacter::ToggleHeadMesh(bool bHideHeadMesh)
     {
         if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
         {
-            if (bHideHeadMesh) {
-                auto HideIfExists = [SkeletalMesh](FName BoneName)
-                    {
-                        if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
-                        {
-                            // hide rendering of the bone
-                            SkeletalMesh->HideBoneByName(BoneName, EPhysBodyOp::PBO_None);
-                        }
-                    };
-                HideIfExists(FName("head"));
-                HideIfExists(FName("hair_front"));
-                HideIfExists(FName("hair_back"));
-                HideIfExists(FName("neck_01"));
-
-                SkeletalMesh->SetCastHiddenShadow(true);
-            }
-            else if (!bHideHeadMesh)
+            auto HideIfExists = [SkeletalMesh](FName BoneName)
             {
-                auto UnhideIfExists = [SkeletalMesh](FName BoneName)
-                    {
-                        if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
-                        {
-                            // unhide rendering of the bone
-                            SkeletalMesh->UnHideBoneByName(BoneName);
-                        }
-                    };
-                UnhideIfExists(FName("head"));
-                UnhideIfExists(FName("hair_front"));
-                UnhideIfExists(FName("hair_back"));
-                UnhideIfExists(FName("neck_01"));
-                SkeletalMesh->SetCastHiddenShadow(false);
+                if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+                {
+                    SkeletalMesh->HideBoneByName(BoneName, EPhysBodyOp::PBO_None);
+                }
+            };
+
+            auto UnhideIfExists = [SkeletalMesh](FName BoneName)
+            {
+                if (SkeletalMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+                {
+                    SkeletalMesh->UnHideBoneByName(BoneName);
+                }
+            };
+
+            // 본 메쉬는 계속 렌더/쉐도우, 머리만 가림
+            SkeletalMesh->SetCastHiddenShadow(true);
+            SkeletalMesh->SetOwnerNoSee(false);
+
+            const TArray<FName> HeadBones = {
+                FName("head"),
+                FName("hair_front"),
+                FName("hair_back"),
+                FName("neck_01")
+            };
+
+            if (bHideHeadMesh)
+            {
+                for (const FName& Bone : HeadBones) { HideIfExists(Bone); }
+                UpdateHeadShadowProxyVisibility(true);
             }
+            else
+            {
+                for (const FName& Bone : HeadBones) { UnhideIfExists(Bone); }
+                UpdateHeadShadowProxyVisibility(false);
+            }
+        }
+    }
+}
+
+void ABlasterCharacter::UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy)
+{
+    if (!HeadShadowProxy || !GetMesh())
+    {
+        return;
+    }
+
+    // Ensure proxy uses the same mesh/skeleton
+    if (HeadShadowProxy->GetSkeletalMeshAsset() != GetMesh()->GetSkeletalMeshAsset())
+    {
+        HeadShadowProxy->SetSkeletalMesh(GetMesh()->GetSkeletalMeshAsset());
+    }
+
+    if (bEnableShadowProxy)
+    {
+        // Hide all bones, then unhide head-related bones so only 머리 부분이 그림자를 남김
+        const int32 BoneCount = HeadShadowProxy->GetNumBones();
+        for (int32 Index = 0; Index < BoneCount; ++Index)
+        {
+            HeadShadowProxy->HideBone(Index, EPhysBodyOp::PBO_None);
+        }
+
+        const TArray<FName> HeadBones = {
+            FName("head"),
+            FName("hair_front"),
+            FName("hair_back"),
+            FName("neck_01")
+        };
+        for (const FName& Bone : HeadBones)
+        {
+            HeadShadowProxy->UnHideBoneByName(Bone);
+        }
+
+        HeadShadowProxy->SetHiddenInGame(true);  // 본 렌더는 숨김
+        HeadShadowProxy->SetVisibility(false);   // 하지만 CastHiddenShadow 로 그림자만 유지
+        HeadShadowProxy->SetCastHiddenShadow(true);
+    }
+    else
+    {
+        HeadShadowProxy->SetHiddenInGame(true);
+        HeadShadowProxy->SetVisibility(false);
+        // 해제 시 본 상태 복원 (모두 언하이드)
+        const int32 BoneCount = HeadShadowProxy->GetNumBones();
+        for (int32 Index = 0; Index < BoneCount; ++Index)
+        {
+            HeadShadowProxy->UnHideBone(Index);
         }
     }
 }

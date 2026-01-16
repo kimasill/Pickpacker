@@ -11,14 +11,20 @@
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerState.h"
 #include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Blaster/PlayerState/BlasterPlayerState.h"
 #include "TimerManager.h"
 #include "OnlineSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "Interfaces/OnlineIdentityInterface.h"
+#include "OnlineSessionSettings.h"
+#include "GameFramework/PlayerController.h"
 
 ALobbyGameMode::ALobbyGameMode()
 	: DefaultLobbyVisibility(ESessionVisibility::Private)
 {
+	// 로비에서도 BlasterPlayerState 사용 (준비 상태 복제/캐릭터 위젯 표시 위해 필요)
+	PlayerStateClass = ABlasterPlayerState::StaticClass();
 	// DefaultPawnClass는 Blueprint에서 설정하거나 생성자에서 설정 가능
 	// Blueprint에서 LobbyPawnClass를 설정하면 그것을 사용
 }
@@ -54,6 +60,40 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	if (!HasAuthority())
 	{
 		return;
+	}
+
+	// 스팀 닉네임 우선 적용, 없으면 임의 이름 지정
+	if (APlayerState* PS = NewPlayer->PlayerState)
+	{
+		FString DisplayName = PS->GetPlayerName();
+
+		// 닉네임이 비었거나 기본값이면 스팀 닉네임/대체 이름으로 설정
+		const bool bNeedsName = DisplayName.IsEmpty() || DisplayName.Equals(TEXT("Player"), ESearchCase::IgnoreCase);
+		if (bNeedsName)
+		{
+			if (const IOnlineSubsystem* OSS = IOnlineSubsystem::Get())
+			{
+				if (const IOnlineIdentityPtr Identity = OSS->GetIdentityInterface())
+				{
+					if (PS->GetUniqueId().IsValid())
+					{
+						const FString Nick = Identity->GetPlayerNickname(*PS->GetUniqueId());
+						if (!Nick.IsEmpty())
+						{
+							DisplayName = Nick;
+						}
+					}
+				}
+			}
+
+			if (DisplayName.IsEmpty())
+			{
+				// 오프라인/스팀 미사용 시 임의 이름
+				DisplayName = FString::Printf(TEXT("플레이어%d"), PS->GetPlayerId());
+			}
+
+			PS->SetPlayerName(DisplayName);
+		}
 	}
 
 	int32 NumberOfPlayers = 0;
@@ -277,18 +317,7 @@ void ALobbyGameMode::StartGameManually()
 		return;
 	}
 
-	FString TargetMap = EntryMapPath;
-	if (UGameInstance* GameInstance = GetGameInstance())
-	{
-		if (UMultiplayerSessionsSubsystem* Subsystem = GameInstance->GetSubsystem<UMultiplayerSessionsSubsystem>())
-		{
-			if (!Subsystem->DesiredSelectedMap.IsEmpty())
-			{
-				TargetMap = Subsystem->DesiredSelectedMap;
-			}
-		}
-	}
-
+	const FString TargetMap = ResolveTargetMap();
 	if (TargetMap.IsEmpty())
 	{
 		UE_LOG(LogTemp, Error, TEXT("Target map is empty. Set EntryMapPath or SelectedMap in session settings."));
@@ -309,8 +338,22 @@ void ALobbyGameMode::StartGameManually()
 	bGameStarting = true;
 	bUseSeamlessTravel = true;
 
-	UE_LOG(LogTemp, Log, TEXT("Starting game manually. Traveling to %s"), *TravelPath);
-	World->ServerTravel(TravelPath);
+	// 로딩 화면 표시 (클라이언트) - 시작 메시지
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+		{
+			PC->ClientShowLoadingScreenWithKey(TEXT("Booting"), TEXT("Ready"), 1.0f);
+		}
+	}
+
+	// 페이드 아웃 후 트래블
+	StartFadeOnAllPlayers(true);
+	if (ALobbyGameState* LobbyGS = GetGameState<ALobbyGameState>())
+	{
+		LobbyGS->MulticastStartFadeOnPlayers(true, TravelFadeDuration);
+	}
+	DoServerTravelWithFade(TravelPath);
 }
 
 bool ALobbyGameMode::IsPlayerReady(const FString& PlayerId) const
@@ -426,5 +469,97 @@ void ALobbyGameMode::UpdateReadyCountsAndMaybeStart()
 	if (!bGameStarting && CanStartGame())
 	{
 		StartGameManually();
+	}
+}
+
+FString ALobbyGameMode::ResolveTargetMap() const
+{
+	// 1) GameState에 저장된 RoomSettings 우선
+	if (const ALobbyGameState* LobbyGS = GetGameState<ALobbyGameState>())
+	{
+		const FLobbySettings Settings = LobbyGS->GetRoomSettings();
+		if (!Settings.SelectedMap.IsEmpty())
+		{
+			return Settings.SelectedMap;
+		}
+	}
+
+	// 2) 세션 서브시스템의 DesiredSelectedMap
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const UMultiplayerSessionsSubsystem* Subsystem = GameInstance->GetSubsystem<UMultiplayerSessionsSubsystem>())
+		{
+			if (!Subsystem->DesiredSelectedMap.IsEmpty())
+			{
+				return Subsystem->DesiredSelectedMap;
+			}
+
+			// 3) 현재 세션 설정에서 SelectedMap 읽기 (호스트/조인 모두)
+			if (IOnlineSubsystem* OSS = IOnlineSubsystem::Get())
+			{
+				if (IOnlineSessionPtr SessionInterface = OSS->GetSessionInterface())
+				{
+					if (FNamedOnlineSession* Session = SessionInterface->GetNamedSession(NAME_GameSession))
+					{
+						FString SessionSelectedMap;
+						if (Session->SessionSettings.Get(FName("SelectedMap"), SessionSelectedMap) && !SessionSelectedMap.IsEmpty())
+						{
+							return SessionSelectedMap;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 4) 최종 폴백: EntryMapPath
+	return EntryMapPath;
+}
+
+void ALobbyGameMode::StartFadeOnAllPlayers(bool bFadeOut) const
+{
+	const float From = bFadeOut ? 0.f : 1.f;
+	const float To = bFadeOut ? 1.f : 0.f;
+	const bool bFadeAudio = true;
+	const bool bHoldWhenFinished = bFadeOut; // 아웃 시 화면을 유지해 로딩 노출 방지
+
+	if (const UWorld* World = GetWorld())
+	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (APlayerController* PC = It->Get())
+			{
+				if (PC->PlayerCameraManager)
+				{
+					PC->PlayerCameraManager->StartCameraFade(
+						From,
+						To,
+						TravelFadeDuration,
+						FLinearColor::Black,
+						bHoldWhenFinished,
+						bFadeAudio);
+				}
+			}
+		}
+	}
+}
+
+void ALobbyGameMode::DoServerTravelWithFade(const FString& TravelPath)
+{
+	if (UWorld* World = GetWorld())
+	{
+		const float Delay = FMath::Max(TravelFadeDuration - 0.05f, 0.f); // 페이드 끝 무렵 트래블
+		World->GetTimerManager().SetTimer(
+			TravelTimerHandle,
+			[this, TravelPath]()
+			{
+				if (UWorld* InnerWorld = GetWorld())
+				{
+					UE_LOG(LogTemp, Log, TEXT("Starting game (with fade). Traveling to %s"), *TravelPath);
+					InnerWorld->ServerTravel(TravelPath);
+				}
+			},
+			Delay,
+			false);
 	}
 }

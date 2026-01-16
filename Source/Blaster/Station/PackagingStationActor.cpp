@@ -2,6 +2,9 @@
 
 #include "PackagingStationActor.h"
 #include "Blaster/Parcel/ParcelActor.h"
+#include "Blaster/Parcel/PackedParcelActor.h"
+#include "Blaster/Parcel/UnpackedParcelActor.h"
+#include "Blaster/DataAssets/DA_ParcelData.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
@@ -106,28 +109,13 @@ void APackagingStationActor::ProcessInputArea()
 		return;
 	}
 
-	AParcelActor* Parcel = FindParcelInArea();
-	if (!Parcel || Parcel->IsAttached())
-	{
-		return;
-	}
-
-	// 모드에 따라 처리
 	if (CurrentMode == EPackagingMode::Pack)
 	{
-		// 포장 모드: 포장되지 않은 Parcel만 처리
-		if (!Parcel->IsPackaged())
-		{
-			AddToProcessingQueue(Parcel);
-		}
+		ProcessPackaging();
 	}
 	else
 	{
-		// 포장 해제 모드: 포장된 Parcel만 처리
-		if (Parcel->IsPackaged())
-		{
-			AddToProcessingQueue(Parcel);
-		}
+		ProcessUnpackaging();
 	}
 }
 
@@ -238,6 +226,229 @@ AParcelActor* APackagingStationActor::FindParcelInArea() const
 	}
 
 	return nullptr;
+}
+
+TArray<AParcelActor*> APackagingStationActor::CollectParcelsInArea() const
+{
+	TArray<AParcelActor*> Result;
+	if (!InputArea)
+	{
+		return Result;
+	}
+
+	TArray<AActor*> Overlaps;
+	InputArea->GetOverlappingActors(Overlaps, AParcelActor::StaticClass());
+	for (AActor* Actor : Overlaps)
+	{
+		if (AParcelActor* Parcel = Cast<AParcelActor>(Actor))
+		{
+			if (!Parcel->IsAttached())
+			{
+				Result.Add(Parcel);
+			}
+		}
+	}
+	return Result;
+}
+
+void APackagingStationActor::ProcessPackaging()
+{
+	if (!ParcelDataAsset)
+	{
+		return;
+	}
+
+	const TArray<AParcelActor*> Parcels = CollectParcelsInArea();
+	if (Parcels.Num() == 0)
+	{
+		return;
+	}
+
+	// 태그별로 그룹화
+	TMap<FGameplayTag, TArray<AParcelActor*>> ByTag;
+	TMap<FName, TArray<AParcelActor*>> ByRowName;
+	for (AParcelActor* Parcel : Parcels)
+	{
+		if (!Parcel || Parcel->IsPackaged())
+		{
+			continue;
+		}
+
+		const FName ParcelRowName = Parcel->GetParcelDefinitionRowName();
+		if (ParcelRowName != NAME_None)
+		{
+			ByRowName.FindOrAdd(ParcelRowName).Add(Parcel);
+		}
+
+		FGameplayTagContainer ParcelTagsContainer = Parcel->GetParcelTags();
+		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+		{
+			if (Recipe.TargetParcelTag.IsValid() && ParcelTagsContainer.HasTag(Recipe.TargetParcelTag))
+			{
+				ByTag.FindOrAdd(Recipe.TargetParcelTag).Add(Parcel);
+			}
+		}
+	}
+
+	// 레시피 순회 후 조건 충족 시 포장 생성
+	for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+	{
+		if (Recipe.RequiredCount <= 0)
+		{
+			continue;
+		}
+
+		const bool bUseRowFilter = Recipe.TargetParcelRowName != NAME_None;
+		if (!bUseRowFilter && !Recipe.TargetParcelTag.IsValid())
+		{
+			continue;
+		}
+
+		TArray<AParcelActor*>* CandidatesPtr = bUseRowFilter
+			? ByRowName.Find(Recipe.TargetParcelRowName)
+			: ByTag.Find(Recipe.TargetParcelTag);
+		if (!CandidatesPtr || CandidatesPtr->Num() < Recipe.RequiredCount)
+		{
+			continue;
+		}
+
+		// 소비할 파슬 선택
+		TArray<AParcelActor*> Consume;
+		for (int32 i = 0; i < Recipe.RequiredCount; ++i)
+		{
+			Consume.Add((*CandidatesPtr)[i]);
+		}
+
+		// 출력 위치
+		FTransform OutTransform = OutputLocation ? OutputLocation->GetComponentTransform() : GetActorTransform();
+
+		// 포장 액터 스폰 (PackedParcelActor 사용)
+		TSubclassOf<AParcelActor> UseClass = Recipe.PackagedClass
+			? Recipe.PackagedClass
+			: (DefaultPackagedClass ? DefaultPackagedClass : TSubclassOf<AParcelActor>(APackedParcelActor::StaticClass()));
+		if (!UseClass)
+		{
+			continue;
+		}
+
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		AParcelActor* Packaged = GetWorld()->SpawnActor<AParcelActor>(UseClass, OutTransform, Params);
+		if (Packaged)
+		{
+			// 실제 소비된 파슬을 기반으로 콘텐츠 자동 생성 (RowName 우선)
+			TMap<FName, int32> ContentCounts;
+			for (AParcelActor* P : Consume)
+			{
+				if (!P)
+				{
+					continue;
+				}
+				FName ContentRow = P->GetParcelDefinitionRowName();
+				if (ContentRow == NAME_None && bUseRowFilter)
+				{
+					ContentRow = Recipe.TargetParcelRowName;
+				}
+				if (ContentRow != NAME_None)
+				{
+					ContentCounts.FindOrAdd(ContentRow)++;
+				}
+			}
+
+			TArray<FParcelPackageContent> AutoContents;
+			for (const TPair<FName, int32>& Pair : ContentCounts)
+			{
+				FParcelPackageContent Content;
+				Content.ParcelRowName = Pair.Key;
+				Content.Count = Pair.Value;
+				AutoContents.Add(Content);
+			}
+
+			Packaged->SetParcelDataAsset(ParcelDataAsset);
+			
+			// 레시피 정보 설정 (모든 타입에 공통)
+			Packaged->SetPackageRecipe(&Recipe, ParcelDataAsset);
+			
+			// PackedParcelActor인 경우 추가 설정
+			if (APackedParcelActor* PackedParcel = Cast<APackedParcelActor>(Packaged))
+			{
+				// 레시피 RowName 설정 (TargetParcelRowName 또는 TagName 사용)
+				FName RecipeRowName = Recipe.TargetParcelRowName != NAME_None 
+					? Recipe.TargetParcelRowName 
+					: Recipe.TargetParcelTag.GetTagName();
+				if (RecipeRowName != NAME_None)
+				{
+					PackedParcel->SetPackageRecipeRowName(RecipeRowName);
+				}
+				
+				// 콘텐츠 설정
+				if (AutoContents.Num() > 0)
+				{
+					PackedParcel->SetInitialContents(AutoContents);
+				}
+			}
+			else
+			{
+				// 일반 ParcelActor인 경우 (레거시)
+				if (AutoContents.Num() > 0)
+				{
+					Packaged->SetPackageContents(AutoContents);
+				}
+			}
+			
+			// PackedParcelActor는 이미 포장 상태로 생성되므로 SetPackaged 불필요
+			if (bEnableDebugLogging)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[PackagingStationActor] Packaged bundle spawned: %s (Row: %s / Tag: %s)"),
+					*Packaged->GetName(),
+					*Recipe.TargetParcelRowName.ToString(),
+					*Recipe.TargetParcelTag.ToString());
+			}
+
+			// 소비 파슬 제거
+			for (AParcelActor* P : Consume)
+			{
+				if (P && !P->IsPendingKillPending())
+				{
+					P->Destroy();
+				}
+			}
+			
+			OnParcelPackaged.Broadcast(Packaged);
+		}
+	}
+}
+
+void APackagingStationActor::ProcessUnpackaging()
+{
+	const TArray<AParcelActor*> Parcels = CollectParcelsInArea();
+	if (Parcels.Num() == 0)
+	{
+		return;
+	}
+
+	const FTransform OutTransform = OutputLocation ? OutputLocation->GetComponentTransform() : GetActorTransform();
+
+	for (AParcelActor* Parcel : Parcels)
+	{
+		if (!Parcel || !Parcel->IsPackaged())
+		{
+			continue;
+		}
+
+		if (Parcel->IsPackageBundle())
+		{
+			Parcel->UnpackAtTransform(OutTransform, false);
+		}
+		else
+		{
+			Parcel->SetPackaged(false);
+			Parcel->SetActorTransform(OutTransform);
+			OnParcelUnpackaged.Broadcast(Parcel);
+		}
+	}
 }
 
 void APackagingStationActor::AddToProcessingQueue(AParcelActor* Parcel)

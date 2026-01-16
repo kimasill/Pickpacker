@@ -20,6 +20,7 @@ class BLASTER_API ABlasterPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 public:
+	ABlasterPlayerController();
 	
 	void SetHUDHealth(float Health, float MaxHealth);
 	void SetHUDShield(float Shield, float MaxShield);
@@ -61,6 +62,25 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
 	void BP_PlayEndingSequence(ULevelSequence* Sequence);
 
+	/** 로딩 화면 표시/해제 */
+	UFUNCTION(Client, Reliable)
+	void ClientShowLoadingScreen();
+	UFUNCTION(Client, Reliable)
+	void ClientShowLoadingScreenWithKey(FName TextKey, FName CompleteTextKey = NAME_None, float CompleteTextDelay = 0.0f);
+	UFUNCTION(Client, Reliable)
+	void ClientNotifyLevelLoaded();
+	UFUNCTION(Client, Reliable)
+	void ClientHideLoadingScreen();
+
+	UFUNCTION(BlueprintCallable, Category = "Loading")
+	void ShowLoadingScreen();
+	UFUNCTION(BlueprintCallable, Category = "Loading")
+	void ShowLoadingScreenWithKey(FName TextKey, FName CompleteTextKey = NAME_None, float CompleteTextDelay = 0.0f);
+	UFUNCTION(BlueprintCallable, Category = "Loading")
+	void HideLoadingScreen();
+	UFUNCTION(BlueprintCallable, Category = "Loading")
+	void SetLoadingTextKey(FName TextKey);
+
 
 protected:
 	virtual void BeginPlay() override;
@@ -71,6 +91,10 @@ protected:
 	/** 로비 설정 패널 토글 (키 바인딩 필요: "LobbyPanel") */
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
 	void ToggleLobbySettingsPanel();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void TogglePanel();
+
 
 	/**
 	* Sync time between server and client
@@ -120,6 +144,34 @@ private:
 	UPROPERTY()
 	class ABlasterHUD* BlasterHUD;
 
+	/** 로딩 화면 위젯 */
+	UPROPERTY(EditAnywhere, Category = "Loading")
+	TSubclassOf<UUserWidget> LoadingScreenWidgetClass;
+
+	UPROPERTY()
+	UUserWidget* LoadingScreenWidget;
+
+	/** 로딩 화면에 표시할 텍스트 맵 */
+	UPROPERTY(EditAnywhere, Category = "Loading")
+	TMap<FName, FString> LoadingTextMap;
+
+	UPROPERTY(EditAnywhere, Category = "Loading")
+	FName DefaultLoadingTextKey = TEXT("Booting");
+
+	UPROPERTY()
+	FString LoadingText;
+
+	UPROPERTY()
+	FName PendingCompleteTextKey = NAME_None;
+
+	UPROPERTY()
+	float PendingCompleteTextDelay = 0.0f;
+
+	FTimerHandle LoadingCompleteTimerHandle;
+
+	void HandlePostLoadMap(UWorld* LoadedWorld);
+	void UpdateLoadingScreenText();
+
 	/**
 	* Return to Main Menu
 	*/
@@ -145,6 +197,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input|UI")
 	TObjectPtr<UInputAction> LobbyPanelAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input|UI")
+	TObjectPtr<UInputAction> PanelAction;
 
 	UPROPERTY()
 	class ABlasterGameMode* BlasterGameMode;

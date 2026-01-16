@@ -12,6 +12,61 @@ class UStaticMesh;
 class USoundBase;
 class UNiagaraSystem;
 class UMaterialInterface;
+class AParcelActor;
+
+/**
+ * 포장에 포함될 콘텐츠 (클래스 + 수량)
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelPackageContent
+{
+	GENERATED_BODY()
+
+	/** 포함될 Parcel RowName (이 값이 우선 사용됨) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (GetOptions = "GetParcelRowOptions"))
+	FName ParcelRowName = NAME_None;
+
+	/** (레거시) 직접 클래스 지정 - RowName이 없을 때만 사용 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
+	TSubclassOf<AParcelActor> ParcelClass;
+
+	/** 스폰 수량 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
+	int32 Count = 1;
+};
+
+/**
+ * 포장 레시피: 특정 태그를 가진 언팩 파슬을 RequiredCount 이상 모아 포장된 번들 생성
+ */
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelPackageRecipe
+{
+	GENERATED_BODY()
+
+	/** 레시피 이름 (에디터에서 식별용) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Package")
+	FString RecipeName = TEXT("Default Package Recipe");
+
+	/** 이 태그를 가진 언팩 파슬이 RequiredCount 이상 모이면 포장됨 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
+	FGameplayTag TargetParcelTag;
+
+	/** RowName이 지정되면 태그 대신 RowName 기준으로만 포장 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (GetOptions = "GetParcelRowOptions"))
+	FName TargetParcelRowName = NAME_None;
+
+	/** 필요한 언팩 파슬 수량 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
+	int32 RequiredCount = 1;
+
+	/** 포장 결과물로 사용할 메쉬 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
+	TSoftObjectPtr<UStaticMesh> PackagedMesh;
+
+	/** 포장 결과물로 사용할 클래스 (기본 ParcelActor) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
+	TSubclassOf<AParcelActor> PackagedClass;
+};
 
 /**
  * Parcel Configuration - Defines parcel properties and behavior
@@ -65,10 +120,6 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Appearance")
 	TSoftObjectPtr<UStaticMesh> UnpackagedMeshAsset;
 
-	/** Packaged mesh (what players see on the belt) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Appearance")
-	TSoftObjectPtr<UStaticMesh> PackagedMeshAsset;
-
 	/** Default item data contained inside the parcel */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
 	FItemData ItemData;
@@ -112,6 +163,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcels")
 	TArray<FParcelConfig> ParcelConfigs;
 
+	/** Packaging recipes */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcels|Packaging")
+	TArray<FParcelPackageRecipe> PackageRecipes;
+
 	/** Global parcel parameters */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Global Parameters")
 	TMap<FString, float> GlobalParameters;
@@ -139,6 +194,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
 	bool GetParcelConfigByName(const FName& RowName, FParcelConfig& OutConfig) const;
+
+	/** Parcel row 옵션 제공 (에디터 드롭다운용) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
+	TArray<FName> GetParcelRowOptions() const;
 
 	/**
 	 * Get global parameter value

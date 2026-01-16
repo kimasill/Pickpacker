@@ -72,6 +72,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Packaging")
 	void UnpackageParcel(AParcelActor* Parcel);
 
+protected:
+	/** 포장 레시피가 포함된 데이터 에셋 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Packaging")
+	UDA_ParcelData* ParcelDataAsset = nullptr;
+
+	/** 레시피에 포장 클래스가 비어있을 때 사용할 기본 포장 클래스 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Packaging")
+	TSubclassOf<AParcelActor> DefaultPackagedClass;
+
+	/** 포장 처리: 태그 기준으로 RequiredCount만큼 소비 후 포장 번들 스폰 */
+	void ProcessPackaging();
+
+	/** 포장 해제 처리: 번들 언팩 또는 일반 언패키징 */
+	void ProcessUnpackaging();
+
+	/** 입력 영역의 Parcel 수집 */
+	TArray<AParcelActor*> CollectParcelsInArea() const;
+
 public:
 	/** 스테이션 메시 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

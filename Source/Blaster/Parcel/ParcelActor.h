@@ -39,6 +39,7 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
+	virtual void Destroyed() override;
 
 	/**
 	 * Initialize parcel with configuration
@@ -51,6 +52,23 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel")
 	bool ApplyParcelConfigFromDataAsset(bool bInitializeRuntime = true);
+
+	/** DataAsset/RowName 수동 설정 (스폰 시 주입용) */
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void SetParcelDataAsset(UDA_ParcelData* InAsset) { ParcelDataAsset = InAsset; }
+
+	UFUNCTION(BlueprintCallable, Category = "Parcel")
+	void SetParcelDefinitionRowName(const FName& InRow) { ParcelDefinitionRowName = InRow; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	FName GetParcelDefinitionRowName() const { return ParcelDefinitionRowName; }
+	void SetMeshPhysics(bool bEnablePhysics);
+	/** 포장 레시피/콘텐츠 적용 */
+	void SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_ParcelData* InParcelDataAsset = nullptr);
+	void SetPackageContents(const TArray<FParcelPackageContent>& InContents);
+	/** 포장 해제 (정상) / 파괴 시 언팩 */
+	void UnpackAtTransform(const FTransform& OutTransform, bool bScatterAroundLocation);
+	void SpawnPackageContents(const FTransform& SpawnTransform, bool bScatterAroundLocation);
 
 	/**
 	 * Request to attach parcel to character
@@ -131,6 +149,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	bool IsPackaged() const { return bIsPackaged; }
+
+	/** 패키지 번들 여부 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
+	bool IsPackageBundle() const { return bIsPackageBundle; }
 
 	/**
 	 * Set packaged state and update mesh
@@ -330,15 +352,32 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", GetOptions = "GetParcelRowOptions"))
 	FName ParcelDefinitionRowName;
 
+	// 포장 레시피 참조 (패키징된 번들일 때 사용)
+	UPROPERTY(Replicated)
+	FGameplayTag PackageTargetTag;
+
+	UPROPERTY(Replicated)
+	FName PackageTargetRowName = NAME_None;
+
+	UPROPERTY(Replicated)
+	int32 PackageRequiredCount = 0;
+
+	UPROPERTY(Replicated)
+	TSoftObjectPtr<UStaticMesh> PackageMeshAsset;
+
+	UPROPERTY(VisibleInstanceOnly, Category = "Parcel Packaging", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UDA_ParcelData> PackageParcelDataAsset = nullptr;
+
+	/** 포장된 콘텐츠 (런타임 데이터, PackedParcelActor의 InitialContents에서 설정됨) */
+	UPROPERTY(VisibleInstanceOnly, Category = "Parcel Packaging", meta = (AllowPrivateAccess = "true"))
+	TArray<FParcelPackageContent> PackageContents;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config", meta = (AllowPrivateAccess = "true", EditCondition = "!bAutoApplyParcelData", EditConditionHides))
 	FParcelConfig ParcelConfig;
 
 	// Parcel tags
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
 	FGameplayTagContainer ParcelTags;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel Config")
-	bool PackageOnSpawn = true;
 
 	// Physics settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
@@ -369,6 +408,10 @@ protected:
 	// Packaging state
 	UPROPERTY(Replicated)
 	bool bIsPackaged = false;
+	UPROPERTY(Replicated)
+	bool bIsPackageBundle = false;
+	UPROPERTY()
+	bool bHasUnpacked = false;
 
 
 
@@ -503,12 +546,15 @@ public:
 	void AssignToShelf(AShelfActor* Shelf, int32 SlotIndex);
 	void ClearShelfAssignment(AShelfActor* Shelf);
 
+protected:
+	/** 서브클래스에서 메시 업데이트를 위해 사용 */
+	bool UpdateMeshForCurrentPackagingState();
+
 private:
 	bool Handle_UseItem(class ACharacter* User);
 	bool ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntime, bool bLogWarnings);
 	bool TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const;
 	void ApplyParcelConfigVisuals(const FParcelConfig& Config);
-	bool UpdateMeshForCurrentPackagingState();
 
 	// Whether to use two-hand carry animations (derived from carry socket count)
 	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Carry")

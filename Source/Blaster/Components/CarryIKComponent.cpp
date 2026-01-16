@@ -228,19 +228,14 @@ void UCarryIKComponent::RefreshGripType()
         return;
     }
 
-    const AActor* OwnerActor = GetOwner();
-    if (!OwnerActor || !OwnerActor->HasAuthority())
-    {
-        return;
-    }
+    // 데이터에 설정된 값을 우선 사용 (두 손 여부와 무관)
+    CurrentGripType = AttachedParcel->GetItemData().GripType;
 
-    if (AttachedParcel->IsItem())
+    // 설정이 없을 때만 폴백: 두 손이면 Box, 아니면 Handle
+    if (CurrentGripType == EGripType::None)
     {
-        CurrentGripType = AttachedParcel->GetItemData().GripType;
-        return;
+        CurrentGripType = AttachedParcel->RequiresTwoHandCarry() ? EGripType::Box : EGripType::Handle;
     }
-
-    CurrentGripType = AttachedParcel->RequiresTwoHandCarry() ? EGripType::Box : EGripType::Handle;
 }
 
 

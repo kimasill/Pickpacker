@@ -18,7 +18,7 @@ void ALobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 
 	DOREPLIFETIME(ALobbyGameState, RoomSettings);
 	DOREPLIFETIME(ALobbyGameState, ReadyPlayerCount);
-	DOREPLIFETIME(ALobbyGameState, TotalPlayerCount);
+	DOREPLIFETIME(ALobbyGameState, TotalPlayerCount);	
 }
 
 void ALobbyGameState::UpdateRoomSettings(int32 MaxPlayers, const FString& MatchType, const FString& SessionTitle,
@@ -98,6 +98,35 @@ void ALobbyGameState::MulticastPlayerReadyStatusChanged_Implementation(const FSt
 			}
 		}
 	}
+}
+
+void ALobbyGameState::MulticastStartFadeOnPlayers_Implementation(bool bFadeOut, float Duration)
+{
+	const float From = bFadeOut ? 0.f : 1.f;
+	const float To = bFadeOut ? 1.f : 0.f;
+	const bool bFadeAudio = true;
+	const bool bHoldWhenFinished = bFadeOut;
+
+	if (UWorld* World = GetWorld())
+	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (APlayerController* PC = It->Get())
+			{				
+				if (PC->PlayerCameraManager)
+				{
+					PC->PlayerCameraManager->StartCameraFade(
+						From,
+						To,
+						Duration,
+						FLinearColor::Black,
+						bHoldWhenFinished,
+						bFadeAudio);
+				}
+			}
+		}
+	}
+	OnFaded();
 }
 
 void ALobbyGameState::MulticastPlayerJoined_Implementation(const FString& PlayerName)

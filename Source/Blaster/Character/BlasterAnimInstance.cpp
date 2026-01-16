@@ -41,10 +41,17 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	
 
 	FRotator AimRotation = BlasterCharacter->GetBaseAimRotation();
-	FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(BlasterCharacter->GetVelocity());
+
+	// When speed is almost zero, force movement rotation to aim to avoid stale yaw offsets keeping walk/strafe poses active.
+	FRotator MovementRotation = AimRotation;
+	if (Speed > KINDA_SMALL_NUMBER)
+	{
+		MovementRotation = UKismetMathLibrary::MakeRotFromX(Velocity);
+	}
+
 	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(AimRotation, MovementRotation); // Calculate the yaw offset between aim and movement
 	DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 15.f);
-	YawOffset = DeltaRotation.Yaw; // Store the yaw offset for animations
+	YawOffset = (Speed > KINDA_SMALL_NUMBER) ? DeltaRotation.Yaw : 0.f; // Store the yaw offset for animations
 
 	CharacterRotationLastFrame = CharacterRotation;
 	CharacterRotation = BlasterCharacter->GetActorRotation(); // Get the character's current rotation

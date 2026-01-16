@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/InteractionComponent.h"
+#include "Net/UnrealNetwork.h"
 
 APackagingSwitchActor::APackagingSwitchActor()
 {
@@ -68,6 +69,14 @@ void APackagingSwitchActor::Tick(float DeltaTime)
 
 void APackagingSwitchActor::ToggleSwitch()
 {
+	// 클라이언트에서 호출되면 서버로 요청
+	if (!HasAuthority())
+	{
+		Server_ToggleSwitch();
+		return;
+	}
+
+	// 서버에서 직접 처리
 	if (!PackagingStation)
 	{
 		if (bEnableDebugLogging)
@@ -87,7 +96,27 @@ void APackagingSwitchActor::ToggleSwitch()
 			NewMode == EPackagingMode::Pack ? TEXT("Pack") : TEXT("Unpack"));
 	}
 
+	// 모든 클라이언트에 알림
+	Multicast_OnSwitchToggled(NewMode);
+}
+
+void APackagingSwitchActor::Server_ToggleSwitch_Implementation()
+{
+	// 서버에서 처리
+	ToggleSwitch();
+}
+
+void APackagingSwitchActor::Multicast_OnSwitchToggled_Implementation(EPackagingMode NewMode)
+{
+	// 모든 클라이언트에서 블루프린트 이벤트 브로드캐스트
 	OnSwitchToggled.Broadcast(NewMode);
+
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[PackagingSwitchActor] Multicast switch toggled: Mode = %s (Client: %s)"),
+			NewMode == EPackagingMode::Pack ? TEXT("Pack") : TEXT("Unpack"),
+			HasAuthority() ? TEXT("Server") : TEXT("Client"));
+	}
 }
 
 void APackagingSwitchActor::SetPackagingStation(APackagingStationActor* Station)

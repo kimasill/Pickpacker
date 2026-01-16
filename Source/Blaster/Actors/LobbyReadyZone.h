@@ -28,3 +28,4 @@ private:
 	void UpdateReadyState(AActor* OtherActor, bool bReady);
 };
 
+

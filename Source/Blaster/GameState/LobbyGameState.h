@@ -73,6 +73,10 @@ public:
 	UFUNCTION(NetMulticast, Reliable, Category = "Lobby")
 	void MulticastPlayerReadyStatusChanged(const FString& PlayerId, bool bIsReady);
 
+	/** 클라이언트 전체 페이드 */
+	UFUNCTION(NetMulticast, Reliable, Category = "Lobby")
+	void MulticastStartFadeOnPlayers(bool bFadeOut, float Duration);
+
 	/** 준비 인원/전체 인원 수 반환 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Lobby")
 	int32 GetReadyPlayerCount() const { return ReadyPlayerCount; }
@@ -94,6 +98,9 @@ public:
 	 */
 	UFUNCTION(NetMulticast, Reliable, Category = "Lobby")
 	void MulticastPlayerLeft(const FString& PlayerName);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Lobby")
+	void OnFaded();
 
 	/**
 	 * Blueprint 이벤트: Room 세팅 업데이트 시 호출
