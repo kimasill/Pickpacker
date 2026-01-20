@@ -26,6 +26,51 @@ void APackedParcelActor::BeginPlay()
 
 	// 부모 클래스 BeginPlay 호출
 	Super::BeginPlay();
+
+	// Base BeginPlay에서 ItemData가 갱신되므로 레시피 GripType을 다시 반영
+	if (HasAuthority() && ParcelDataAsset && PackageRecipeRowName != NAME_None)
+	{
+		const FParcelPackageRecipe* FoundRecipe = nullptr;
+		const FString RequestedRecipeName = PackageRecipeRowName.ToString();
+		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+		{
+			bool bMatchesTargetRowList = false;
+			for (const FName& RowName : Recipe.TargetParcelRowNames)
+			{
+				if (RowName == PackageRecipeRowName)
+				{
+					bMatchesTargetRowList = true;
+					break;
+				}
+			}
+
+			bool bMatchesTargetTagList = false;
+			for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
+			{
+				if (Tag.GetTagName() == PackageRecipeRowName)
+				{
+					bMatchesTargetTagList = true;
+					break;
+				}
+			}
+
+			const bool bMatchesRecipeName =
+				!RequestedRecipeName.IsEmpty() &&
+				Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
+			if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
+			{
+				FoundRecipe = &Recipe;
+				break;
+			}
+		}
+
+		if (FoundRecipe && FoundRecipe->GripType != EGripType::None)
+		{
+			FItemData UpdatedItemData = ItemData;
+			UpdatedItemData.GripType = FoundRecipe->GripType;
+			SetItemData(UpdatedItemData);
+		}
+	}
 }
 
 void APackedParcelActor::OnConstruction(const FTransform& Transform)
@@ -48,10 +93,33 @@ void APackedParcelActor::InitializeFromPackageRecipe()
 
 	// PackageRecipe 찾기
 	const FParcelPackageRecipe* FoundRecipe = nullptr;
+	const FString RequestedRecipeName = PackageRecipeRowName.ToString();
 	for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
 	{
-		if (Recipe.TargetParcelRowName == PackageRecipeRowName || 
-			(Recipe.TargetParcelRowName == NAME_None && Recipe.TargetParcelTag.GetTagName() == PackageRecipeRowName))
+		bool bMatchesTargetRowList = false;
+		for (const FName& RowName : Recipe.TargetParcelRowNames)
+		{
+			if (RowName == PackageRecipeRowName)
+			{
+				bMatchesTargetRowList = true;
+				break;
+			}
+		}
+
+		bool bMatchesTargetTagList = false;
+		for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
+		{
+			if (Tag.GetTagName() == PackageRecipeRowName)
+			{
+				bMatchesTargetTagList = true;
+				break;
+			}
+		}
+
+		const bool bMatchesRecipeName =
+			!RequestedRecipeName.IsEmpty() &&
+			Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
+		if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
 		{
 			FoundRecipe = &Recipe;
 			break;
@@ -70,13 +138,21 @@ void APackedParcelActor::InitializeFromPackageRecipe()
 	// PackageRecipe 적용
 	SetPackageRecipe(FoundRecipe, ParcelDataAsset);
 
+	// ParcelDefinition은 레시피의 RowName 목록 중 매칭된 값으로 동기화
+	if (FoundRecipe->TargetParcelRowNames.Contains(PackageRecipeRowName) && ParcelDefinitionRowName != PackageRecipeRowName)
+	{
+		ParcelDefinitionRowName = PackageRecipeRowName;
+		ApplyParcelConfigFromDataAsset(false);
+	}
+
 	// 포장 상태 강제 설정 (복제 기본값 상쇄)
 	SetPackaged(true);
 
 	// 포장 메시 설정
-	if (!FoundRecipe->PackagedMesh.IsNull())
+	if (FoundRecipe->PackagedMeshes.Num() > 0)
 	{
-		PackageMeshAsset = FoundRecipe->PackagedMesh;
+		const int32 MeshIndex = FMath::RandRange(0, FoundRecipe->PackagedMeshes.Num() - 1);
+		PackageMeshAsset = FoundRecipe->PackagedMeshes[MeshIndex];
 		UpdateMeshForCurrentPackagingState();
 	}
 
@@ -111,9 +187,22 @@ TArray<FName> APackedParcelActor::GetPackageRecipeRowOptions() const
 	for (int32 Index = 0; Index < Num; ++Index)
 	{
 		const FParcelPackageRecipe& Recipe = ParcelDataAsset->PackageRecipes[Index];
-		FString Label = Recipe.RecipeName != TEXT("Default Package Recipe")
-			? Recipe.RecipeName
-			: FString::Printf(TEXT("Recipe_%d"), Index);
+		FString Label = Recipe.RecipeName;
+		if (Label.IsEmpty())
+		{
+			if (Recipe.TargetParcelRowNames.Num() > 0)
+			{
+				Label = Recipe.TargetParcelRowNames[0].ToString();
+			}
+			else if (Recipe.TargetParcelTags.Num() > 0)
+			{
+				Label = Recipe.TargetParcelTags[0].ToString();
+			}
+		}
+		if (Label.IsEmpty())
+		{
+			Label = FString::Printf(TEXT("Recipe_%d"), Index);
+		}
 		Options.Add(FName(*Label));
 	}
 

@@ -42,7 +42,7 @@ public:
     bool IsIKEnabled() const { return bIKEnabled; }
 
     /**
-     IK 타겟 위치 (Parcel의 소켓 위치)*/
+     IK 타겟 위치 (캐릭터 스켈레탈 메시 기준 Component Space) */
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Carry IK")
 	FTransform GetLeftHandIKTransform() const { return LeftHandIKTransform; }
@@ -70,7 +70,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Carry IK")
 	FTransform RightHandIKTransform;
 
-    /** IK 타겟 위치 (Parcel 소켓) */
+    /** IK 타겟 위치 (캐릭터 스켈레탈 메시 기준 Component Space) */
 
     /** 왼손 오프셋 (소켓로부터) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Carry IK")

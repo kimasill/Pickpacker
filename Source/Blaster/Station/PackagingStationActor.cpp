@@ -283,141 +283,276 @@ void APackagingStationActor::ProcessPackaging()
 		FGameplayTagContainer ParcelTagsContainer = Parcel->GetParcelTags();
 		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
 		{
-			if (Recipe.TargetParcelTag.IsValid() && ParcelTagsContainer.HasTag(Recipe.TargetParcelTag))
+			for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
 			{
-				ByTag.FindOrAdd(Recipe.TargetParcelTag).Add(Parcel);
+				if (Tag.IsValid() && ParcelTagsContainer.HasTag(Tag))
+				{
+					ByTag.FindOrAdd(Tag).Add(Parcel);
+				}
 			}
 		}
 	}
 
 	// 레시피 순회 후 조건 충족 시 포장 생성
-	for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+	auto GetCandidateUnits = [](const TArray<AParcelActor*>& Candidates)
 	{
+		int32 TotalUnits = 0;
+		for (AParcelActor* Parcel : Candidates)
+		{
+			if (!Parcel)
+			{
+				continue;
+			}
+			TotalUnits += Parcel->GetPackagingSpaceUnits();
+		}
+		return TotalUnits;
+	};
+
+	TMap<int32, TArray<FName>> MatchedRowsByRecipe;
+	TMap<int32, TArray<FGameplayTag>> MatchedTagsByRecipe;
+	TSet<int32> EligibleRowRecipes;
+	TSet<int32> EligibleTagRecipes;
+	for (int32 RecipeIndex = 0; RecipeIndex < ParcelDataAsset->PackageRecipes.Num(); ++RecipeIndex)
+	{
+		const FParcelPackageRecipe& Recipe = ParcelDataAsset->PackageRecipes[RecipeIndex];
 		if (Recipe.RequiredCount <= 0)
 		{
 			continue;
 		}
 
-		const bool bUseRowFilter = Recipe.TargetParcelRowName != NAME_None;
-		if (!bUseRowFilter && !Recipe.TargetParcelTag.IsValid())
+		bool bHasRowMatch = false;
+		for (const FName& RowTarget : Recipe.TargetParcelRowNames)
+		{
+			TArray<AParcelActor*>* CandidatesPtr = ByRowName.Find(RowTarget);
+			const int32 TotalUnits = CandidatesPtr ? GetCandidateUnits(*CandidatesPtr) : 0;
+			if (CandidatesPtr && TotalUnits >= Recipe.RequiredCount)
+			{
+				MatchedRowsByRecipe.FindOrAdd(RecipeIndex).Add(RowTarget);
+				EligibleRowRecipes.Add(RecipeIndex);
+				bHasRowMatch = true;
+			}
+		}
+
+		if (bHasRowMatch)
 		{
 			continue;
 		}
 
-		TArray<AParcelActor*>* CandidatesPtr = bUseRowFilter
-			? ByRowName.Find(Recipe.TargetParcelRowName)
-			: ByTag.Find(Recipe.TargetParcelTag);
-		if (!CandidatesPtr || CandidatesPtr->Num() < Recipe.RequiredCount)
+		for (const FGameplayTag& TagTarget : Recipe.TargetParcelTags)
+		{
+			if (!TagTarget.IsValid())
+			{
+				continue;
+			}
+
+			TArray<AParcelActor*>* CandidatesPtr = ByTag.Find(TagTarget);
+			const int32 TotalUnits = CandidatesPtr ? GetCandidateUnits(*CandidatesPtr) : 0;
+			if (CandidatesPtr && TotalUnits >= Recipe.RequiredCount)
+			{
+				MatchedTagsByRecipe.FindOrAdd(RecipeIndex).Add(TagTarget);
+				EligibleTagRecipes.Add(RecipeIndex);
+			}
+		}
+	}
+
+	TArray<int32> EligibleRecipes;
+	if (EligibleRowRecipes.Num() > 0)
+	{
+		EligibleRecipes = EligibleRowRecipes.Array();
+	}
+	else
+	{
+		EligibleRecipes = EligibleTagRecipes.Array();
+	}
+
+	if (EligibleRecipes.Num() == 0)
+	{
+		return;
+	}
+
+	const int32 SelectedIndex = EligibleRecipes[FMath::RandRange(0, EligibleRecipes.Num() - 1)];
+	const FParcelPackageRecipe& Recipe = ParcelDataAsset->PackageRecipes[SelectedIndex];
+	const bool bUseRowFilter = MatchedRowsByRecipe.Contains(SelectedIndex);
+
+	FName MatchedRowName = NAME_None;
+	FGameplayTag MatchedTag;
+	if (bUseRowFilter)
+	{
+		const TArray<FName>& RowMatches = MatchedRowsByRecipe.FindChecked(SelectedIndex);
+		MatchedRowName = RowMatches[FMath::RandRange(0, RowMatches.Num() - 1)];
+	}
+	else
+	{
+		const TArray<FGameplayTag>& TagMatches = MatchedTagsByRecipe.FindChecked(SelectedIndex);
+		MatchedTag = TagMatches[FMath::RandRange(0, TagMatches.Num() - 1)];
+	}
+
+	TArray<AParcelActor*>* CandidatesPtr = bUseRowFilter
+		? ByRowName.Find(MatchedRowName)
+		: ByTag.Find(MatchedTag);
+	if (!CandidatesPtr)
+	{
+		return;
+	}
+
+	// 소비할 파슬 선택: 요구 단위에 정확히 일치하는 조합만 사용
+	TArray<AParcelActor*> Consume;
+	const int32 RequiredUnits = Recipe.RequiredCount;
+	TArray<int32> PrevIndex;
+	TArray<int32> PrevSum;
+	PrevIndex.Init(INDEX_NONE, RequiredUnits + 1);
+	PrevSum.Init(-1, RequiredUnits + 1);
+	PrevIndex[0] = -2;
+	PrevSum[0] = 0;
+
+	for (int32 CandidateIndex = 0; CandidateIndex < CandidatesPtr->Num(); ++CandidateIndex)
+	{
+		AParcelActor* Candidate = (*CandidatesPtr)[CandidateIndex];
+		if (!Candidate)
 		{
 			continue;
 		}
 
-		// 소비할 파슬 선택
-		TArray<AParcelActor*> Consume;
-		for (int32 i = 0; i < Recipe.RequiredCount; ++i)
+		const int32 CandidateUnits = FMath::Max(1, Candidate->GetPackagingSpaceUnits());
+		for (int32 Sum = RequiredUnits - CandidateUnits; Sum >= 0; --Sum)
 		{
-			Consume.Add((*CandidatesPtr)[i]);
+			if (PrevIndex[Sum] != INDEX_NONE && PrevIndex[Sum + CandidateUnits] == INDEX_NONE)
+			{
+				PrevIndex[Sum + CandidateUnits] = CandidateIndex;
+				PrevSum[Sum + CandidateUnits] = Sum;
+			}
+		}
+	}
+
+	if (PrevIndex[RequiredUnits] == INDEX_NONE)
+	{
+		return; // 조건을 만족할 조합을 못 찾았으므로 포장 중단
+	}
+
+	for (int32 Sum = RequiredUnits; Sum > 0;)
+	{
+		const int32 CandidateIndex = PrevIndex[Sum];
+		if (!CandidatesPtr->IsValidIndex(CandidateIndex))
+		{
+			break;
 		}
 
-		// 출력 위치
-		FTransform OutTransform = OutputLocation ? OutputLocation->GetComponentTransform() : GetActorTransform();
-
-		// 포장 액터 스폰 (PackedParcelActor 사용)
-		TSubclassOf<AParcelActor> UseClass = Recipe.PackagedClass
-			? Recipe.PackagedClass
-			: (DefaultPackagedClass ? DefaultPackagedClass : TSubclassOf<AParcelActor>(APackedParcelActor::StaticClass()));
-		if (!UseClass)
+		if (AParcelActor* Candidate = (*CandidatesPtr)[CandidateIndex])
 		{
-			continue;
+			Consume.Add(Candidate);
 		}
 
-		FActorSpawnParameters Params;
-		Params.Owner = this;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-		AParcelActor* Packaged = GetWorld()->SpawnActor<AParcelActor>(UseClass, OutTransform, Params);
-		if (Packaged)
+		const int32 NextSum = PrevSum[Sum];
+		if (NextSum < 0 || NextSum >= Sum)
 		{
-			// 실제 소비된 파슬을 기반으로 콘텐츠 자동 생성 (RowName 우선)
-			TMap<FName, int32> ContentCounts;
-			for (AParcelActor* P : Consume)
-			{
-				if (!P)
-				{
-					continue;
-				}
-				FName ContentRow = P->GetParcelDefinitionRowName();
-				if (ContentRow == NAME_None && bUseRowFilter)
-				{
-					ContentRow = Recipe.TargetParcelRowName;
-				}
-				if (ContentRow != NAME_None)
-				{
-					ContentCounts.FindOrAdd(ContentRow)++;
-				}
-			}
-
-			TArray<FParcelPackageContent> AutoContents;
-			for (const TPair<FName, int32>& Pair : ContentCounts)
-			{
-				FParcelPackageContent Content;
-				Content.ParcelRowName = Pair.Key;
-				Content.Count = Pair.Value;
-				AutoContents.Add(Content);
-			}
-
-			Packaged->SetParcelDataAsset(ParcelDataAsset);
-			
-			// 레시피 정보 설정 (모든 타입에 공통)
-			Packaged->SetPackageRecipe(&Recipe, ParcelDataAsset);
-			
-			// PackedParcelActor인 경우 추가 설정
-			if (APackedParcelActor* PackedParcel = Cast<APackedParcelActor>(Packaged))
-			{
-				// 레시피 RowName 설정 (TargetParcelRowName 또는 TagName 사용)
-				FName RecipeRowName = Recipe.TargetParcelRowName != NAME_None 
-					? Recipe.TargetParcelRowName 
-					: Recipe.TargetParcelTag.GetTagName();
-				if (RecipeRowName != NAME_None)
-				{
-					PackedParcel->SetPackageRecipeRowName(RecipeRowName);
-				}
-				
-				// 콘텐츠 설정
-				if (AutoContents.Num() > 0)
-				{
-					PackedParcel->SetInitialContents(AutoContents);
-				}
-			}
-			else
-			{
-				// 일반 ParcelActor인 경우 (레거시)
-				if (AutoContents.Num() > 0)
-				{
-					Packaged->SetPackageContents(AutoContents);
-				}
-			}
-			
-			// PackedParcelActor는 이미 포장 상태로 생성되므로 SetPackaged 불필요
-			if (bEnableDebugLogging)
-			{
-				UE_LOG(LogTemp, Log, TEXT("[PackagingStationActor] Packaged bundle spawned: %s (Row: %s / Tag: %s)"),
-					*Packaged->GetName(),
-					*Recipe.TargetParcelRowName.ToString(),
-					*Recipe.TargetParcelTag.ToString());
-			}
-
-			// 소비 파슬 제거
-			for (AParcelActor* P : Consume)
-			{
-				if (P && !P->IsPendingKillPending())
-				{
-					P->Destroy();
-				}
-			}
-			
-			OnParcelPackaged.Broadcast(Packaged);
+			break;
 		}
+		Sum = NextSum;
+	}
+
+	if (Consume.Num() == 0)
+	{
+		return;
+	}
+
+	// 출력 위치
+	FTransform OutTransform = OutputLocation ? OutputLocation->GetComponentTransform() : GetActorTransform();
+
+	// 포장 액터 스폰 (PackedParcelActor 사용)
+	TSubclassOf<AParcelActor> UseClass = Recipe.PackagedClass
+		? Recipe.PackagedClass
+		: (DefaultPackagedClass ? DefaultPackagedClass : TSubclassOf<AParcelActor>(APackedParcelActor::StaticClass()));
+	if (!UseClass)
+	{
+		return;
+	}
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AParcelActor* Packaged = GetWorld()->SpawnActor<AParcelActor>(UseClass, OutTransform, Params);
+	if (Packaged)
+	{
+		// 실제 소비된 파슬을 기반으로 콘텐츠 자동 생성 (RowName 우선)
+		TMap<FName, int32> ContentCounts;
+		for (AParcelActor* P : Consume)
+		{
+			if (!P)
+			{
+				continue;
+			}
+			FName ContentRow = P->GetParcelDefinitionRowName();
+			if (ContentRow == NAME_None && bUseRowFilter)
+			{
+				ContentRow = MatchedRowName;
+			}
+			if (ContentRow != NAME_None)
+			{
+				ContentCounts.FindOrAdd(ContentRow)++;
+			}
+		}
+
+		TArray<FParcelPackageContent> AutoContents;
+		for (const TPair<FName, int32>& Pair : ContentCounts)
+		{
+			FParcelPackageContent Content;
+			Content.ParcelRowName = Pair.Key;
+			Content.Count = Pair.Value;
+			AutoContents.Add(Content);
+		}
+
+		Packaged->SetParcelDataAsset(ParcelDataAsset);
+		
+		// 레시피 정보 설정 (모든 타입에 공통)
+		Packaged->SetPackageRecipe(&Recipe, ParcelDataAsset);
+		
+		// PackedParcelActor인 경우 추가 설정
+		if (APackedParcelActor* PackedParcel = Cast<APackedParcelActor>(Packaged))
+		{
+			// 레시피 RowName 설정 (TargetParcelRowName 또는 TagName 사용)
+			FName RecipeRowName = bUseRowFilter
+				? MatchedRowName
+				: MatchedTag.GetTagName();
+			if (RecipeRowName != NAME_None)
+			{
+				PackedParcel->SetPackageRecipeRowName(RecipeRowName);
+			}
+			
+			// 콘텐츠 설정
+			if (AutoContents.Num() > 0)
+			{
+				PackedParcel->SetInitialContents(AutoContents);
+			}
+		}
+		else
+		{
+			// 일반 ParcelActor인 경우 (레거시)
+			if (AutoContents.Num() > 0)
+			{
+				Packaged->SetPackageContents(AutoContents);
+			}
+		}
+		
+		// PackedParcelActor는 이미 포장 상태로 생성되므로 SetPackaged 불필요
+		if (bEnableDebugLogging)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[PackagingStationActor] Packaged bundle spawned: %s (Row: %s / Tag: %s)"),
+				*Packaged->GetName(),
+				*MatchedRowName.ToString(),
+				*MatchedTag.ToString());
+		}
+
+		// 소비 파슬 제거
+		for (AParcelActor* P : Consume)
+		{
+			if (P && !P->IsPendingKillPending())
+			{
+				P->Destroy();
+			}
+		}
+		
+		OnParcelPackaged.Broadcast(Packaged);
 	}
 }
 

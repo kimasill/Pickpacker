@@ -75,9 +75,15 @@ TArray<FName> AUnpackedParcelActor::GetPackageRecipeRowOptions() const
 	for (int32 Index = 0; Index < Num; ++Index)
 	{
 		const FParcelPackageRecipe& Recipe = ParcelDataAsset->PackageRecipes[Index];
-		FString Label = Recipe.TargetParcelRowName != NAME_None 
-			? Recipe.TargetParcelRowName.ToString()
-			: Recipe.TargetParcelTag.ToString();
+		FString Label;
+		if (Recipe.TargetParcelRowNames.Num() > 0)
+		{
+			Label = Recipe.TargetParcelRowNames[0].ToString();
+		}
+		else if (Recipe.TargetParcelTags.Num() > 0)
+		{
+			Label = Recipe.TargetParcelTags[0].ToString();
+		}
 		if (Label.IsEmpty())
 		{
 			Label = FString::Printf(TEXT("Recipe_%d"), Index);

@@ -194,6 +194,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	const FItemData& GetItemData() const { return ItemData; }
 
+	/** 포장 수량 계산용 공간 차지 단위 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Packaging")
+	int32 GetPackagingSpaceUnits() const;
+
 	/**
 	 * Set item data
 	 */

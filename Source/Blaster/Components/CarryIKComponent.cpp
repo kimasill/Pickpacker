@@ -109,6 +109,8 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
 
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter) { DisableIK();  return; }
+    USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh();
+    if (!CharacterMesh) { DisableIK(); return; }
 
     if (!AttachedParcel) { DisableIK(); return; }
     AParcelActor* Parcel = AttachedParcel.Get();
@@ -171,38 +173,35 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
 
     if (!bGotTargets)
     {
-        if (USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh())
+        const ABlasterCharacter* BlasterOwner = Cast<ABlasterCharacter>(OwnerCharacter);
+        if (!BlasterOwner)
         {
-            const ABlasterCharacter* BlasterOwner = Cast<ABlasterCharacter>(OwnerCharacter);
-            if (!BlasterOwner)
-            {
-                DisableIK();
-                return;
-            }
-
-            const FName TargetSocket = CurrentSocketName.IsNone()
-                ? BlasterOwner->GetCarrySocketName()
-                : CurrentSocketName;
-
-            const FTransform SocketTransform = CharacterMesh->GetSocketTransform(TargetSocket, RTS_World);
-
-            const FVector SocketLocation = SocketTransform.GetLocation();
-            const FRotator SocketRotation = SocketTransform.Rotator();
-
-            const FVector WorldLeftOffset = SocketRotation.RotateVector(LeftHandOffset);
-            const FVector WorldRightOffset = SocketRotation.RotateVector(RightHandOffset);
-
-            const FVector LeftHandLocation = SocketLocation + WorldLeftOffset;
-            const FVector RightHandLocation = SocketLocation + WorldRightOffset;
-
-            LTransform = FTransform(SocketRotation, LeftHandLocation);
-            RTransform = FTransform(SocketRotation, RightHandLocation);
-            CenterTransform = SocketTransform;
-
-            bLeftOk = true;
-            bRightOk = true;
-            bGotTargets = true;
+            DisableIK();
+            return;
         }
+
+        const FName TargetSocket = CurrentSocketName.IsNone()
+            ? BlasterOwner->GetCarrySocketName()
+            : CurrentSocketName;
+
+        const FTransform SocketTransform = CharacterMesh->GetSocketTransform(TargetSocket, RTS_World);
+
+        const FVector SocketLocation = SocketTransform.GetLocation();
+        const FRotator SocketRotation = SocketTransform.Rotator();
+
+        const FVector WorldLeftOffset = SocketRotation.RotateVector(LeftHandOffset);
+        const FVector WorldRightOffset = SocketRotation.RotateVector(RightHandOffset);
+
+        const FVector LeftHandLocation = SocketLocation + WorldLeftOffset;
+        const FVector RightHandLocation = SocketLocation + WorldRightOffset;
+
+        LTransform = FTransform(SocketRotation, LeftHandLocation);
+        RTransform = FTransform(SocketRotation, RightHandLocation);
+        CenterTransform = SocketTransform;
+
+        bLeftOk = true;
+        bRightOk = true;
+        bGotTargets = true;
     }
 
     if (!bGotTargets)
@@ -213,9 +212,10 @@ void UCarryIKComponent::UpdateIKLocations(float DeltaTime)
         return;
     }
 
-    LeftHandIKTransform = bLeftOk ? LTransform : FTransform::Identity;
-    RightHandIKTransform = bRightOk ? RTransform : FTransform::Identity;
-    TargetCenterTransform = CenterTransform;
+    const FTransform MeshWorld = CharacterMesh->GetComponentTransform();
+    LeftHandIKTransform = bLeftOk ? LTransform.GetRelativeTransform(MeshWorld) : FTransform::Identity;
+    RightHandIKTransform = bRightOk ? RTransform.GetRelativeTransform(MeshWorld) : FTransform::Identity;
+    TargetCenterTransform = CenterTransform.GetRelativeTransform(MeshWorld);
     bHasLeftHandTarget = bLeftOk;
     bHasRightHandTarget = bRightOk;
 }

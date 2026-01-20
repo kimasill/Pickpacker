@@ -94,7 +94,7 @@ private:
 	bool bHoldingTheFlag;
 
 	/**
-	/ * Carry IK *
+	/ * Carry IK (Component Space) *
 	/
 	**/
 	UPROPERTY(BlueprintReadOnly, Category = "Carry IK", meta = (AllowPrivateAccess = "true"))

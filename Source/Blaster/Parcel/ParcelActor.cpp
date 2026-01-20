@@ -345,12 +345,27 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 	}
 
 	bIsPackageBundle = true;
-	PackageTargetTag = InRecipe->TargetParcelTag;
-	PackageTargetRowName = InRecipe->TargetParcelRowName;
+	PackageTargetTag = InRecipe->TargetParcelTags.Num() > 0 ? InRecipe->TargetParcelTags[0] : FGameplayTag();
+	PackageTargetRowName = InRecipe->TargetParcelRowNames.Num() > 0 ? InRecipe->TargetParcelRowNames[0] : NAME_None;
 	PackageRequiredCount = InRecipe->RequiredCount;
-	PackageMeshAsset = InRecipe->PackagedMesh;
+	if (InRecipe->PackagedMeshes.Num() > 0)
+	{
+		const int32 MeshIndex = FMath::RandRange(0, InRecipe->PackagedMeshes.Num() - 1);
+		PackageMeshAsset = InRecipe->PackagedMeshes[MeshIndex];
+	}
+	else
+	{
+		PackageMeshAsset.Reset();
+	}
 	PackageParcelDataAsset = InParcelDataAsset ? InParcelDataAsset : ParcelDataAsset;
 	// Contents는 레시피에서 제거되었으므로 여기서 설정하지 않음 (InitialContents 또는 포장 시 자동 생성)
+
+	if (InRecipe->GripType != EGripType::None)
+	{
+		FItemData UpdatedItemData = ItemData;
+		UpdatedItemData.GripType = InRecipe->GripType;
+		SetItemData(UpdatedItemData);
+	}
 	
 	// 메시 업데이트 (포장 메시가 설정되면 즉시 표시)
 	UpdateMeshForCurrentPackagingState();
@@ -1331,6 +1346,11 @@ void AParcelActor::ClearShelfAssignment(AShelfActor* Shelf)
 
     OccupyingShelf = nullptr;
     OccupyingShelfSlotIndex = INDEX_NONE;
+}
+
+int32 AParcelActor::GetPackagingSpaceUnits() const
+{
+	return FMath::Max(1, ParcelConfig.PackagingSpaceUnits);
 }
 
 void AParcelActor::SetItemData(const FItemData& NewItemData)

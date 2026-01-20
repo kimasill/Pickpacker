@@ -47,21 +47,25 @@ struct BLASTER_API FParcelPackageRecipe
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Package")
 	FString RecipeName = TEXT("Default Package Recipe");
 
-	/** 이 태그를 가진 언팩 파슬이 RequiredCount 이상 모이면 포장됨 */
+	/** 이 태그들 중 하나를 가진 언팩 파슬이 RequiredCount 만큼 모이면 포장됨 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
-	FGameplayTag TargetParcelTag;
+	TArray<FGameplayTag> TargetParcelTags;
 
-	/** RowName이 지정되면 태그 대신 RowName 기준으로만 포장 */
+	/** RowName 목록 중 하나를 기준으로 포장 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (GetOptions = "GetParcelRowOptions"))
-	FName TargetParcelRowName = NAME_None;
+	TArray<FName> TargetParcelRowNames;
 
 	/** 필요한 언팩 파슬 수량 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
 	int32 RequiredCount = 1;
 
-	/** 포장 결과물로 사용할 메쉬 */
+	/** 포장 결과물로 사용할 메쉬(랜덤 선택) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
-	TSoftObjectPtr<UStaticMesh> PackagedMesh;
+	TArray<TSoftObjectPtr<UStaticMesh>> PackagedMeshes;
+
+	/** 포장 상태에서 사용할 그립 타입 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package|Grip")
+	EGripType GripType = EGripType::None;
 
 	/** 포장 결과물로 사용할 클래스 (기본 ParcelActor) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
@@ -112,6 +116,10 @@ struct BLASTER_API FParcelConfig
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Economy")
 	int32 BasePrice = 10;
 
+	/** 포장 수량 계산에 사용되는 공간 차지 단위 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Packaging", meta = (ClampMin = "1"))
+	int32 PackagingSpaceUnits = 1;
+
 	/** Classification tag (ex: Parcel-Classification.Standard) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Tags")
 	FGameplayTag ClassificationTag;
@@ -145,6 +153,7 @@ struct BLASTER_API FParcelConfig
 		SuspicionPoints = 0.0f;
 		ProcessingTime = 3.0f;
 		BasePrice = 10;
+		PackagingSpaceUnits = 1;
 	}
 };
 

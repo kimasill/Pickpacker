@@ -83,8 +83,9 @@ ABlasterCharacter::ABlasterCharacter()
 	HeadShadowProxy->SetupAttachment(GetMesh());
 	HeadShadowProxy->SetLeaderPoseComponent(GetMesh());
 	HeadShadowProxy->SetHiddenInGame(true);
-	HeadShadowProxy->SetVisibility(false);
 	HeadShadowProxy->SetCastHiddenShadow(true);
+	HeadShadowProxy->SetCastShadow(true);
+	HeadShadowProxy->SetVisibility(true, true);
 	HeadShadowProxy->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HeadShadowProxy->SetComponentTickEnabled(false);
 	HeadShadowProxy->bOwnerNoSee = false;
@@ -1638,13 +1639,14 @@ void ABlasterCharacter::UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy)
         }
 
         HeadShadowProxy->SetHiddenInGame(true);  // 본 렌더는 숨김
-        HeadShadowProxy->SetVisibility(false);   // 하지만 CastHiddenShadow 로 그림자만 유지
+        HeadShadowProxy->SetVisibility(true, true); // CastHiddenShadow 로 그림자만 유지
         HeadShadowProxy->SetCastHiddenShadow(true);
+        HeadShadowProxy->SetCastShadow(true);
     }
     else
     {
         HeadShadowProxy->SetHiddenInGame(true);
-        HeadShadowProxy->SetVisibility(false);
+        HeadShadowProxy->SetVisibility(true, true);
         // 해제 시 본 상태 복원 (모두 언하이드)
         const int32 BoneCount = HeadShadowProxy->GetNumBones();
         for (int32 Index = 0; Index < BoneCount; ++Index)
