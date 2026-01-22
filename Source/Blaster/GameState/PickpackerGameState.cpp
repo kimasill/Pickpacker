@@ -33,6 +33,7 @@ void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(APickpackerGameState, TeamSuspicion);
 	DOREPLIFETIME(APickpackerGameState, bSimulationRunning);
 	DOREPLIFETIME(APickpackerGameState, ActiveOrders);
+	DOREPLIFETIME(APickpackerGameState, CurrentOrderWaveNumber);
 	DOREPLIFETIME(APickpackerGameState, TeamCredits);
 	DOREPLIFETIME(APickpackerGameState, OrderTimesPayloads);
 }
@@ -135,6 +136,18 @@ void APickpackerGameState::SetActiveOrders(const TArray<FActiveOrderState>& NewO
 	EnsureOrderTimesUpdateTimer();
 }
 
+void APickpackerGameState::SetCurrentOrderWaveNumber(int32 NewWaveNumber)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetCurrentOrderWaveNumber called without authority"));
+		return;
+	}
+
+	CurrentOrderWaveNumber = FMath::Max(0, NewWaveNumber);
+	OnOrderWaveStarted.Broadcast(CurrentOrderWaveNumber);
+}
+
 void APickpackerGameState::SetTeamCredits(int32 NewCredits)
 {
 	if (!HasAuthority())
@@ -225,6 +238,11 @@ void APickpackerGameState::OnRep_ActiveOrders()
 	OnOrdersUpdated.Broadcast(ActiveOrders);
 	// Clients also update remaining times for UI responsiveness
 	BroadcastOrderRemainingTimes();
+}
+
+void APickpackerGameState::OnRep_CurrentOrderWaveNumber()
+{
+	OnOrderWaveStarted.Broadcast(CurrentOrderWaveNumber);
 }
 
 void APickpackerGameState::OnRep_TeamCredits()

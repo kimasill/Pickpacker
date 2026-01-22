@@ -117,6 +117,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
 	float OrderResolutionHoldTime = 8.0f;
 
+	/** Maximum number of active orders (<=0 means unlimited) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
+	int32 MaxActiveOrders = 0;
+
+	/** Initial delay before the first order wave starts (seconds) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders", meta = (ClampMin = "0.0"))
+	float InitialOrderStartDelay = 0.0f;
+
 	/** Whether to start the order system automatically once gameplay begins */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Orders")
 	bool bAutoStartOrders = true;
@@ -128,6 +136,10 @@ public:
 	/** Apply a credit delta (server only) */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Credits")
 	void ApplyCreditDelta(int32 Delta, const FString& Reason);
+
+	/** Wave started event (Blueprint UI hook) */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Orders")
+	void BP_OnOrderWaveStarted(int32 WaveNumber);
 
 
 protected:
@@ -197,8 +209,8 @@ protected:
 protected:
 	/** Order system helpers */
 	void StartOrderSystem();
-	void BeginOrderWave(int32 WaveIndex);
-	void ScheduleNextOrderWave(float DelaySeconds);
+	void BeginOrderWave(int32 WaveIndex, int32 RepeatIndex = 0);
+	void ScheduleNextOrderWave(int32 WaveIndex, int32 RepeatIndex, float DelaySeconds);
 	void TickOrderSystem();
 	void CleanupResolvedOrders();
 	bool AreAllOrdersResolved() const;
@@ -208,6 +220,7 @@ protected:
 	void SyncOrdersToGameState();
 	void ApplyOrderPenalty(const FActiveOrderState& Order) const;
 	void HandleNextOrderWaveTimer();
+	bool CanSpawnNewOrders() const;
 
 protected:
 	/** Current orders tracked on the server */
@@ -219,6 +232,13 @@ protected:
 
 	/** Current wave index */
 	int32 CurrentOrderWaveIndex = INDEX_NONE;
+
+	/** Current repeat index within the wave */
+	int32 CurrentWaveRepeatIndex = 0;
+
+	/** Pending wave info for timer */
+	int32 PendingWaveIndex = INDEX_NONE;
+	int32 PendingWaveRepeatIndex = 0;
 
 	/** Order system timers */
 	FTimerHandle OrderSystemTimerHandle;

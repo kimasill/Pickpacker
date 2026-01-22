@@ -39,15 +39,6 @@ void AParcelSpawnMarker::HandleSpawnedDestroyed(AActor* DestroyedActor)
     {
         return !Ptr.IsValid() || Ptr.Get() == DestroyedActor;
     });
-
-    if (HasAuthority())
-    {
-        if (!bRespawnEnabled)
-        {
-            return;
-		}
-        GetWorld()->GetTimerManager().SetTimer(RespawnTimerHandle, this, &AParcelSpawnMarker::TryRespawn, RespawnDelay, false);
-    }
 }
 
 void AParcelSpawnMarker::TryRespawn()
@@ -65,14 +56,31 @@ void AParcelSpawnMarker::TryRespawn()
             ++Alive;
         }
     }
-    while (Alive < MaxSimultaneous)
+
+	const int32 Remaining = MaxSimultaneous - Alive;
+	if (Remaining <= 0)
+	{
+		return;
+	}
+
+	FName SelectedRow = NAME_None;
+	FIntPoint SelectedRange(1, 1);
+	if (!ChooseParcelCandidate(SelectedRow, SelectedRange) || SelectedRow == NAME_None)
+	{
+		return;
+	}
+
+	const int32 RangeMin = FMath::Max(1, FMath::Min(SelectedRange.X, SelectedRange.Y));
+	const int32 RangeMax = FMath::Max(RangeMin, FMath::Max(SelectedRange.X, SelectedRange.Y));
+	const int32 SpawnCount = FMath::Min(FMath::RandRange(RangeMin, RangeMax), Remaining);
+
+    for (int32 SpawnIndex = 0; SpawnIndex < SpawnCount; ++SpawnIndex)
     {
-        AActor* Spawned = SpawnParcel();
+        AActor* Spawned = SpawnParcel(SelectedRow);
         if (!Spawned)
         {
             break;
         }
-        ++Alive;
     }
 }
 
@@ -83,11 +91,27 @@ void AParcelSpawnMarker::StartSpawning()
 		return;
 	}
 
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RespawnTimerHandle);
+	}
+
 	// 즉시 채우기
 	TryRespawn();
+
+	if (!bRespawnEnabled)
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		const float Interval = FMath::Max(0.01f, RespawnDelay);
+		World->GetTimerManager().SetTimer(RespawnTimerHandle, this, &AParcelSpawnMarker::TryRespawn, Interval, true);
+	}
 }
 
-AActor* AParcelSpawnMarker::SpawnParcel()
+AActor* AParcelSpawnMarker::SpawnParcel(FName Row)
 {
 	if (!HasAuthority())
 	{
@@ -127,7 +151,6 @@ AActor* AParcelSpawnMarker::SpawnParcel()
 	if (ParcelDataAsset)
 	{
 		Parcel->SetParcelDataAsset(ParcelDataAsset);
-		const FName Row = ChooseParcelRow();
 		if (Row != NAME_None)
 		{
 			Parcel->SetParcelDefinitionRowName(Row);
@@ -143,21 +166,77 @@ AActor* AParcelSpawnMarker::SpawnParcel()
 	return Parcel;
 }
 
-FName AParcelSpawnMarker::ChooseParcelRow() const
+bool AParcelSpawnMarker::ChooseParcelCandidate(FName& OutRow, FIntPoint& OutRange) const
 {
+	OutRow = NAME_None;
+	OutRange = SpawnCountRange;
+
 	if (CandidateParcelRows.Num() > 0)
 	{
-		const int32 Index = FMath::RandRange(0, CandidateParcelRows.Num() - 1);
-		return CandidateParcelRows[Index];
+		float TotalWeight = 0.0f;
+		for (const FParcelSpawnCandidate& Candidate : CandidateParcelRows)
+		{
+			if (Candidate.ParcelRow != NAME_None && Candidate.Weight > 0.0f)
+			{
+				TotalWeight += Candidate.Weight;
+			}
+		}
+
+		if (TotalWeight > 0.0f)
+		{
+			const float Pick = FMath::FRandRange(0.0f, TotalWeight);
+			float Accumulated = 0.0f;
+			for (const FParcelSpawnCandidate& Candidate : CandidateParcelRows)
+			{
+				if (Candidate.ParcelRow == NAME_None || Candidate.Weight <= 0.0f)
+				{
+					continue;
+				}
+				Accumulated += Candidate.Weight;
+				if (Pick <= Accumulated)
+				{
+					OutRow = Candidate.ParcelRow;
+					OutRange = Candidate.SpawnCountRange;
+					return true;
+				}
+			}
+		}
+
+		// 가중치가 없거나 모두 0인 경우 균등 랜덤
+		TArray<FName> ValidRows;
+		for (const FParcelSpawnCandidate& Candidate : CandidateParcelRows)
+		{
+			if (Candidate.ParcelRow != NAME_None)
+			{
+				ValidRows.Add(Candidate.ParcelRow);
+			}
+		}
+		if (ValidRows.Num() > 0)
+		{
+			const int32 Index = FMath::RandRange(0, ValidRows.Num() - 1);
+			const FName PickedRow = ValidRows[Index];
+			for (const FParcelSpawnCandidate& Candidate : CandidateParcelRows)
+			{
+				if (Candidate.ParcelRow == PickedRow)
+				{
+					OutRow = Candidate.ParcelRow;
+					OutRange = Candidate.SpawnCountRange;
+					return true;
+				}
+			}
+			OutRow = PickedRow;
+			return true;
+		}
 	}
 
 	if (ParcelDataAsset && ParcelDataAsset->ParcelConfigs.Num() > 0)
 	{
 		const int32 Index = FMath::RandRange(0, ParcelDataAsset->ParcelConfigs.Num() - 1);
-		return FName(*FString::FromInt(Index)); // DA_ParcelData GetParcelConfigByName supports numeric index
+		OutRow = FName(*FString::FromInt(Index)); // DA_ParcelData GetParcelConfigByName supports numeric index
+		return true;
 	}
 
-	return NAME_None;
+	return false;
 }
 
 TArray<FName> AParcelSpawnMarker::GetParcelRowOptions() const

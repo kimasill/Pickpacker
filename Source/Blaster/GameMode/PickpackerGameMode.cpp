@@ -327,8 +327,19 @@ void APickpackerGameMode::StartOrderSystem()
 	bOrderSystemInitialized = true;
 	ActiveOrders.Reset();
 	CurrentOrderWaveIndex = INDEX_NONE;
+	CurrentWaveRepeatIndex = 0;
+	PendingWaveIndex = INDEX_NONE;
+	PendingWaveRepeatIndex = 0;
 
-	BeginOrderWave(0);
+	if (CanSpawnNewOrders())
+	{
+		const FParcelOrderWave* FirstWave = OrderWaveData->GetWave(0);
+		if (FirstWave)
+		{
+			const float InitialDelay = FMath::Max(0.0f, InitialOrderStartDelay);
+			ScheduleNextOrderWave(0, 0, InitialDelay);
+		}
+	}
 
 	if (UWorld* World = GetWorld())
 	{
@@ -343,14 +354,14 @@ void APickpackerGameMode::StartOrderSystem()
 	}
 }
 
-void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
+void APickpackerGameMode::BeginOrderWave(int32 WaveIndex, int32 RepeatIndex)
 {
 	if (!HasAuthority() || !OrderWaveData)
 	{
 		return;
 	}
 
-	const FParcelOrderWave* Wave = OrderWaveData->GetWave(0);
+	const FParcelOrderWave* Wave = OrderWaveData->GetWave(WaveIndex);
 	if (!Wave)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Attempted to start invalid order wave index %d"), WaveIndex);
@@ -364,17 +375,31 @@ void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
 	}
 
 	CurrentOrderWaveIndex = WaveIndex;
+	CurrentWaveRepeatIndex = RepeatIndex;
 
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 	const int32 TemplateCount = Wave->Orders.Num();
-	const int32 DifficultyTier = WaveIndex % 5; // 10% increase each tier
-	const float QuantityMultiplier = 1.0f + static_cast<float>(DifficultyTier) * 0.1f;
-	const int32 AdditionalItems = WaveIndex / 5;
-	const int32 OrdersToSpawn = FMath::Clamp(1 + AdditionalItems, 1, TemplateCount);
+	const int32 OrdersToSpawn = Wave->OrdersPerWave <= 0
+		? TemplateCount
+		: FMath::Clamp(Wave->OrdersPerWave, 1, TemplateCount);
+
+	TArray<int32> TemplateIndices;
+	TemplateIndices.Reserve(TemplateCount);
+	for (int32 Index = 0; Index < TemplateCount; ++Index)
+	{
+		TemplateIndices.Add(Index);
+	}
+	for (int32 Index = TemplateIndices.Num() - 1; Index > 0; --Index)
+	{
+		const int32 SwapIndex = FMath::RandRange(0, Index);
+		TemplateIndices.Swap(Index, SwapIndex);
+	}
 
 	for (int32 SelectionIndex = 0; SelectionIndex < OrdersToSpawn; ++SelectionIndex)
 	{
-		const int32 TemplateIdx = FMath::RandRange(0, TemplateCount - 1);
+		const int32 TemplateIdx = TemplateIndices.IsValidIndex(SelectionIndex)
+			? TemplateIndices[SelectionIndex]
+			: FMath::RandRange(0, TemplateCount - 1);
 		const FParcelOrderDefinition& Definition = Wave->Orders[TemplateIdx];
 
 		FActiveOrderState OrderState;
@@ -388,9 +413,7 @@ void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
 		OrderState.OrderDescription = Definition.OrderDescription;
 		OrderState.RequiredParcelTag = Definition.RequiredParcelTag;
 		OrderState.RequiredItemTag = Definition.RequiredItemTag;
-		const int32 BaseQuantity = Definition.RequiredQuantity > 0 ? Definition.RequiredQuantity : 1;
-		const int32 AdjustedQuantity = FMath::Max(1, FMath::RoundToInt(FMath::CeilToFloat(static_cast<float>(BaseQuantity) * QuantityMultiplier)));
-		OrderState.RequiredQuantity = AdjustedQuantity;
+		OrderState.RequiredQuantity = FMath::Max(1, Definition.RequiredQuantity);
 		OrderState.SubmittedQuantity = 0;
 		OrderState.bRequirePackaged = Definition.bRequirePackaged;
 		OrderState.ExpireTime = Definition.TimeLimitSeconds > 0.f ? Now + Definition.TimeLimitSeconds : -1.f;
@@ -404,20 +427,49 @@ void APickpackerGameMode::BeginOrderWave(int32 WaveIndex)
 
 	SyncOrdersToGameState();
 
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order wave %d started (%d orders)"), WaveIndex, Wave->Orders.Num());
+	if (CurrentWaveRepeatIndex == 0)
+	{
+		if (PickpackerGameState)
+		{
+			PickpackerGameState->SetCurrentOrderWaveNumber(WaveIndex + 1);
+		}
+		BP_OnOrderWaveStarted(WaveIndex + 1);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order wave %d started (%d orders)"), WaveIndex, OrdersToSpawn);
+
+	if (CanSpawnNewOrders())
+	{
+		const int32 NextRepeatIndex = CurrentWaveRepeatIndex + 1;
+		if (NextRepeatIndex < FMath::Max(1, Wave->RepeatCount))
+		{
+			ScheduleNextOrderWave(WaveIndex, NextRepeatIndex, FMath::Max(0.0f, Wave->RepeatDelay));
+		}
+		else
+		{
+			const int32 NextWaveIndex = WaveIndex + 1;
+			if (OrderWaveData->GetWave(NextWaveIndex))
+			{
+				ScheduleNextOrderWave(NextWaveIndex, 0, FMath::Max(0.0f, Wave->NextWaveDelay));
+			}
+		}
+	}
 }
 
-void APickpackerGameMode::ScheduleNextOrderWave(float DelaySeconds)
+void APickpackerGameMode::ScheduleNextOrderWave(int32 WaveIndex, int32 RepeatIndex, float DelaySeconds)
 {
 	if (!HasAuthority() || !OrderWaveData)
 	{
 		return;
 	}
 
-	if (!OrderWaveData->GetWave(0))
+	if (!OrderWaveData->GetWave(WaveIndex))
 	{
 		return; // No more waves
 	}
+
+	PendingWaveIndex = WaveIndex;
+	PendingWaveRepeatIndex = RepeatIndex;
 
 	if (UWorld* World = GetWorld())
 	{
@@ -456,7 +508,10 @@ void APickpackerGameMode::HandleNextOrderWaveTimer()
 		World->GetTimerManager().ClearTimer(NextWaveTimerHandle);
 	}
 
-	BeginOrderWave(CurrentOrderWaveIndex + 1);
+	if (CanSpawnNewOrders() && PendingWaveIndex != INDEX_NONE)
+	{
+		BeginOrderWave(PendingWaveIndex, PendingWaveRepeatIndex);
+	}
 }
 
 void APickpackerGameMode::TickOrderSystem()
@@ -486,17 +541,6 @@ void APickpackerGameMode::TickOrderSystem()
 	}
 
 	CleanupResolvedOrders();
-
-	// 기존 구현은 "다음 인덱스 wave"가 존재할 때만 다음 웨이브를 시작했는데,
-	// 데이터 자산이 0번 웨이브 하나만 가지고 있고 그 안에서 템플릿을 랜덤 선택하는 구조라면
-	// 추가 웨이브가 생성되지 않는다. 따라서 웨이브 존재 여부는 0번 웨이브만 확인하고,
-	// 모든 오더가 해결되면 동일 웨이브(난이도 인덱스만 증가)로 다음 라운드를 스케줄한다.
-	if (OrderWaveData && AreAllOrdersResolved())
-	{
-		const FParcelOrderWave* NextWave = OrderWaveData->GetWave(0);
-		const float Delay = NextWave ? NextWave->StartDelay : 0.0f;
-		ScheduleNextOrderWave(Delay);
-	}
 }
 
 void APickpackerGameMode::CleanupResolvedOrders()
@@ -640,4 +684,13 @@ void APickpackerGameMode::ApplyOrderPenalty(const FActiveOrderState& Order) cons
 	{
 		PickpackerGameState->AddTeamSuspicion(Order.SuspicionPenalty);
 	}
+}
+
+bool APickpackerGameMode::CanSpawnNewOrders() const
+{
+	if (MaxActiveOrders <= 0)
+	{
+		return true;
+	}
+	return ActiveOrders.Num() < MaxActiveOrders;
 }

@@ -531,11 +531,6 @@ void UInteractionComponent::Interact()
         // If not targeting shelf, drop parcel with impulse
         Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
         if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
-        ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(OwnerCharacter);
-        if (BlasterCharacter)
-        {
-            BlasterCharacter->ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
-        }
         return;
     }
 

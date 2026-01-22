@@ -122,6 +122,7 @@ void UParcelStateComponent::InitializeParcel(const FParcelConfig& Config)
 	ParcelConfig = Config;
 	CurrentState.Durability = Config.BaseDurability;
 	CurrentState.Weight = Config.BaseWeight;
+	CurrentState.Unit = Config.PackagingSpaceUnits;
 	CurrentState.Instability = Config.InstabilityFactor;
 
 	if (!ParcelConfig.ClassificationTag.IsValid())
@@ -174,7 +175,7 @@ void UParcelStateComponent::ApplyDamage(float DamageAmount, const FString& Damag
 	}
 }
 
-void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
+float UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& ImpactSource)
 {
     if (ImpactForce <= ImpactDamageThreshold)
     {
@@ -183,7 +184,7 @@ void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& 
             UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelStateComponent] Impact damage below threshold - Force: %.2f, Threshold: %.2f"),
                 ImpactForce, ImpactDamageThreshold);
         }
-        return;
+        return 0.0f;
     }
 
     // Base damage scales with over-threshold impulse; classification adjusts multiplier
@@ -213,13 +214,16 @@ void UParcelStateComponent::ApplyImpactDamage(float ImpactForce, const FString& 
     const float MaxPerImpact = FMath::Max(5.0f, CurrentState.Durability * 0.2f);
     DamageAmount = FMath::Min(DamageAmount, MaxPerImpact);
 
+	const float OldDurability = CurrentState.Durability;
     ApplyDamage(DamageAmount, FString::Printf(TEXT("Impact_%s"), *ImpactSource));
+	const float AppliedDamage = FMath::Max(0.0f, OldDurability - CurrentState.Durability);
 
     if (bEnableDebugLogging)
     {
         UE_LOG(LogTemp, Log, TEXT("[ParcelStateComponent] Impact damage applied - Force: %.2f, Threshold: %.2f, Over: %.2f, Damage: %.2f, Multiplier: %.2f, Source: %s"),
             ImpactForce, ImpactDamageThreshold, OverThreshold, DamageAmount, Multiplier, *ImpactSource);
     }
+	return AppliedDamage;
 }
 
 void UParcelStateComponent::UpdateInstability(float DeltaTime)

@@ -516,6 +516,14 @@ private:
 	UPROPERTY()
 	float LastImpactTime = -100.0f;
 
+	/** 최근 드랍한 캐릭터 (드랍 충격 의심 판정용) */
+	UPROPERTY()
+	TWeakObjectPtr<class ABlasterCharacter> PendingDropper;
+
+	/** 드랍 직후 충격 의심 판정을 대기 중인지 */
+	UPROPERTY()
+	bool bPendingDropSuspicion = false;
+
 	UPROPERTY()
 	TWeakObjectPtr<AShelfActor> OccupyingShelf;
 
@@ -559,6 +567,7 @@ private:
 	bool ApplyParcelConfigFromDataAssetInternal(bool bInitializeRuntime, bool bLogWarnings);
 	bool TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const;
 	void ApplyParcelConfigVisuals(const FParcelConfig& Config);
+	void UpdatePackagedConfigFromContents();
 
 	// Whether to use two-hand carry animations (derived from carry socket count)
 	UPROPERTY(Replicated, VisibleInstanceOnly, Category = "Parcel|Carry")

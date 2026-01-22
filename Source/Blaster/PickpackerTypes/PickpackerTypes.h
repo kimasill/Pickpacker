@@ -23,6 +23,9 @@ struct BLASTER_API FParcelState
 	float Weight = 1.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Parcel State")
+	int32 Unit = 1;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Parcel State")
 	float Instability = 0.0f;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Parcel State")
@@ -38,6 +41,7 @@ struct BLASTER_API FParcelState
 	{
 		Durability = 100.0f;
 		Weight = 1.0f;
+		Unit = 1;
 		Instability = 0.0f;
 		bIsAttached = false;
 		SocketId = NAME_None;
@@ -336,9 +340,21 @@ struct BLASTER_API FParcelOrderWave
 {
 	GENERATED_BODY()
 
-	/** Delay before the wave becomes active */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
-	float StartDelay = 0.0f;
+	/** Number of orders to spawn for this wave (<=0 means all templates) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0"))
+	int32 OrdersPerWave = 1;
+
+	/** Number of times to repeat this wave */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "1"))
+	int32 RepeatCount = 1;
+
+	/** Delay between repeats of the same wave (seconds) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0.0"))
+	float RepeatDelay = 0.0f;
+
+	/** Delay before moving to the next wave (seconds) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0.0"))
+	float NextWaveDelay = 10.0f;
 
 	/** Orders contained in this wave */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")

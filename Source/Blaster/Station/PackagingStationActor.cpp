@@ -277,7 +277,7 @@ void APackagingStationActor::ProcessPackaging()
 		const FName ParcelRowName = Parcel->GetParcelDefinitionRowName();
 		if (ParcelRowName != NAME_None)
 		{
-			ByRowName.FindOrAdd(ParcelRowName).Add(Parcel);
+			ByRowName.FindOrAdd(ParcelRowName).AddUnique(Parcel);
 		}
 
 		FGameplayTagContainer ParcelTagsContainer = Parcel->GetParcelTags();
@@ -287,7 +287,7 @@ void APackagingStationActor::ProcessPackaging()
 			{
 				if (Tag.IsValid() && ParcelTagsContainer.HasTag(Tag))
 				{
-					ByTag.FindOrAdd(Tag).Add(Parcel);
+					ByTag.FindOrAdd(Tag).AddUnique(Parcel);
 				}
 			}
 		}
@@ -510,14 +510,8 @@ void APackagingStationActor::ProcessPackaging()
 		// PackedParcelActor인 경우 추가 설정
 		if (APackedParcelActor* PackedParcel = Cast<APackedParcelActor>(Packaged))
 		{
-			// 레시피 RowName 설정 (TargetParcelRowName 또는 TagName 사용)
-			FName RecipeRowName = bUseRowFilter
-				? MatchedRowName
-				: MatchedTag.GetTagName();
-			if (RecipeRowName != NAME_None)
-			{
-				PackedParcel->SetPackageRecipeRowName(RecipeRowName);
-			}
+			// 레시피 인덱스 기반 설정 (가장 안전한 식별자)
+			PackedParcel->SetPackageRecipeIndex(SelectedIndex);
 			
 			// 콘텐츠 설정
 			if (AutoContents.Num() > 0)

@@ -29,6 +29,12 @@ public:
 	void SetPackageRecipeRowName(const FName& InRowName);
 
 	/**
+	 * PackageRecipe 인덱스를 사용하여 포장 레시피 적용
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel|Config")
+	void SetPackageRecipeIndex(int32 InIndex);
+
+	/**
 	 * 초기 콘텐츠 설정 (에디터에서 지정 가능)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel|Config")
@@ -43,6 +49,10 @@ protected:
 	/** PackageRecipe RowName (포장 레시피 선택용) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (GetOptions = "GetPackageRecipeRowOptions"))
 	FName PackageRecipeRowName = NAME_None;
+
+	/** PackageRecipe 인덱스 (RowName보다 우선) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config")
+	int32 PackageRecipeIndex = INDEX_NONE;
 
 	/** 초기 콘텐츠 (에디터에서 지정 가능, 런타임에는 PackageContents로 사용됨) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")

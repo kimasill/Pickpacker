@@ -35,6 +35,7 @@
 #include "Components/DecalComponent.h"
 #include "Sound/SoundCue.h"
 #include "Blaster/Gate/GateActor.h"
+#include "Blaster/GameState/PickpackerGameState.h"
 
 AParcelActor::AParcelActor()
 {
@@ -360,6 +361,11 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 	PackageParcelDataAsset = InParcelDataAsset ? InParcelDataAsset : ParcelDataAsset;
 	// Contents는 레시피에서 제거되었으므로 여기서 설정하지 않음 (InitialContents 또는 포장 시 자동 생성)
 
+	if (!InRecipe->RecipeName.IsEmpty())
+	{
+		ParcelConfig.ParcelName = InRecipe->RecipeName;
+	}
+
 	if (InRecipe->GripType != EGripType::None)
 	{
 		FItemData UpdatedItemData = ItemData;
@@ -369,6 +375,7 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 	
 	// 메시 업데이트 (포장 메시가 설정되면 즉시 표시)
 	UpdateMeshForCurrentPackagingState();
+	UpdatePackagedConfigFromContents();
 
 }
 
@@ -379,6 +386,80 @@ void AParcelActor::SetPackageContents(const TArray<FParcelPackageContent>& InCon
 		return;
 	}
 	PackageContents = InContents;
+	UpdatePackagedConfigFromContents();
+}
+
+void AParcelActor::UpdatePackagedConfigFromContents()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (PackageContents.Num() == 0)
+	{
+		return;
+	}
+
+	UDA_ParcelData* DataAssetToUse = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+	if (!DataAssetToUse)
+	{
+		return;
+	}
+
+	float TotalWeight = 0.0f;
+	bool bHasStats = false;
+	float MinDurability = 0.0f;
+	float MinInstability = 0.0f;
+	FGameplayTag ContentTag;
+
+	for (const FParcelPackageContent& Entry : PackageContents)
+	{
+		if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None)
+		{
+			continue;
+		}
+
+		FParcelConfig ContentConfig;
+		if (!DataAssetToUse->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig))
+		{
+			continue;
+		}
+
+		TotalWeight += ContentConfig.BaseWeight * Entry.Count;
+		if (!bHasStats)
+		{
+			MinDurability = ContentConfig.BaseDurability;
+			MinInstability = ContentConfig.InstabilityFactor;
+			bHasStats = true;
+		}
+		else
+		{
+			MinDurability = FMath::Min(MinDurability, ContentConfig.BaseDurability);
+			MinInstability = FMath::Min(MinInstability, ContentConfig.InstabilityFactor);
+		}
+
+		if (!ContentTag.IsValid())
+		{
+			ContentTag = ContentConfig.ClassificationTag;
+		}
+	}
+
+	if (!bHasStats)
+	{
+		return;
+	}
+
+	FParcelConfig UpdatedConfig = ParcelConfig;
+	UpdatedConfig.BaseWeight = TotalWeight;
+	UpdatedConfig.BaseDurability = MinDurability;
+	UpdatedConfig.InstabilityFactor = MinInstability;
+	if (ContentTag.IsValid())
+	{
+		UpdatedConfig.ClassificationTag = ContentTag;
+	}
+
+	InitializeParcel(UpdatedConfig);
 }
 
 bool AParcelActor::TryResolveParcelConfig(FParcelConfig& OutConfig, bool bLogWarnings) const
@@ -595,6 +676,9 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 	FVector DropLocation = GetActorLocation();
 	ACharacter* DroppingCarrier = CurrentCarrier;
 	const FName DroppingSocket = CurrentSocketId;
+
+	PendingDropper = Cast<ABlasterCharacter>(DroppingCarrier);
+	bPendingDropSuspicion = PendingDropper.IsValid();
 
 	// Detach from character mesh
 	if (DroppingCarrier)
@@ -893,7 +977,7 @@ void AParcelActor::UpdateHUDWidget()
 		HUDWidget->SetMinimalDisplay(bIsAttached); // 들고 있을 땐 최소 정보만
 		// ParcelConfig의 BaseDurability를 최대 내구도로 사용
 		const float MaxDurability = ParcelConfig.BaseDurability > 0.0f ? ParcelConfig.BaseDurability : 100.0f;
-		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ClassificationTag, MaxDurability);
+		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ParcelTag, ParcelConfig.ClassificationTag, MaxDurability);
 	}
 }
 
@@ -1001,10 +1085,33 @@ void AParcelActor::HandleParcelMeshHit(
         FMath::Min(ClampedImpulse, VelocityWeighted) - MinImpactImpulseForDamage);
     if (EffectiveImpact <= 0.0f) return;
 
-    ParcelStateComponent->ApplyImpactDamage(EffectiveImpact, TEXT("Impact"));
+	const float AppliedDamage = ParcelStateComponent->ApplyImpactDamage(EffectiveImpact, TEXT("Impact"));
+	const float MaxDurability = ParcelConfig.BaseDurability > 0.0f ? ParcelConfig.BaseDurability : 100.0f;
+	const float DamageRatio = MaxDurability > 0.0f ? FMath::Clamp(AppliedDamage / MaxDurability, 0.0f, 1.0f) : 0.0f;
 
-    FName ImpactKey = EffectiveImpact < 300.0f ? FName("Impact_Light")
-                     : EffectiveImpact < 900.0f ? FName("Impact_Med")
+	if (bPendingDropSuspicion)
+	{
+		const APickpackerGameState* GameState = GetWorld() ? GetWorld()->GetGameState<APickpackerGameState>() : nullptr;
+		const float Threshold = GameState ? GameState->GetParcelDropSuspicionDamageRatioThreshold() : 0.0f;
+		if (Threshold <= 0.0f)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+		}
+		else if (DamageRatio >= Threshold)
+		{
+			if (PendingDropper.IsValid())
+			{
+				PendingDropper->ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
+			}
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+		}
+	}
+
+    FName ImpactKey = DamageRatio < 0.15f ? FName("Impact_Light")
+                     : DamageRatio < 0.30f ? FName("Impact_Med")
+                     : DamageRatio < 0.60f ? FName("Impact_Heavy")
                      : FName("Impact_Heavy");
 
     Multicast_PlayParcelEffect(ImpactKey, Hit.ImpactPoint);
@@ -1056,6 +1163,12 @@ void AParcelActor::StabilizePhysics()
 	// Reduce physics simulation to improve performance
 	MeshComponent->SetPhysicsLinearVelocity(FVector::ZeroVector);
 	MeshComponent->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+
+	if (bPendingDropSuspicion)
+	{
+		bPendingDropSuspicion = false;
+		PendingDropper = nullptr;
+	}
 
 	if (bEnableDebugLogging)
 	{

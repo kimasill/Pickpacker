@@ -11,6 +11,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
+#include "Engine/DataTable.h"
 #include "ParcelHUDWidget.generated.h"
 
 USTRUCT(BlueprintType)
@@ -46,6 +47,18 @@ struct BLASTER_API FParcelHUDStyle
 	FLinearColor BackgroundCriticalTint = FLinearColor(1.0f, 0.1f, 0.1f, 0.28f);
 };
 
+USTRUCT(BlueprintType)
+struct BLASTER_API FParcelHUDTagDisplayRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel HUD")
+	FGameplayTag Tag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel HUD")
+	FText DisplayText;
+};
+
 /**
  * Parcel HUD Widget - Displays parcel state information
  */
@@ -64,13 +77,16 @@ public:
 	 * Update parcel state display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
-	void UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag, float MaxDurability = 100.0f);
+	void UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ParcelTag, const FGameplayTag& ClassificationTag, float MaxDurability = 100.0f);
 
 	/**
 	 * Set parcel type display
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
 	void SetClassificationTag(const FGameplayTag& ClassificationTag);
+
+	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
+	void SetParcelTag(const FGameplayTag& ParcelTag);
 
 	/**
 	 * Update durability bar
@@ -83,6 +99,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
 	void UpdateWeightDisplay(float Weight);
+
+	/**
+	* Update unit display
+	*/
+	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
+	void UpdateUnitDisplay(int32 Count);
 
 	/**
 	 * Update instability bar
@@ -140,10 +162,15 @@ protected:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel HUD")
 	FText GetClassificationText(const FGameplayTag& ClassificationTag) const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel HUD")
+	FText GetParcelTagText(const FGameplayTag& ParcelTag) const;
+
 	/**
 	 * Extract the last part of a gameplay tag (e.g., "Pickpacker.Parcel.Classification.Standard" -> "Standard")
 	 */
 	FString GetTagLastPart(const FGameplayTag& Tag) const;
+
+	bool TryGetTagDisplayText(const UDataTable* DataTable, const FGameplayTag& Tag, FText& OutText) const;
 
 public:
 	// UI Components
@@ -158,6 +185,9 @@ public:
 	UTextBlock* WeightText;
 
 	UPROPERTY(meta = (BindWidget))
+	UTextBlock* UnitText;
+
+	UPROPERTY(meta = (BindWidget))
 	UTextBlock* CarrierCountText;
 
 	UPROPERTY(meta = (BindWidget))
@@ -167,14 +197,20 @@ public:
 	UImage* ParcelTypeIcon;
 
 	UPROPERTY(meta = (BindWidget))
+	UTextBlock* ParcelTagText;
+
+	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ParcelNameText;
 
 	UPROPERTY(meta = (BindWidget))
 	UBorder* BackgroundBorder;
 
-	// 분류 태그 -> 표시 텍스트 매핑 (예: Parcel-Classification.Standard -> "일반")
+	// 태그 표시용 데이터 테이블 (Row: FParcelHUDTagDisplayRow)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel HUD")
-	TMap<FName, FText> ClassificationDisplayMap;
+	UDataTable* ClassificationDisplayTable = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel HUD")
+	UDataTable* ParcelTagDisplayTable = nullptr;
 
 protected:
 	// Current parcel state

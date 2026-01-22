@@ -9,6 +9,24 @@
 
 class AParcelActor;
 
+USTRUCT(BlueprintType)
+struct FParcelSpawnCandidate
+{
+	GENERATED_BODY()
+
+	/** ParcelDataAsset 내 Row 이름 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn", meta = (GetOptions = "GetParcelRowOptions"))
+	FName ParcelRow;
+
+	/** 해당 Row의 스폰 가중치 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn", meta = (ClampMin = "0.0"))
+	float Weight = 1.0f;
+
+	/** 해당 Row가 선택되었을 때 한번에 스폰할 개수 범위 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
+	FIntPoint SpawnCountRange = FIntPoint(1, 1);
+};
+
 /**
  * Spawn marker specialized for parcels. Supports continuous respawn.
  */
@@ -26,9 +44,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
 	UDA_ParcelData* ParcelDataAsset = nullptr;
 
-	/** 후보군: ParcelData 내 Row 이름(비면 전체 랜덤) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn", meta = (GetOptions = "GetParcelRowOptions"))
-	TArray<FName> CandidateParcelRows;
+	/** 후보군: ParcelData 내 Row + 가중치(비면 전체 랜덤) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
+	TArray<FParcelSpawnCandidate> CandidateParcelRows;
 
 	/** 스폰할 파슬 클래스 (기본 AParcelActor) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
@@ -50,9 +68,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
 	bool bRespawnEnabled = true;
 
-    /** Respawn delay after an actor is destroyed (seconds). */
+    /** Spawn interval in seconds. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
     float RespawnDelay = 10.0f;
+
+	/** 후보군이 비어 있을 때 사용할 기본 스폰 개수 범위 (예: 1~3) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
+	FIntPoint SpawnCountRange = FIntPoint(1, 1);
 
     
 
@@ -60,8 +82,8 @@ protected:
     virtual void OnSpawned(AActor* SpawnedActor) override;
 
 private:
-	AActor* SpawnParcel();
-	FName ChooseParcelRow() const;
+	AActor* SpawnParcel(FName Row);
+	bool ChooseParcelCandidate(FName& OutRow, FIntPoint& OutRange) const;
 
     UPROPERTY()
     TArray<TWeakObjectPtr<AActor>> SpawnedActors;

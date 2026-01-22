@@ -85,6 +85,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Suspicion")
 	float GetSuspicionLevel() const;
 
+	/** 드랍 의심 판정 내구도 소모 비율 임계치 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Suspicion")
+	float GetParcelDropSuspicionDamageRatioThreshold() const { return ParcelDropSuspicionDamageRatioThreshold; }
+
 	/**
 	 * Check if simulation is running
 	 */
@@ -111,6 +115,14 @@ public:
 
 	/** Server-side setter for active orders. Starts automatic remaining-time updates. */
 	void SetActiveOrders(const TArray<FActiveOrderState>& NewOrders);
+
+	/** Set current order wave number (server only) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Orders")
+	void SetCurrentOrderWaveNumber(int32 NewWaveNumber);
+
+	/** Get current order wave number */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Orders")
+	int32 GetCurrentOrderWaveNumber() const { return CurrentOrderWaveNumber; }
 
 	/**
 	 * Set team credits (server only)
@@ -187,6 +199,11 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
 	FOnOrdersUpdated OnOrdersUpdated;
 
+	/** Broadcast when a new order wave starts */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOrderWaveStarted, int32, WaveNumber);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
+	FOnOrderWaveStarted OnOrderWaveStarted;
+
 	/** Broadcast periodic remaining time updates (OrderId -> RemainingSeconds). */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOrderTimesUpdated, const TArray<FOrderTimesUpdatePayload>&, Payload);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
@@ -217,6 +234,9 @@ protected:
 	/** Called when active orders are replicated */
 	UFUNCTION()
 	void OnRep_ActiveOrders();
+
+	UFUNCTION()
+	void OnRep_CurrentOrderWaveNumber();
 
 	/** Called when team credits replicate */
 	UFUNCTION()
@@ -250,6 +270,10 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_ActiveOrders)
 	TArray<FActiveOrderState> ActiveOrders;
 
+	/** Replicated current wave number (1-based, 0 if none) */
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentOrderWaveNumber)
+	int32 CurrentOrderWaveNumber = 0;
+
 	/** Previous order times payload for change detection */
 	UPROPERTY(ReplicatedUsing = OnRep_OrderTimesPayloads)
 	TArray<FOrderTimesUpdatePayload> OrderTimesPayloads;
@@ -265,6 +289,10 @@ private:
 	/** Maximum suspicion before alert level increases */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Suspicion", meta = (AllowPrivateAccess = "true"))
 	float MaxSuspicion = 100.0f;
+
+	/** 택배 드랍 의심 판정 내구도 소모 비율 임계치 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Suspicion", meta = (AllowPrivateAccess = "true"))
+	float ParcelDropSuspicionDamageRatioThreshold = 0.2f;
 
 	/** Cached anchor subsystem reference */
 	UPROPERTY()

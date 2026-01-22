@@ -20,11 +20,6 @@ UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	// Initialize current state
 	CurrentClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
 	CurrentParcelState = FParcelState();
-
-	// 기본 분류 표시 매핑 (태그의 마지막 부분만 키로 사용)
-	ClassificationDisplayMap.Add(FName("Standard"), NSLOCTEXT("ParcelHUD", "ClassificationStandard", "일반"));
-	ClassificationDisplayMap.Add(FName("Fragile"), NSLOCTEXT("ParcelHUD", "ClassificationFragile", "취급주의"));
-	ClassificationDisplayMap.Add(FName("Contraband"), NSLOCTEXT("ParcelHUD", "ClassificationContraband", "특수"));
 }
 
 void UParcelHUDWidget::NativeConstruct()
@@ -88,7 +83,7 @@ void UParcelHUDWidget::NativeDestruct()
 	}
 }
 
-void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ClassificationTag, float MaxDurability)
+void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const FGameplayTag& ParcelTag, const FGameplayTag& ClassificationTag, float MaxDurability)
 {
 	CurrentParcelState = ParcelState;
 	CurrentClassificationTag = ClassificationTag;
@@ -117,8 +112,10 @@ void UParcelHUDWidget::UpdateParcelState(const FParcelState& ParcelState, const 
 	// Update all UI elements
 	UpdateDurabilityBar(ParcelState.Durability, MaxDurability);
 	UpdateWeightDisplay(ParcelState.Weight);
+	UpdateUnitDisplay(ParcelState.Unit);
 	UpdateInstabilityBar(ParcelState.Instability, 100.0f);
 	UpdateCarrierCount(ParcelState.Carriers.Num());
+	SetParcelTag(ParcelTag);
 	SetClassificationTag(ClassificationTag);
 	UpdateHUDColor(ParcelState, MaxDurability);
 
@@ -148,6 +145,18 @@ void UParcelHUDWidget::SetClassificationTag(const FGameplayTag& ClassificationTa
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[ParcelHUDWidget] Parcel classification set to: %s"), *ClassificationTag.ToString());
+	}
+}
+
+void UParcelHUDWidget::SetParcelTag(const FGameplayTag& ParcelTag)
+{
+	if(ParcelTagText)
+	{
+		ParcelTagText->SetText(GetParcelTagText(ParcelTag));
+	}
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ParcelHUDWidget] Parcel tag set to: %s"), *ParcelTag.ToString());
 	}
 }
 
@@ -189,6 +198,20 @@ void UParcelHUDWidget::UpdateWeightDisplay(float Weight)
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelHUDWidget] Weight display updated - Value: %.2f"), Weight);
+	}
+}
+
+void UParcelHUDWidget::UpdateUnitDisplay(int32 Count)
+{
+	if (!UnitText)
+	{
+		return;
+	}
+	FText UnitTextContent = FText::Format(FText::FromString(TEXT("크기: {0}")), FText::AsNumber(Count));
+	UnitText->SetText(UnitTextContent);
+	if (bEnableDebugLogging)
+	{
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelHUDWidget] Unit count updated - Count: %d"), Count);
 	}
 }
 
@@ -418,18 +441,56 @@ FText UParcelHUDWidget::GetClassificationText(const FGameplayTag& Classification
 		return NSLOCTEXT("ParcelHUD", "ClassificationFallback", "일반");
 	}
 
-	// 태그의 마지막 부분 추출 (예: Pickpacker.Parcel.Classification.Standard -> Standard)
-	FString LastPart = GetTagLastPart(ClassificationTag);
-
-	// 마지막 부분으로 매핑 검색
-	FName LastPartName = FName(*LastPart);
-	if (const FText* Found = ClassificationDisplayMap.Find(LastPartName))
+	FText DisplayText;
+	if (TryGetTagDisplayText(ClassificationDisplayTable, ClassificationTag, DisplayText))
 	{
-		return *Found;
+		return DisplayText;
 	}
 
-	// 매핑을 찾지 못한 경우 마지막 부분을 그대로 표시
+	const FString LastPart = GetTagLastPart(ClassificationTag);
 	return FText::FromString(LastPart);
 }
 
+FText UParcelHUDWidget::GetParcelTagText(const FGameplayTag& ParcelTag) const
+{
+	if (!ParcelTag.IsValid())
+	{
+		return FText::GetEmpty();
+	}
+
+	FText DisplayText;
+	if (TryGetTagDisplayText(ParcelTagDisplayTable, ParcelTag, DisplayText))
+	{
+		return DisplayText;
+	}
+
+	const FString LastPart = GetTagLastPart(ParcelTag);
+	return FText::FromString(LastPart);
+}
+
+bool UParcelHUDWidget::TryGetTagDisplayText(const UDataTable* DataTable, const FGameplayTag& Tag, FText& OutText) const
+{
+	if (!DataTable || !Tag.IsValid())
+	{
+		return false;
+	}
+
+	const TArray<FName> RowNames = DataTable->GetRowNames();
+	for (const FName& RowName : RowNames)
+	{
+		const FParcelHUDTagDisplayRow* Row = DataTable->FindRow<FParcelHUDTagDisplayRow>(RowName, TEXT("ParcelHUDTagLookup"));
+		if (!Row || !Row->Tag.IsValid())
+		{
+			continue;
+		}
+
+		if (Row->Tag.MatchesTagExact(Tag))
+		{
+			OutText = Row->DisplayText;
+			return true;
+		}
+	}
+
+	return false;
+}
 

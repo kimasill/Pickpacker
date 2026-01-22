@@ -45,7 +45,7 @@ public:
 	 * Apply impact damage (for fragile parcels)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Parcel State")
-	void ApplyImpactDamage(float ImpactForce, const FString& ImpactSource = TEXT("Impact"));
+	float ApplyImpactDamage(float ImpactForce, const FString& ImpactSource = TEXT("Impact"));
 
 	/**
 	 * Update instability (for contraband parcels)

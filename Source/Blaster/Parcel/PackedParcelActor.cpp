@@ -86,43 +86,50 @@ void APackedParcelActor::OnConstruction(const FTransform& Transform)
 
 void APackedParcelActor::InitializeFromPackageRecipe()
 {
-	if (!ParcelDataAsset || PackageRecipeRowName == NAME_None)
+	if (!ParcelDataAsset)
 	{
 		return;
 	}
 
 	// PackageRecipe 찾기
 	const FParcelPackageRecipe* FoundRecipe = nullptr;
-	const FString RequestedRecipeName = PackageRecipeRowName.ToString();
-	for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+	if (PackageRecipeIndex != INDEX_NONE && ParcelDataAsset->PackageRecipes.IsValidIndex(PackageRecipeIndex))
 	{
-		bool bMatchesTargetRowList = false;
-		for (const FName& RowName : Recipe.TargetParcelRowNames)
+		FoundRecipe = &ParcelDataAsset->PackageRecipes[PackageRecipeIndex];
+	}
+	if (!FoundRecipe && PackageRecipeRowName != NAME_None)
+	{
+		const FString RequestedRecipeName = PackageRecipeRowName.ToString();
+		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
 		{
-			if (RowName == PackageRecipeRowName)
+			bool bMatchesTargetRowList = false;
+			for (const FName& RowName : Recipe.TargetParcelRowNames)
 			{
-				bMatchesTargetRowList = true;
+				if (RowName == PackageRecipeRowName)
+				{
+					bMatchesTargetRowList = true;
+					break;
+				}
+			}
+
+			bool bMatchesTargetTagList = false;
+			for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
+			{
+				if (Tag.GetTagName() == PackageRecipeRowName)
+				{
+					bMatchesTargetTagList = true;
+					break;
+				}
+			}
+
+			const bool bMatchesRecipeName =
+				!RequestedRecipeName.IsEmpty() &&
+				Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
+			if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
+			{
+				FoundRecipe = &Recipe;
 				break;
 			}
-		}
-
-		bool bMatchesTargetTagList = false;
-		for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
-		{
-			if (Tag.GetTagName() == PackageRecipeRowName)
-			{
-				bMatchesTargetTagList = true;
-				break;
-			}
-		}
-
-		const bool bMatchesRecipeName =
-			!RequestedRecipeName.IsEmpty() &&
-			Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
-		if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
-		{
-			FoundRecipe = &Recipe;
-			break;
 		}
 	}
 
@@ -165,6 +172,14 @@ void APackedParcelActor::InitializeFromPackageRecipe()
 void APackedParcelActor::SetPackageRecipeRowName(const FName& InRowName)
 {
 	PackageRecipeRowName = InRowName;
+	PackageRecipeIndex = INDEX_NONE;
+	InitializeFromPackageRecipe();
+}
+
+void APackedParcelActor::SetPackageRecipeIndex(int32 InIndex)
+{
+	PackageRecipeIndex = InIndex;
+	PackageRecipeRowName = NAME_None;
 	InitializeFromPackageRecipe();
 }
 

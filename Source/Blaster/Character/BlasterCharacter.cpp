@@ -1479,7 +1479,6 @@ void ABlasterCharacter::DropCarriedParcelIfAny()
 	{
 		// 드랍 후 서버에서 소켓 정리되도록 요청
 		Carried->RequestDrop(FVector::ZeroVector);
-		ReportSuspiciousBehavior(ESuspiciousBehavior::DroppingParcel);
 	}
 }
 
