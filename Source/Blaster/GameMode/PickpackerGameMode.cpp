@@ -20,7 +20,7 @@
 
 namespace
 {
-	static void AppendDebugLog(const FString& JsonLine)
+	static void AppendDebugLog_PickpackerGameMode(const FString& JsonLine)
 	{
 		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
@@ -211,7 +211,7 @@ void APickpackerGameMode::RequestReturnToLobby()
 	if (!bGameOverInProgress)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PickpackerGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H16\",\"location\":\"PickpackerGameMode.cpp:210\",\"message\":\"RequestReturnToLobby skipped\",\"data\":{\"reason\":\"gameOverFalse\",\"timerActive\":%s},\"timestamp\":%lld}"),
 			(GetWorld() && GetWorld()->GetTimerManager().IsTimerActive(ReturnToLobbyTimerHandle)) ? TEXT("true") : TEXT("false"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -221,7 +221,7 @@ void APickpackerGameMode::RequestReturnToLobby()
 	if (bReturnToLobbyTriggered)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PickpackerGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H17\",\"location\":\"PickpackerGameMode.cpp:215\",\"message\":\"RequestReturnToLobby skipped\",\"data\":{\"reason\":\"alreadyTriggered\"},\"timestamp\":%lld}"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 		// #endregion
@@ -230,7 +230,7 @@ void APickpackerGameMode::RequestReturnToLobby()
 	if (GetWorld() && !GetWorld()->GetTimerManager().IsTimerActive(ReturnToLobbyTimerHandle))
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PickpackerGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"PickpackerGameMode.cpp:206\",\"message\":\"RequestReturnToLobby\",\"data\":{\"gameOver\":%s,\"world\":\"%s\"},\"timestamp\":%lld}"),
 			bGameOverInProgress ? TEXT("true") : TEXT("false"),
 			GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
@@ -241,7 +241,7 @@ void APickpackerGameMode::RequestReturnToLobby()
 	else
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PickpackerGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H16\",\"location\":\"PickpackerGameMode.cpp:219\",\"message\":\"RequestReturnToLobby skipped\",\"data\":{\"reason\":\"timerActive\",\"timerActive\":%s},\"timestamp\":%lld}"),
 			(GetWorld() && GetWorld()->GetTimerManager().IsTimerActive(ReturnToLobbyTimerHandle)) ? TEXT("true") : TEXT("false"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -264,7 +264,7 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	if (bReturnToLobbyTriggered)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PickpackerGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H17\",\"location\":\"PickpackerGameMode.cpp:238\",\"message\":\"ReturnPlayersToLobby skipped\",\"data\":{\"reason\":\"alreadyTriggered\"},\"timestamp\":%lld}"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 		// #endregion
@@ -272,7 +272,7 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	}
 	bReturnToLobbyTriggered = true;
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H17\",\"location\":\"PickpackerGameMode.cpp:244\",\"message\":\"ReturnPlayersToLobby first\",\"data\":{\"setTriggered\":true},\"timestamp\":%lld}"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
@@ -283,14 +283,14 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	{
 		ClientConnCount = NetDriver->ClientConnections.Num();
 	}
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H14\",\"location\":\"PickpackerGameMode.cpp:232\",\"message\":\"NetDriver clients\",\"data\":{\"clientConnections\":%d},\"timestamp\":%lld}"),
 		ClientConnCount,
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H15\",\"location\":\"PickpackerGameMode.cpp:241\",\"message\":\"Seamless before set\",\"data\":{\"bUseSeamless\":%s},\"timestamp\":%lld}"),
 		bUseSeamlessTravel ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -299,7 +299,7 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	bUseSeamlessTravel = true;
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H15\",\"location\":\"PickpackerGameMode.cpp:247\",\"message\":\"Seamless after set\",\"data\":{\"bUseSeamless\":%s},\"timestamp\":%lld}"),
 		bUseSeamlessTravel ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -308,14 +308,14 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	// #region agent log
 	const FString TravelPath = FString::Printf(TEXT("%s?listen"), *LobbyTravelPath);
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H9\",\"location\":\"PickpackerGameMode.cpp:240\",\"message\":\"ServerTravel to lobby\",\"data\":{\"url\":\"%s\",\"world\":\"%s\"},\"timestamp\":%lld}"),
 		*TravelPath,
 		World ? *World->GetMapName() : TEXT("none"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H21\",\"location\":\"PickpackerGameMode.cpp:244\",\"message\":\"SeamlessTravel requested\",\"data\":{\"useSeamless\":%s},\"timestamp\":%lld}"),
 		bUseSeamlessTravel ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -323,20 +323,20 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	bUseSeamlessTravel = false;
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H15\",\"location\":\"PickpackerGameMode.cpp:247\",\"message\":\"Seamless after set\",\"data\":{\"bUseSeamless\":%s},\"timestamp\":%lld}"),
 		bUseSeamlessTravel ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H9\",\"location\":\"PickpackerGameMode.cpp:240\",\"message\":\"ServerTravel to lobby\",\"data\":{\"url\":\"%s\",\"world\":\"%s\"},\"timestamp\":%lld}"),
 		*TravelPath,
 		World ? *World->GetMapName() : TEXT("none"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H21\",\"location\":\"PickpackerGameMode.cpp:244\",\"message\":\"SeamlessTravel requested\",\"data\":{\"useSeamless\":%s},\"timestamp\":%lld}"),
 		bUseSeamlessTravel ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -344,7 +344,7 @@ void APickpackerGameMode::ReturnPlayersToLobby()
 	bUseSeamlessTravel = true;
 	World->ServerTravel(TravelPath);
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H18\",\"location\":\"PickpackerGameMode.cpp:247\",\"message\":\"ServerTravel issued\",\"data\":{\"inSeamless\":%s},\"timestamp\":%lld}"),
 		World->IsInSeamlessTravel() ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -357,7 +357,7 @@ void APickpackerGameMode::PostSeamlessTravel()
 
 	UWorld* World = GetWorld();
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H12\",\"location\":\"PickpackerGameMode.cpp:272\",\"message\":\"PostSeamlessTravel\",\"data\":{\"world\":\"%s\",\"numPC\":%d},\"timestamp\":%lld}"),
 		World ? *World->GetMapName() : TEXT("none"),
 		World ? World->GetNumPlayerControllers() : -1,
@@ -379,7 +379,7 @@ void APickpackerGameMode::PostSeamlessTravel()
 		HostAddress = HostAddress.Replace(TEXT("0.0.0.0"), TEXT("127.0.0.1"));
 	}
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PickpackerGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H29\",\"location\":\"PickpackerGameMode.cpp:290\",\"message\":\"PostSeamlessTravel host\",\"data\":{\"host\":\"%s\"},\"timestamp\":%lld}"),
 		*HostAddress,
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -390,7 +390,7 @@ void APickpackerGameMode::PostSeamlessTravel()
 		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
 		{
 			// #region agent log
-			AppendDebugLog(FString::Printf(
+			AppendDebugLog_PickpackerGameMode(FString::Printf(
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H26\",\"location\":\"PickpackerGameMode.cpp:283\",\"message\":\"PostSeamlessTravel PC\",\"data\":{\"pc\":\"%s\",\"netConn\":%s,\"world\":\"%s\"},\"timestamp\":%lld}"),
 				*GetNameSafe(PC),
 				PC->GetNetConnection() ? TEXT("true") : TEXT("false"),
@@ -402,7 +402,7 @@ void APickpackerGameMode::PostSeamlessTravel()
 				PC->ClientEnsureLobbyTravel(HostAddress, LobbyTravelPath);
 			}
 			// #region agent log
-			AppendDebugLog(FString::Printf(
+			AppendDebugLog_PickpackerGameMode(FString::Printf(
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H13\",\"location\":\"PickpackerGameMode.cpp:285\",\"message\":\"PostSeamlessTravel NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
 				*GetNameSafe(PC),
 				FDateTime::UtcNow().ToUnixTimestamp() * 1000));

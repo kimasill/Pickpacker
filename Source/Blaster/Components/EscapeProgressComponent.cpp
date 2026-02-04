@@ -18,7 +18,7 @@
 
 namespace
 {
-	static void AppendDebugLog(const FString& JsonLine)
+	static void AppendDebugLog_EscapeProgress(const FString& JsonLine)
 	{
 		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
@@ -383,7 +383,7 @@ void UEscapeProgressComponent::ReturnPlayersToLobby()
 	if (UWorld* World = GetWorld())
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_EscapeProgress(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H20\",\"location\":\"EscapeProgressComponent.cpp:372\",\"message\":\"ReturnPlayersToLobby\",\"data\":{\"world\":\"%s\"},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -401,6 +401,20 @@ void UEscapeProgressComponent::OnRep_CurrentEndingId()
 		BroadcastInputBlock(true);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -56,7 +56,7 @@
 
 namespace
 {
-	static void AppendDebugLog(const FString& JsonLine)
+	static void AppendDebugLog_BlasterCharacter(const FString& JsonLine)
 	{
 		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
@@ -248,7 +248,7 @@ void ABlasterCharacter::OnRep_PlayerState()
 	Super::OnRep_PlayerState();
 	UpdateOverheadWidget();
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_BlasterCharacter(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H45\",\"location\":\"BlasterCharacter.cpp:236\",\"message\":\"OnRep_PlayerState\",\"data\":{\"name\":\"%s\",\"world\":\"%s\"},\"timestamp\":%lld}"),
 		GetPlayerState() ? *GetPlayerState()->GetPlayerName() : TEXT("none"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
@@ -269,7 +269,7 @@ void ABlasterCharacter::SetEndingInProgress(bool bInProgress)
 	bDisableGameplay = bInProgress;
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_BlasterCharacter(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H42\",\"location\":\"BlasterCharacter.cpp:242\",\"message\":\"SetEndingInProgress\",\"data\":{\"inProgress\":%s,\"world\":\"%s\",\"movementMode\":%d},\"timestamp\":%lld}"),
 		bInProgress ? TEXT("true") : TEXT("false"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),

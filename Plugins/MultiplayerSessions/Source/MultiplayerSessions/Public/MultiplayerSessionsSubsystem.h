@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSubsystem.h"
 #include "MultiplayerSessionsSubsystem.generated.h"
 
 // Forward declarations for the delegates we will use
@@ -26,12 +27,14 @@ enum class ESessionVisibility : uint8
 /**
  * 
  */
-UCLASS()
+UCLASS(Config=Game)
 class MULTIPLAYERSESSIONS_API UMultiplayerSessionsSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 public:
 	UMultiplayerSessionsSubsystem();
+	IOnlineSubsystem* GetOnlineSubsystem() const;
+	FName GetSubsystemName() const;
 	void CreateSession(int32 NumPublicConnections, FString MatchType, const FString& SessionTitle = TEXT(""), ESessionVisibility Visibility = ESessionVisibility::Private, const FString& SelectedMap = TEXT(""), const FString& GameMode = TEXT(""));
 	void FindSessions(int32 MaxSearchResults);
 	void JoinSession(const FOnlineSessionSearchResult& SessionResult);
@@ -58,6 +61,10 @@ protected:
 	bool IsValidSessionInterface();
 private:
 	IOnlineSessionPtr SessionInterface;
+
+	UPROPERTY(Config)
+	bool bUseNullSubsystemInEditor = true;
+
 	// To add th the Online Session Interface Delegate list.
 	// we'll bind our MultiplayerSessionsSubsystem to these delegates
 	TSharedPtr<FOnlineSessionSettings> LastSessionSettings;

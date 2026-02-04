@@ -36,7 +36,7 @@
 
 namespace
 {
-	static void AppendDebugLog(const FString& JsonLine)
+	static void AppendDebugLog_PlayerController(const FString& JsonLine)
 	{
 		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
@@ -48,7 +48,7 @@ namespace
 	static void OnTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H23\",\"location\":\"BlasterPlayerController.cpp:44\",\"message\":\"TravelFailure\",\"data\":{\"world\":\"%s\",\"type\":%d,\"error\":\"%s\"},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			static_cast<int32>(FailureType),
@@ -60,7 +60,7 @@ namespace
 	static void OnNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H24\",\"location\":\"BlasterPlayerController.cpp:55\",\"message\":\"NetworkFailure\",\"data\":{\"world\":\"%s\",\"type\":%d,\"error\":\"%s\",\"netDriver\":\"%s\"},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			static_cast<int32>(FailureType),
@@ -73,7 +73,7 @@ namespace
 	static void OnPreLoadMap(const FString& MapName)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H31\",\"location\":\"BlasterPlayerController.cpp:66\",\"message\":\"PreLoadMap\",\"data\":{\"map\":\"%s\"},\"timestamp\":%lld}"),
 			*MapName,
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -83,7 +83,7 @@ namespace
 	static void OnPostLoadMap(UWorld* World)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H32\",\"location\":\"BlasterPlayerController.cpp:74\",\"message\":\"PostLoadMap\",\"data\":{\"world\":\"%s\",\"type\":%d,\"hasWorldSettings\":%s},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			World ? static_cast<int32>(World->WorldType) : -1,
@@ -95,7 +95,7 @@ namespace
 	static void OnPreWorldInit(UWorld* World, const UWorld::InitializationValues IVS)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H35\",\"location\":\"BlasterPlayerController.cpp:82\",\"message\":\"PreWorldInit\",\"data\":{\"world\":\"%s\",\"type\":%d},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			World ? static_cast<int32>(World->WorldType) : -1,
@@ -106,7 +106,7 @@ namespace
 	static void OnPostWorldInit(UWorld* World, const UWorld::InitializationValues IVS)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H36\",\"location\":\"BlasterPlayerController.cpp:91\",\"message\":\"PostWorldInit\",\"data\":{\"world\":\"%s\",\"type\":%d,\"hasWorldSettings\":%s},\"timestamp\":%lld}"),
 			World ? *World->GetMapName() : TEXT("none"),
 			World ? static_cast<int32>(World->WorldType) : -1,
@@ -170,7 +170,7 @@ void ABlasterPlayerController::BeginPlay()
 		GEngine->OnNetworkFailure().AddStatic(&OnNetworkFailure);
 		bTravelDelegatesBound = true;
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H25\",\"location\":\"BlasterPlayerController.cpp:96\",\"message\":\"BindTravelDelegates\",\"data\":{},\"timestamp\":%lld}"),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 		// #endregion
@@ -184,7 +184,7 @@ void ABlasterPlayerController::BeginPlay()
 		bMapDelegatesBound = true;
 	}
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H22\",\"location\":\"BlasterPlayerController.cpp:102\",\"message\":\"BeginPlay\",\"data\":{\"world\":\"%s\",\"netMode\":%d,\"hasServerConn\":%s},\"timestamp\":%lld}"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
 		GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
@@ -460,7 +460,7 @@ void ABlasterPlayerController::OnPossess(APawn* InPawn)
 		: -1;
 	const int32 NetModeValue = GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1;
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H43\",\"location\":\"BlasterPlayerController.cpp:434\",\"message\":\"OnPossess state\",\"data\":{\"playerName\":\"%s\",\"blocked\":%s,\"ignoreMove\":%s,\"ignoreLook\":%s,\"ending\":%s,\"moveMode\":\"%s\",\"world\":\"%s\",\"netMode\":\"%s\"},\"timestamp\":%lld}"),
 		GetPlayerState<APlayerState>() ? *GetPlayerState<APlayerState>()->GetPlayerName() : TEXT("none"),
 		bEndingInputBlocked ? TEXT("true") : TEXT("false"),
@@ -923,7 +923,7 @@ void ABlasterPlayerController::SetInputBlocked(bool bBlocked)
 {
 	bEndingInputBlocked = bBlocked;
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H40\",\"location\":\"BlasterPlayerController.cpp:891\",\"message\":\"SetInputBlocked\",\"data\":{\"blocked\":%s,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		bBlocked ? TEXT("true") : TEXT("false"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
@@ -958,7 +958,7 @@ void ABlasterPlayerController::ClientShowLoadingScreenWithKey_Implementation(FNa
 void ABlasterPlayerController::PreClientTravel(const FString& PendingURL, ETravelType TravelType, bool bIsSeamlessTravel)
 {
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H7\",\"location\":\"BlasterPlayerController.cpp:812\",\"message\":\"PreClientTravel\",\"data\":{\"url\":\"%s\",\"travelType\":%d,\"seamless\":%s,\"isLocal\":%s,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		*PendingURL,
 		static_cast<int32>(TravelType),
@@ -970,7 +970,7 @@ void ABlasterPlayerController::PreClientTravel(const FString& PendingURL, ETrave
 	// #endregion
 	// #region agent log
 	const bool bHasServerConn = (GetWorld() && GetWorld()->GetNetDriver() && GetWorld()->GetNetDriver()->ServerConnection);
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H19\",\"location\":\"BlasterPlayerController.cpp:818\",\"message\":\"PreClientTravel Conn\",\"data\":{\"hasServerConn\":%s},\"timestamp\":%lld}"),
 		bHasServerConn ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -981,7 +981,7 @@ void ABlasterPlayerController::PreClientTravel(const FString& PendingURL, ETrave
 	{
 		ConnState = static_cast<int32>(GetWorld()->GetNetDriver()->ServerConnection->GetConnectionState());
 	}
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H46\",\"location\":\"BlasterPlayerController.cpp:824\",\"message\":\"PreClientTravel ConnState\",\"data\":{\"state\":%d,\"inSeamless\":%s},\"timestamp\":%lld}"),
 		ConnState,
 		(GetWorld() && GetWorld()->IsInSeamlessTravel()) ? TEXT("true") : TEXT("false"),
@@ -989,7 +989,7 @@ void ABlasterPlayerController::PreClientTravel(const FString& PendingURL, ETrave
 	// #endregion
 	// #region agent log
 	const AGameModeBase* AuthGM = GetWorld() ? GetWorld()->GetAuthGameMode() : nullptr;
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H15\",\"location\":\"BlasterPlayerController.cpp:820\",\"message\":\"PreClientTravel GM\",\"data\":{\"gmClass\":\"%s\",\"gmSeamless\":%s},\"timestamp\":%lld}"),
 		AuthGM ? *AuthGM->GetClass()->GetName() : TEXT("none"),
 		(AuthGM && AuthGM->bUseSeamlessTravel) ? TEXT("true") : TEXT("false"),
@@ -1002,7 +1002,7 @@ void ABlasterPlayerController::PostSeamlessTravel()
 {
 	Super::PostSeamlessTravel();
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H27\",\"location\":\"BlasterPlayerController.cpp:842\",\"message\":\"PostSeamlessTravel\",\"data\":{\"world\":\"%s\",\"netMode\":%d,\"hasServerConn\":%s},\"timestamp\":%lld}"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
 		GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
@@ -1017,7 +1017,7 @@ void ABlasterPlayerController::OnRep_Pawn()
 	APawn* NewPawn = GetPawn();
 	const bool bIsLobbyPawn = (NewPawn && NewPawn->GetClass()->GetName().Contains(TEXT("LobbyCharacter")));
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H47\",\"location\":\"BlasterPlayerController.cpp:858\",\"message\":\"OnRep_Pawn\",\"data\":{\"pawn\":\"%s\",\"isLobby\":%s,\"ignoreMove\":%s,\"ignoreLook\":%s},\"timestamp\":%lld}"),
 		*GetNameSafe(NewPawn),
 		bIsLobbyPawn ? TEXT("true") : TEXT("false"),
@@ -1048,7 +1048,7 @@ void ABlasterPlayerController::ClientEnsureLobbyTravel_Implementation(const FStr
 		ConnState = static_cast<int32>(GetWorld()->GetNetDriver()->ServerConnection->GetConnectionState());
 	}
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H33\",\"location\":\"BlasterPlayerController.cpp:853\",\"message\":\"EnsureLobbyTravel pre\",\"data\":{\"world\":\"%s\",\"hasWorldSettings\":%s,\"hasServerConn\":%s,\"inSeamless\":%s,\"connState\":%d},\"timestamp\":%lld}"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
 		(GetWorld() && GetWorld()->GetWorldSettings()) ? TEXT("true") : TEXT("false"),
@@ -1058,7 +1058,7 @@ void ABlasterPlayerController::ClientEnsureLobbyTravel_Implementation(const FStr
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H28\",\"location\":\"BlasterPlayerController.cpp:854\",\"message\":\"ClientEnsureLobbyTravel\",\"data\":{\"current\":\"%s\",\"isLobby\":%s,\"host\":\"%s\",\"path\":\"%s\"},\"timestamp\":%lld}"),
 		*CurrentMap,
 		bIsAlreadyLobby ? TEXT("true") : TEXT("false"),
@@ -1073,7 +1073,7 @@ void ABlasterPlayerController::ClientEnsureLobbyTravel_Implementation(const FStr
 	if (bHasServerConn)
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H34\",\"location\":\"BlasterPlayerController.cpp:864\",\"message\":\"ClientTravel relative lobby\",\"data\":{\"url\":\"%s\"},\"timestamp\":%lld}"),
 			*LobbyPath,
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -1084,7 +1084,7 @@ void ABlasterPlayerController::ClientEnsureLobbyTravel_Implementation(const FStr
 	{
 		const FString TravelUrl = FString::Printf(TEXT("%s%s"), *HostAddress, *LobbyPath);
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_PlayerController(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H28\",\"location\":\"BlasterPlayerController.cpp:874\",\"message\":\"ClientTravel to host lobby\",\"data\":{\"url\":\"%s\"},\"timestamp\":%lld}"),
 			*TravelUrl,
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -1096,7 +1096,7 @@ void ABlasterPlayerController::ClientEnsureLobbyTravel_Implementation(const FStr
 void ABlasterPlayerController::ClientNotifyLevelLoaded_Implementation()
 {
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H3\",\"location\":\"BlasterPlayerController.cpp:804\",\"message\":\"ClientNotifyLevelLoaded\",\"data\":{\"isLocal\":%s,\"world\":\"%s\",\"netMode\":%d,\"hasServerConn\":%s},\"timestamp\":%lld}"),
 		IsLocalController() ? TEXT("true") : TEXT("false"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
@@ -1177,7 +1177,7 @@ void ABlasterPlayerController::ShowLoadingScreen()
 	bShowMouseCursor = false;
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H4\",\"location\":\"BlasterPlayerController.cpp:874\",\"message\":\"ShowLoadingScreen\",\"data\":{\"map\":\"%s\"},\"timestamp\":%lld}"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -1203,7 +1203,7 @@ void ABlasterPlayerController::HideLoadingScreen()
 	SetInputMode(InputMode);
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H5\",\"location\":\"BlasterPlayerController.cpp:894\",\"message\":\"HideLoadingScreen\",\"data\":{\"map\":\"%s\"},\"timestamp\":%lld}"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -1218,7 +1218,7 @@ void ABlasterPlayerController::HandlePostLoadMap(UWorld* LoadedWorld)
 	}
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H6\",\"location\":\"BlasterPlayerController.cpp:904\",\"message\":\"HandlePostLoadMap\",\"data\":{\"map\":\"%s\",\"pendingKey\":\"%s\",\"delay\":%.2f,\"netMode\":%d,\"hasServerConn\":%s},\"timestamp\":%lld}"),
 		LoadedWorld ? *LoadedWorld->GetMapName() : TEXT("none"),
 		*PendingCompleteTextKey.ToString(),
@@ -1251,7 +1251,7 @@ void ABlasterPlayerController::HandlePostLoadMap(UWorld* LoadedWorld)
 	PendingCompleteTextKey = NAME_None;
 	PendingCompleteTextDelay = 0.0f;
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H44\",\"location\":\"BlasterPlayerController.cpp:1167\",\"message\":\"PostLoad state\",\"data\":{\"blocked\":%s,\"ignoreMove\":%s,\"ignoreLook\":%s,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		bEndingInputBlocked ? TEXT("true") : TEXT("false"),
 		IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
@@ -1302,7 +1302,7 @@ void ABlasterPlayerController::ClientSetInputBlocked_Implementation(bool bBlocke
 {
 	bEndingInputBlocked = bBlocked;
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H41\",\"location\":\"BlasterPlayerController.cpp:1207\",\"message\":\"ClientSetInputBlocked\",\"data\":{\"blocked\":%s,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		bBlocked ? TEXT("true") : TEXT("false"),
 		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),

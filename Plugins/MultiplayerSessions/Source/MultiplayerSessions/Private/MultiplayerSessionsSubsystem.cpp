@@ -17,7 +17,24 @@ UMultiplayerSessionsSubsystem::UMultiplayerSessionsSubsystem():
 	StartSessionCompleteDelegate(FOnStartSessionCompleteDelegate::CreateUObject(this, &ThisClass::OnStartSessionComplete)),
 	DestroySessionCompleteDelegate(FOnDestroySessionCompleteDelegate::CreateUObject(this, &ThisClass::OnDestroySessionComplete))
 {
+	LoadConfig();
+}
 
+IOnlineSubsystem* UMultiplayerSessionsSubsystem::GetOnlineSubsystem() const
+{
+	const FName SubsystemName = GetSubsystemName();
+	return SubsystemName.IsNone() ? IOnlineSubsystem::Get() : IOnlineSubsystem::Get(SubsystemName);
+}
+
+FName UMultiplayerSessionsSubsystem::GetSubsystemName() const
+{
+#if WITH_EDITOR
+	if (bUseNullSubsystemInEditor)
+	{
+		return FName(TEXT("NULL"));
+	}
+#endif
+	return NAME_None;
 }
 
 void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FString MatchType, const FString& SessionTitle, ESessionVisibility Visibility, const FString& SelectedMap, const FString& GameMode)
@@ -50,9 +67,9 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 
     LastSessionSettings = MakeShareable(new FOnlineSessionSettings());
     bool bIsNull = false;
-    if (IOnlineSubsystem* OSS = IOnlineSubsystem::Get())
+    if (IOnlineSubsystem* OSS = GetOnlineSubsystem())
     {
-        bIsNull = OSS->GetSubsystemName() == FName(TEXT("NULL"));
+        bIsNull = OSS->GetSubsystemName() == NULL_SUBSYSTEM;
     }
 	LastSessionSettings->bIsLANMatch = bIsNull; // NULL 서브시스템은 LAN으로 강제
 	LastSessionSettings->NumPublicConnections = NumPublicConnections;
@@ -64,9 +81,9 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 
     // LAN(Null)과 온라인을 분기하되, 광고/조인/Presence는 공통으로 활성화해 검색 가능성을 높임
     LastSessionSettings->bAllowJoinViaPresence = true;
-    LastSessionSettings->bShouldAdvertise = true;                 // LAN/온라인 공통 광고
+    LastSessionSettings->bShouldAdvertise = true;        
     LastSessionSettings->bUsesPresence = true;                    // Presence on (LAN/온라인)
-    LastSessionSettings->bUseLobbiesIfAvailable = bIsNull ? false : true;
+    LastSessionSettings->bUseLobbiesIfAvailable = true;
 	LastSessionSettings->Set(FName("MatchType"), MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	if (!DesiredSessionTitle.IsEmpty())
 	{
@@ -81,7 +98,7 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 		LastSessionSettings->Set(FName("GameMode"), GameMode, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	}
 	LastSessionSettings->Set(FName("SessionVisibility"), static_cast<int32>(Visibility), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-	LastSessionSettings->BuildUniqueId = 1; // Unique ID for the session, can be used to differentiate between sessions
+	LastSessionSettings->BuildUniqueId = GetBuildUniqueId();
 
 	const ULocalPlayer* LocalPlayer = GetWorld()->GetFirstLocalPlayerFromController();
 	if (!SessionInterface->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, *LastSessionSettings))
@@ -118,7 +135,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 	// #region agent log
 	{
 		const int64 Ms = FDateTime::UtcNow().ToUnixTimestamp() * 1000 + FDateTime::UtcNow().GetMillisecond();
-		const FString SubsystemName = IOnlineSubsystem::Get() ? IOnlineSubsystem::Get()->GetSubsystemName().ToString() : TEXT("null");
+		const FString SubsystemName = GetOnlineSubsystem() ? GetOnlineSubsystem()->GetSubsystemName().ToString() : TEXT("null");
 		const bool bHasLP = GetWorld() && GetWorld()->GetFirstLocalPlayerFromController() && GetWorld()->GetFirstLocalPlayerFromController()->GetPreferredUniqueNetId().IsValid();
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:FindSessions\",\"message\":\"FindSessions start\",\"data\":{\"max\":%d,\"subsystem\":\"%s\",\"hasLP\":%s},\"timestamp\":%lld}\n"),
@@ -130,17 +147,18 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 	FindSessionCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionCompleteDelegate);
 
     LastSessionSearch = MakeShareable(new FOnlineSessionSearch());
-    LastSessionSearch->MaxSearchResults = MaxSearchResults;
-    const bool bIsNull = IOnlineSubsystem::Get() && IOnlineSubsystem::Get()->GetSubsystemName() == "NULL";
+    LastSessionSearch->MaxSearchResults = MaxSearchResults;	
+    const bool bIsNull = GetOnlineSubsystem() && GetOnlineSubsystem()->GetSubsystemName() == NULL_SUBSYSTEM;
     LastSessionSearch->bIsLanQuery = bIsNull;
+	// Presence 검색 (온라인)
+	LastSessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
     if (!bIsNull)
     {
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable:4996)
 #endif
-        // Presence 검색 (온라인)
-        LastSessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+       
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
@@ -389,8 +407,7 @@ bool UMultiplayerSessionsSubsystem::IsValidSessionInterface()
 {
 	if (!SessionInterface)
 	{
-		IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
-		if (Subsystem)
+		if (IOnlineSubsystem* Subsystem = GetOnlineSubsystem())
 		{
 			SessionInterface = Subsystem->GetSessionInterface();
 		}

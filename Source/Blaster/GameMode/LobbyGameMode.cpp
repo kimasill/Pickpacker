@@ -26,7 +26,7 @@
 
 namespace
 {
-	static void AppendDebugLog(const FString& JsonLine)
+	static void AppendDebugLog_LobbyGameMode(const FString& JsonLine)
 	{
 		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
@@ -45,7 +45,25 @@ ALobbyGameMode::ALobbyGameMode()
 void ALobbyGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		// NetMode 확인
+		FString NetModeStr;
+		switch (World->GetNetMode())
+		{
+		case NM_Standalone: NetModeStr = "Standalone (Not Server!)"; break;
+		case NM_DedicatedServer: NetModeStr = "Dedicated Server"; break;
+		case NM_ListenServer: NetModeStr = "Listen Server (Success!)"; break;
+		case NM_Client: NetModeStr = "Client"; break;
+		}
 
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 60.f, FColor::Yellow,
+				FString::Printf(TEXT("[Lobby NetMode] : %s"), *NetModeStr));
+		}
+	}
 	// LobbyPawnClass가 설정되어 있으면 DefaultPawnClass로 설정
 	// 설정되지 않았으면 BlasterCharacter를 기본값으로 사용 (로비에서도 이동/입력 허용)
 	if (LobbyPawnClass)
@@ -66,7 +84,7 @@ void ALobbyGameMode::BeginPlay()
 	UpdateReadyCountsAndMaybeStart();
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_LobbyGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"LobbyGameMode.cpp:68\",\"message\":\"Lobby BeginPlay\",\"data\":{\"hasAuthority\":%s,\"playerControllers\":%d,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		HasAuthority() ? TEXT("true") : TEXT("false"),
 		GetWorld() ? GetWorld()->GetNumPlayerControllers() : -1,
@@ -81,7 +99,7 @@ void ALobbyGameMode::BeginPlay()
 		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(*It))
 		{
 			// #region agent log
-			AppendDebugLog(FString::Printf(
+			AppendDebugLog_LobbyGameMode(FString::Printf(
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H2\",\"location\":\"LobbyGameMode.cpp:76\",\"message\":\"NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
 				*GetNameSafe(PC),
 				FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -102,7 +120,7 @@ void ALobbyGameMode::PostSeamlessTravel()
 
 	UWorld* World = GetWorld();
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_LobbyGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H12\",\"location\":\"LobbyGameMode.cpp:92\",\"message\":\"PostSeamlessTravel\",\"data\":{\"world\":\"%s\",\"numPC\":%d,\"netMode\":%d},\"timestamp\":%lld}"),
 		World ? *World->GetMapName() : TEXT("none"),
 		World ? World->GetNumPlayerControllers() : -1,
@@ -129,7 +147,7 @@ void ALobbyGameMode::PostSeamlessTravel()
 		HostAddress = HostAddress.Replace(TEXT("0.0.0.0"), TEXT("127.0.0.1"));
 	}
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_LobbyGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H30\",\"location\":\"LobbyGameMode.cpp:112\",\"message\":\"PostSeamlessTravel host\",\"data\":{\"host\":\"%s\"},\"timestamp\":%lld}"),
 		*HostAddress,
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
@@ -139,7 +157,7 @@ void ALobbyGameMode::PostSeamlessTravel()
 		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(*It))
 		{
 			// #region agent log
-			AppendDebugLog(FString::Printf(
+			AppendDebugLog_LobbyGameMode(FString::Printf(
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H26\",\"location\":\"LobbyGameMode.cpp:103\",\"message\":\"PostSeamlessTravel PC\",\"data\":{\"pc\":\"%s\",\"netConn\":%s,\"world\":\"%s\"},\"timestamp\":%lld}"),
 				*GetNameSafe(PC),
 				PC->GetNetConnection() ? TEXT("true") : TEXT("false"),
@@ -169,7 +187,7 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 
 	// #region agent log
-	AppendDebugLog(FString::Printf(
+	AppendDebugLog_LobbyGameMode(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"post-fix\",\"hypothesisId\":\"H7\",\"location\":\"LobbyGameMode.cpp:70\",\"message\":\"PostLogin\",\"data\":{\"newPlayer\":\"%s\",\"numPC\":%d,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
 		*GetNameSafe(NewPlayer),
 		GetWorld() ? GetWorld()->GetNumPlayerControllers() : -1,
@@ -181,7 +199,7 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(NewPlayer))
 	{
 		// #region agent log
-		AppendDebugLog(FString::Printf(
+		AppendDebugLog_LobbyGameMode(FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"post-fix\",\"hypothesisId\":\"H8\",\"location\":\"LobbyGameMode.cpp:79\",\"message\":\"PostLogin NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
 			*GetNameSafe(PC),
 			FDateTime::UtcNow().ToUnixTimestamp() * 1000));

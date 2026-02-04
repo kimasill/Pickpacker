@@ -40,7 +40,7 @@ UMultiplayerSessionsSubsystem* UMenu::EnsureMultiplayerSubsystem()
 
 void UMenu::MenuSetup(int32 NumberOfPublicConnections, FString TypeOfMatch, FString LobbyPath)
 {
-	PathToLobby = FString::Printf(TEXT("%s?listen"), *LobbyPath);
+	PathToLobby = LobbyPath;
 	NumPublicConnections = NumberOfPublicConnections;
 	MatchType = TypeOfMatch;
 	AddToViewport();
@@ -127,24 +127,8 @@ void UMenu::OnCreateSession(bool bWasSuccessful)
 				TEXT("H2"),
 				TEXT("run-pre3"));
 
-			const FString TravelURL = FString::Printf(TEXT("%s?listen"), *CleanPath);
-
-			// PIE 클라이언트(NetMode==NM_Client)에서도 강제로 open 명령으로 전환 (기존 연결을 끊고 리슨 서버로 재시작)
-			if (World->GetNetMode() == NM_Client)
-			{
-				if (APlayerController* PC = World->GetFirstPlayerController())
-				{
-					PC->ConsoleCommand(FString::Printf(TEXT("open %s"), *TravelURL));
-				}
-				else
-				{
-					UGameplayStatics::OpenLevel(World, FName(*CleanPath), false, TEXT("listen"));
-				}
-			}
-			else
-			{
-				UGameplayStatics::OpenLevel(World, FName(*CleanPath), false, TEXT("listen"));
-			}
+			const FString TravelURL = FString::Printf(TEXT("%s?listen"), *CleanPath);			
+			UGameplayStatics::OpenLevel(this, FName(*CleanPath), true, "listen");
 		}
 	}
 	else
@@ -254,7 +238,7 @@ void UMenu::OnJoinSession(EOnJoinSessionCompleteResult::Type Result)
 		return;
 	}
 
-	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
+	IOnlineSubsystem* Subsystem = MultiplayerSessionsSubsystem ? MultiplayerSessionsSubsystem->GetOnlineSubsystem() : IOnlineSubsystem::Get();
 	if (Subsystem)
 	{
 		IOnlineSessionPtr SessionInterface = Subsystem->GetSessionInterface();
@@ -306,44 +290,30 @@ void UMenu::OnDestroySession(bool bWasSuccessful)
 }
 void UMenu::CreateSession(const FString& SessionTitle)
 {
-	if (!MultiplayerSessionsSubsystem)
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		MenuWriteDebugLog(
-			TEXT("Menu.cpp:CreateSession"),
-			TEXT("No subsystem"),
-			TEXT("{}"),
-			TEXT("H1"),
-			TEXT("run-pre3"));
 		return;
 	}
 
-	FString Title = SessionTitle;
-	if (Title.IsEmpty())
+	FString TargetPath = PathToLobby;
+	if (TargetPath.IsEmpty())
 	{
-		// 기본 제목: 플레이어 이름 사용
-		if (const ULocalPlayer* LP = GetWorld() ? GetWorld()->GetFirstLocalPlayerFromController() : nullptr)
-		{
-			Title = FString::Printf(TEXT("%s의 방"), *LP->GetNickname());
-		}
-		if (Title.IsEmpty())
-		{
-			Title = TEXT("새로운 방");
-		}
+		TargetPath = TEXT("/Game/Maps/Lobby?listen");
 	}
+
+	FString CleanPath = TargetPath;
+	CleanPath.RemoveFromEnd(TEXT("?listen"));
 
 	MenuWriteDebugLog(
 		TEXT("Menu.cpp:CreateSession"),
-		TEXT("CreateSession called"),
-		FString::Printf(TEXT("{\"title\":\"%s\",\"numConnections\":%d,\"matchType\":\"%s\"}"),
-			*Title, NumPublicConnections, *MatchType),
+		TEXT("OpenLevel (no session create)"),
+		FString::Printf(TEXT("{\"map\":\"%s\",\"netMode\":%d}"),
+			*CleanPath,
+			World ? static_cast<int32>(World->GetNetMode()) : -1),
 		TEXT("H1"),
 		TEXT("run-pre3"));
-	// 로비/메뉴에서 설정한 가시성(DesiredSessionVisibility)을 반영하여 최초 생성 시부터 올바른 광고 설정을 사용
-	MultiplayerSessionsSubsystem->CreateSession(
-		NumPublicConnections,
-		MatchType,
-		Title,
-		MultiplayerSessionsSubsystem->DesiredSessionVisibility);
+	UGameplayStatics::OpenLevel(World, FName(*CleanPath), false, TEXT("listen"));
 }
 
 void UMenu::FindSessions()
@@ -510,7 +480,8 @@ void UMenu::SetReadyStatus(bool bReady)
 FSessionInfo UMenu::GetCurrentSessionInfo() const
 {
 	// 1) 현재 세션 인터페이스에서 세션 설정을 직접 읽기 (플러그인-게임 모듈 의존 제거)
-	if (IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get())
+	IOnlineSubsystem* Subsystem = MultiplayerSessionsSubsystem ? MultiplayerSessionsSubsystem->GetOnlineSubsystem() : IOnlineSubsystem::Get();
+	if (Subsystem)
 	{
 		IOnlineSessionPtr SessionInterface = Subsystem->GetSessionInterface();
 		if (SessionInterface.IsValid())
@@ -657,6 +628,8 @@ void UMenu::ShowLobbyInternal()
 	OnLobbyShown();
 	UpdatePlayerListInternal();
 }
+
+
 
 
 
