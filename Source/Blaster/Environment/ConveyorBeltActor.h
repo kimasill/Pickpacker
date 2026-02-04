@@ -7,6 +7,8 @@
 class UBoxComponent;
 class UStaticMeshComponent;
 class UPrimitiveComponent;
+class AActor;
+class ABlasterCharacter;
 
 USTRUCT()
 struct FConveyedPrimitiveEntry
@@ -62,9 +64,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Conveyor")
 	bool bDisableGravityWhileConveyed = true;
 
+	/** 플레이어 이동 시작 위치 오프셋 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Conveyor")
+	FVector EntryOffset = FVector::ZeroVector;
+
 	/** Automatically release an actor if it leaves the belt volume for any reason */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Conveyor")
 	bool bReleaseOnVolumeExit = true;
+
+public:
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Conveyor")
+	FVector GetConveyorEntryLocation() const;
 
 protected:
 	UFUNCTION()
@@ -100,8 +110,16 @@ protected:
 	int32 FindPrimitiveIndex(UPrimitiveComponent* Primitive) const;
 	void UpdateConveyedPrimitives(float DeltaSeconds);
 
+	bool CanConveyActor(AActor* Actor) const;
+	void AddActorToConveyor(AActor* Actor);
+	void ReleaseActor(AActor* Actor);
+	int32 FindActorIndex(AActor* Actor) const;
+
 protected:
 	UPROPERTY()
 	TArray<FConveyedPrimitiveEntry> ConveyedPrimitives;
+
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AActor>> ConveyedActors;
 };
 

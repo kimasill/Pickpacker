@@ -3,6 +3,8 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/Parcel/ParcelActor.h"
 
 AConveyorBeltActor::AConveyorBeltActor()
 {
@@ -22,7 +24,7 @@ AConveyorBeltActor::AConveyorBeltActor()
 	ConveyorVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
 	ConveyorVolume->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	ConveyorVolume->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
-	ConveyorVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	ConveyorVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 
 	DropVolume = CreateDefaultSubobject<UBoxComponent>(TEXT("DropVolume"));
 	DropVolume->SetupAttachment(RootComponent);
@@ -30,7 +32,7 @@ AConveyorBeltActor::AConveyorBeltActor()
 	DropVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
 	DropVolume->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	DropVolume->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Overlap);
-	DropVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	DropVolume->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 }
 
 void AConveyorBeltActor::BeginPlay()
@@ -61,6 +63,27 @@ void AConveyorBeltActor::Tick(float DeltaSeconds)
 	}
 
 	UpdateConveyedPrimitives(DeltaSeconds);
+
+	if (ConveyorVolume)
+	{
+		TArray<UPrimitiveComponent*> OverlappingComponents;
+		ConveyorVolume->GetOverlappingComponents(OverlappingComponents);
+		for (UPrimitiveComponent* Component : OverlappingComponents)
+		{
+			if (!Component)
+			{
+				continue;
+			}
+
+			AParcelActor* Parcel = Cast<AParcelActor>(Component->GetOwner());
+			if (!Parcel)
+			{
+				continue;
+			}
+
+			AddPrimitiveToConveyor(Component);
+		}
+	}
 }
 
 void AConveyorBeltActor::HandleConveyorBeginOverlap(
@@ -77,6 +100,11 @@ void AConveyorBeltActor::HandleConveyorBeginOverlap(
 	}
 
 	AddPrimitiveToConveyor(OtherComp);
+
+	if (OtherActor && CanConveyActor(OtherActor))
+	{
+		AddActorToConveyor(OtherActor);
+	}
 }
 
 void AConveyorBeltActor::HandleConveyorEndOverlap(
@@ -91,6 +119,11 @@ void AConveyorBeltActor::HandleConveyorEndOverlap(
 	}
 
 	ReleasePrimitive(OtherComp, true);
+
+	if (OtherActor)
+	{
+		ReleaseActor(OtherActor);
+	}
 }
 
 void AConveyorBeltActor::HandleDropOverlap(
@@ -107,6 +140,11 @@ void AConveyorBeltActor::HandleDropOverlap(
 	}
 
 	ReleasePrimitive(OtherComp, true);
+
+	if (OtherActor)
+	{
+		ReleaseActor(OtherActor);
+	}
 }
 
 void AConveyorBeltActor::AddPrimitiveToConveyor(UPrimitiveComponent* Primitive)
@@ -116,6 +154,26 @@ void AConveyorBeltActor::AddPrimitiveToConveyor(UPrimitiveComponent* Primitive)
 		return;
 	}
 
+	if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(Primitive->GetOwner()))
+	{
+		// 캐릭터는 물리 컨베이어가 아닌 Actor 컨베이어로 처리
+		return;
+	}
+
+	if (AParcelActor* Parcel = Cast<AParcelActor>(Primitive->GetOwner()))
+	{
+		if (Parcel->IsAttached())
+		{
+			return;
+		}
+	}
+
+	if (!Primitive->IsSimulatingPhysics())
+	{
+		Primitive->SetSimulatePhysics(true);
+		Primitive->WakeAllRigidBodies();
+	}
+
 	if (!Primitive->IsSimulatingPhysics())
 	{
 		return;
@@ -123,6 +181,14 @@ void AConveyorBeltActor::AddPrimitiveToConveyor(UPrimitiveComponent* Primitive)
 
 	FConveyedPrimitiveEntry Entry;
 	Entry.Primitive = Primitive;
+
+	if (AParcelActor* Parcel = Cast<AParcelActor>(Primitive->GetOwner()))
+	{
+		Parcel->SetOnConveyor(true);
+		const FRotator CurrentRotation = Primitive->GetComponentRotation();
+		Primitive->SetWorldRotation(FRotator(0.0f, CurrentRotation.Yaw, 0.0f));
+		Primitive->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	}
 
 	if (bDisableGravityWhileConveyed && Primitive->IsGravityEnabled())
 	{
@@ -140,6 +206,14 @@ void AConveyorBeltActor::ReleasePrimitive(UPrimitiveComponent* Primitive, bool b
 	if (Index == INDEX_NONE)
 	{
 		return;
+	}
+
+	if (Primitive)
+	{
+		if (AParcelActor* Parcel = Cast<AParcelActor>(Primitive->GetOwner()))
+		{
+			Parcel->SetOnConveyor(false);
+		}
 	}
 
 	if (Primitive && bDisableGravityWhileConveyed && bRestorePhysics && ConveyedPrimitives[Index].bRestoreGravity)
@@ -182,6 +256,97 @@ void AConveyorBeltActor::UpdateConveyedPrimitives(float DeltaSeconds)
 
 		UPrimitiveComponent* Primitive = ConveyedPrimitives[i].Primitive.Get();
 		Primitive->AddWorldOffset(Delta, true);
+
+		if (AParcelActor* Parcel = Cast<AParcelActor>(Primitive->GetOwner()))
+		{
+			const FRotator CurrentRotation = Primitive->GetComponentRotation();
+			if (!FMath::IsNearlyZero(CurrentRotation.Roll) || !FMath::IsNearlyZero(CurrentRotation.Pitch))
+			{
+				Primitive->SetWorldRotation(FRotator(0.0f, CurrentRotation.Yaw, 0.0f));
+			}
+			Primitive->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+		}
 	}
+
+	for (int32 i = ConveyedActors.Num() - 1; i >= 0; --i)
+	{
+		if (!ConveyedActors[i].IsValid())
+		{
+			ConveyedActors.RemoveAtSwap(i);
+			continue;
+		}
+
+		AActor* Actor = ConveyedActors[i].Get();
+		if (!Actor || !CanConveyActor(Actor))
+		{
+			ConveyedActors.RemoveAtSwap(i);
+			continue;
+		}
+
+		Actor->AddActorWorldOffset(Delta, true);
+	}
+}
+
+FVector AConveyorBeltActor::GetConveyorEntryLocation() const
+{
+	if (ConveyorVolume)
+	{
+		return ConveyorVolume->GetComponentLocation() + EntryOffset;
+	}
+	return GetActorLocation() + EntryOffset;
+}
+
+bool AConveyorBeltActor::CanConveyActor(AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return false;
+	}
+
+	if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(Actor))
+	{
+		return Character->IsOutOfLives();
+	}
+
+	if (Cast<AParcelActor>(Actor) != nullptr)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void AConveyorBeltActor::AddActorToConveyor(AActor* Actor)
+{
+	if (!Actor || FindActorIndex(Actor) != INDEX_NONE)
+	{
+		return;
+	}
+
+	ConveyedActors.Add(Actor);
+}
+
+void AConveyorBeltActor::ReleaseActor(AActor* Actor)
+{
+	const int32 Index = FindActorIndex(Actor);
+	if (Index == INDEX_NONE)
+	{
+		return;
+	}
+
+	ConveyedActors.RemoveAtSwap(Index);
+}
+
+int32 AConveyorBeltActor::FindActorIndex(AActor* Actor) const
+{
+	for (int32 i = 0; i < ConveyedActors.Num(); ++i)
+	{
+		if (ConveyedActors[i].Get() == Actor)
+		{
+			return i;
+		}
+	}
+
+	return INDEX_NONE;
 }
 

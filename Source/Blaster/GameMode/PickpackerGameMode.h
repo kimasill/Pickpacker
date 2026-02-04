@@ -85,6 +85,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
 	void OnGameOver(const FString& Reason);
 
+	/** 게임 오버 진행 여부 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|GameOver")
+	bool IsGameOverInProgress() const { return bGameOverInProgress; }
+
+	/** SubmissionZone 도착 등으로 로비 복귀 트리거 */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|GameOver")
+	void RequestReturnToLobby();
+
+	virtual void PostSeamlessTravel() override;
+
 	/**
 	 * Called by clients' PlayerState to signal PCG readiness (Server Only)
 	 */
@@ -140,6 +150,10 @@ public:
 	/** Wave started event (Blueprint UI hook) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Orders")
 	void BP_OnOrderWaveStarted(int32 WaveNumber);
+
+	/** 게임 오버 연출 (선택) */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|GameOver")
+	void BP_PlayGameOverSequence(const FString& Reason);
 
 
 protected:
@@ -201,6 +215,26 @@ protected:
 
 	/** Game end check timer */
 	FTimerHandle GameEndCheckTimer;
+
+	/** 게임 오버 후 로비 이동 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|GameOver")
+	bool bReturnToLobbyOnGameOver = true;
+
+	/** 게임 오버 시 로비 이동을 SubmissionZone 도착까지 지연 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|GameOver")
+	bool bDeferLobbyReturnUntilSubmissionZone = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|GameOver")
+	float GameOverReturnDelay = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|GameOver")
+	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+
+	FTimerHandle ReturnToLobbyTimerHandle;
+	bool bGameOverInProgress = false;
+	bool bReturnToLobbyTriggered = false;
+
+	void ReturnPlayersToLobby();
 
 	/** Game over event */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGameOver, const FString&, Reason);

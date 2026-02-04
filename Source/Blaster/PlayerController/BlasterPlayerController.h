@@ -62,6 +62,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
 	void BP_PlayEndingSequence(ULevelSequence* Sequence);
 
+	/** 사망 후 관전 시작 */
+	UFUNCTION(Client, Reliable)
+	void ClientBeginDeathSpectate();
+
 	/** 로딩 화면 표시/해제 */
 	UFUNCTION(Client, Reliable)
 	void ClientShowLoadingScreen();
@@ -71,6 +75,14 @@ public:
 	void ClientNotifyLevelLoaded();
 	UFUNCTION(Client, Reliable)
 	void ClientHideLoadingScreen();
+
+	virtual void PreClientTravel(const FString& PendingURL, ETravelType TravelType, bool bIsSeamlessTravel) override;
+	virtual void PostSeamlessTravel() override;
+	virtual void OnRep_Pawn() override;
+
+	/** 로비 복귀 보장 (클라이언트에서 로비가 아니면 접속 재시도) */
+	UFUNCTION(Client, Reliable)
+	void ClientEnsureLobbyTravel(const FString& HostAddress, const FString& LobbyPath);
 
 	UFUNCTION(BlueprintCallable, Category = "Loading")
 	void ShowLoadingScreen();
@@ -201,8 +213,34 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input|UI")
 	TObjectPtr<UInputAction> PanelAction;
 
+	/** 관전 전환 입력 */
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Spectate")
+	TObjectPtr<UInputAction> SpectateNextAction;
+
 	UPROPERTY()
 	class ABlasterGameMode* BlasterGameMode;
+
+	/** 관전 상태 */
+	UPROPERTY()
+	bool bDeathSpectating = false;
+
+	UPROPERTY()
+	bool bSpectateFadeInPending = false;
+
+	UPROPERTY()
+	int32 CurrentSpectateIndex = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, Category = "Spectate")
+	float SpectateFadeDuration = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "Spectate")
+	float SpectateBlendTime = 0.2f;
+
+	FTimerHandle SpectateFadeTimerHandle;
+
+	void HandleSpectateNext();
+	void SwitchSpectateTarget(int32 Direction);
+	TArray<AActor*> GetSpectateTargets() const;
 
 	float LevelStartingTime = 0.f;
 	float MatchTime = 0.f;

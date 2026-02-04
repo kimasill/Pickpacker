@@ -78,7 +78,7 @@ void UInteractionPromptWidget::UpdateCreditInfo(bool bRequiresUnlock, int32 Unlo
 		}
 		else if (UnlockCost > 0)
 		{
-			FText PromptText =  FText::Format(NSLOCTEXT("InteractionPrompt", "LockedDefault", "Requires {0} credits to unlock"), UnlockCost);
+			FText PromptText = NSLOCTEXT("InteractionPrompt", "LockedDefault", "요구 크레딧:");
 			UpdateInteractionText(PromptText);
 		}
 		else

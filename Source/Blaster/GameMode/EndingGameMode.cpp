@@ -2,6 +2,9 @@
 
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "GameFramework/PlayerStart.h"
+#include "MovieScene.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 AEndingGameMode::AEndingGameMode()
 {
@@ -44,6 +47,20 @@ void AEndingGameMode::OnEndingPlayerReady(ABlasterPlayerController* PlayerContro
 	{
 		PlayerController->ClientPlayEndingSequence(EndingSequenceAsset);
 	}
+
+	if (bReturnToLobbyAfterEnding && !bReturnScheduled && GetWorld())
+	{
+		bReturnScheduled = true;
+		const float SequenceDuration = GetEndingSequenceDuration();
+		const float Delay = FMath::Max(0.1f, SequenceDuration + PostEndingDelay);
+		GetWorld()->GetTimerManager().SetTimer(
+			ReturnToLobbyTimerHandle,
+			this,
+			&AEndingGameMode::ReturnPlayersToLobby,
+			Delay,
+			false
+		);
+	}
 }
 void AEndingGameMode::ApplyEndingSetup(ABlasterPlayerController* PlayerController)
 {
@@ -59,5 +76,54 @@ void AEndingGameMode::ApplyEndingSetup(ABlasterPlayerController* PlayerControlle
 
 	// 블루프린트로 추가 연출(시퀀스/카메라/UI)을 트리거할 수 있도록 이벤트 호출
 	OnEndingPlayerReady(PlayerController);
+}
+
+float AEndingGameMode::GetEndingSequenceDuration() const
+{
+	if (EndingSequenceAsset.IsNull())
+	{
+		return 0.0f;
+	}
+
+	ULevelSequence* Sequence = EndingSequenceAsset.LoadSynchronous();
+	if (!Sequence || !Sequence->GetMovieScene())
+	{
+		return 0.0f;
+	}
+
+	const UMovieScene* MovieScene = Sequence->GetMovieScene();
+	const FFrameRate TickResolution = MovieScene->GetTickResolution();
+	const TRange<FFrameNumber> PlaybackRange = MovieScene->GetPlaybackRange();
+	const FFrameNumber Start = PlaybackRange.GetLowerBoundValue();
+	const FFrameNumber End = PlaybackRange.GetUpperBoundValue();
+	const int32 DurationFrames = (End - Start).Value;
+
+	return TickResolution.AsSeconds(DurationFrames);
+}
+
+void AEndingGameMode::ReturnPlayersToLobby()
+{
+	if (!HasAuthority() || LobbyTravelPath.IsEmpty())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+		{
+			PC->SetInputBlocked(true);
+			PC->ClientShowLoadingScreenWithKey(TEXT("Ready"), TEXT("Ready"), 0.75f);
+		}
+	}
+
+	const FString TravelPath = FString::Printf(TEXT("%s?listen"), *LobbyTravelPath);
+	World->ServerTravel(TravelPath, true);
 }
 

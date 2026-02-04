@@ -11,6 +11,7 @@
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
+#include "Blaster/UI/ParcelTagDisplayUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/Texture2D.h"
 #include "UObject/UnrealType.h"
@@ -148,6 +149,7 @@ UInventoryItemSlotWidget* UInventoryWidget::CreateItemSlot(AParcelActor* Item, i
 	UInventoryItemSlotWidget* SlotWidget = CreateWidget<UInventoryItemSlotWidget>(GetWorld(), ItemSlotWidgetClass);
 	if (SlotWidget)
 	{
+		SlotWidget->SetParcelTagDisplayTable(ParcelTagDisplayTable);
 		SlotWidget->SetItem(Item, SlotIndex);
 	}
 
@@ -192,19 +194,48 @@ void UInventoryItemSlotWidget::SetItem(AParcelActor* InItem, int32 SlotIndex)
 		return;
 	}
 
+	const FString ParcelName = Item->GetParcelDisplayName();
 	const FItemData& ItemData = Item->GetItemData();
 
 	// Set item name
 	if (ItemNameText)
 	{
-		ItemNameText->SetText(FText::FromString(ItemData.ItemName));
+		if (!ParcelName.IsEmpty())
+		{
+			ItemNameText->SetText(FText::FromString(ParcelName));
+		}
+		else
+		{
+			ItemNameText->SetText(FText::FromString(ItemData.ItemName));
+		}
 	}
 
 	// Set item type
 	if (ItemTypeText)
 	{
-		FString TypeString = UEnum::GetValueAsString(ItemData.ItemType);
-		TypeString.RemoveFromStart(TEXT("EItemType::"));
+		FString TypeString;
+		const FGameplayTag ParcelTag = Item->GetParcelTag();
+		if (ParcelTag.IsValid())
+		{
+			FText DisplayText;
+			if (FParcelTagDisplayUtils::TryGetTagDisplayText(ParcelTagDisplayTable, ParcelTag, DisplayText))
+			{
+				TypeString = DisplayText.ToString();
+			}
+			else
+			{
+				TypeString = FParcelTagDisplayUtils::GetTagLastPart(ParcelTag);
+			}
+		}
+		else if (ItemData.ItemType != EItemType::Unknown)
+		{
+			TypeString = UEnum::GetValueAsString(ItemData.ItemType);
+			TypeString.RemoveFromStart(TEXT("EItemType::"));
+		}
+		else
+		{
+			TypeString = TEXT("Unknown");
+		}
 		ItemTypeText->SetText(FText::FromString(TypeString));
 	}
 

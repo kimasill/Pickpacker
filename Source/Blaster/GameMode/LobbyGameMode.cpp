@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/NetDriver.h"
 #include "GameFramework/PlayerState.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
@@ -19,6 +20,18 @@
 #include "Interfaces/OnlineIdentityInterface.h"
 #include "OnlineSessionSettings.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/FileHelper.h"
+#include "HAL/PlatformFilemanager.h"
+#include "Kismet/GameplayStatics.h"
+
+namespace
+{
+	static void AppendDebugLog(const FString& JsonLine)
+	{
+		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+	}
+}
 
 ALobbyGameMode::ALobbyGameMode()
 	: DefaultLobbyVisibility(ESessionVisibility::Private)
@@ -51,6 +64,99 @@ void ALobbyGameMode::BeginPlay()
 
 	// 초기 준비 인원 수 동기화
 	UpdateReadyCountsAndMaybeStart();
+
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"LobbyGameMode.cpp:68\",\"message\":\"Lobby BeginPlay\",\"data\":{\"hasAuthority\":%s,\"playerControllers\":%d,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
+		HasAuthority() ? TEXT("true") : TEXT("false"),
+		GetWorld() ? GetWorld()->GetNumPlayerControllers() : -1,
+		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
+		GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
+
+	// 로비 로드 완료 시 로딩 화면 종료
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(*It))
+		{
+			// #region agent log
+			AppendDebugLog(FString::Printf(
+				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H2\",\"location\":\"LobbyGameMode.cpp:76\",\"message\":\"NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
+				*GetNameSafe(PC),
+				FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+			// #endregion
+			PC->ClientNotifyLevelLoaded();
+			PC->SetInputBlocked(false);
+			if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn()))
+			{
+				Character->SetEndingInProgress(false);
+			}
+		}
+	}
+}
+
+void ALobbyGameMode::PostSeamlessTravel()
+{
+	Super::PostSeamlessTravel();
+
+	UWorld* World = GetWorld();
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H12\",\"location\":\"LobbyGameMode.cpp:92\",\"message\":\"PostSeamlessTravel\",\"data\":{\"world\":\"%s\",\"numPC\":%d,\"netMode\":%d},\"timestamp\":%lld}"),
+		World ? *World->GetMapName() : TEXT("none"),
+		World ? World->GetNumPlayerControllers() : -1,
+		World ? static_cast<int32>(World->GetNetMode()) : -1,
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
+	if (!World)
+	{
+		return;
+	}
+	FString LobbyPath = TEXT("/Game/Maps/Lobby");
+	const FString CurrentMapName = UGameplayStatics::GetCurrentLevelName(World, true);
+	if (!CurrentMapName.IsEmpty())
+	{
+		LobbyPath = FString::Printf(TEXT("/Game/Maps/%s"), *CurrentMapName);
+	}
+	FString HostAddress;
+	if (UNetDriver* NetDriver = World->GetNetDriver())
+	{
+		HostAddress = NetDriver->LowLevelGetNetworkNumber();
+	}
+	if (HostAddress.StartsWith(TEXT("0.0.0.0")))
+	{
+		HostAddress = HostAddress.Replace(TEXT("0.0.0.0"), TEXT("127.0.0.1"));
+	}
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H30\",\"location\":\"LobbyGameMode.cpp:112\",\"message\":\"PostSeamlessTravel host\",\"data\":{\"host\":\"%s\"},\"timestamp\":%lld}"),
+		*HostAddress,
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(*It))
+		{
+			// #region agent log
+			AppendDebugLog(FString::Printf(
+				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H26\",\"location\":\"LobbyGameMode.cpp:103\",\"message\":\"PostSeamlessTravel PC\",\"data\":{\"pc\":\"%s\",\"netConn\":%s,\"world\":\"%s\"},\"timestamp\":%lld}"),
+				*GetNameSafe(PC),
+				PC->GetNetConnection() ? TEXT("true") : TEXT("false"),
+				PC->GetWorld() ? *PC->GetWorld()->GetMapName() : TEXT("none"),
+				FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+			// #endregion
+			PC->SetInputBlocked(false);
+			if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn()))
+			{
+				Character->SetEndingInProgress(false);
+			}
+			if (PC->GetNetConnection())
+			{
+				PC->ClientEnsureLobbyTravel(HostAddress, LobbyPath);
+			}
+		}
+	}
 }
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
@@ -60,6 +166,27 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 	if (!HasAuthority())
 	{
 		return;
+	}
+
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"post-fix\",\"hypothesisId\":\"H7\",\"location\":\"LobbyGameMode.cpp:70\",\"message\":\"PostLogin\",\"data\":{\"newPlayer\":\"%s\",\"numPC\":%d,\"world\":\"%s\",\"netMode\":%d},\"timestamp\":%lld}"),
+		*GetNameSafe(NewPlayer),
+		GetWorld() ? GetWorld()->GetNumPlayerControllers() : -1,
+		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
+		GetWorld() ? static_cast<int32>(GetWorld()->GetNetMode()) : -1,
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
+
+	if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(NewPlayer))
+	{
+		// #region agent log
+		AppendDebugLog(FString::Printf(
+			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"post-fix\",\"hypothesisId\":\"H8\",\"location\":\"LobbyGameMode.cpp:79\",\"message\":\"PostLogin NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
+			*GetNameSafe(PC),
+			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+		// #endregion
+		PC->ClientNotifyLevelLoaded();
 	}
 
 	// 스팀 닉네임 우선 적용, 없으면 임의 이름 지정

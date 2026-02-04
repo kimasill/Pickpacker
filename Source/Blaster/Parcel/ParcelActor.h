@@ -40,6 +40,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void Destroyed() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/**
 	 * Initialize parcel with configuration
@@ -121,6 +122,14 @@ public:
 	/** Classification gameplay tag */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel")
 	FGameplayTag GetClassificationTag() const { return ParcelClassificationTag; }
+
+	/** Parcel tag from ParcelConfig */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Config")
+	FGameplayTag GetParcelTag() const { return ParcelConfig.ParcelTag; }
+
+	/** Parcel display name (from ParcelConfig) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Config")
+	FString GetParcelDisplayName() const { return ParcelConfig.ParcelName; }
 
 	/** Price earned when submitted */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
@@ -416,7 +425,8 @@ protected:
 	bool bIsPackageBundle = false;
 	UPROPERTY()
 	bool bHasUnpacked = false;
-
+	UPROPERTY()
+	bool bSkipContentSpawnOnDestroy = true;
 
 
 	/** 포장된 상태의 메시 */
@@ -524,6 +534,14 @@ private:
 	UPROPERTY()
 	bool bPendingDropSuspicion = false;
 
+	/** 플레이어 드랍 이후 1회 충격만 데미지 허용 */
+	UPROPERTY()
+	bool bImpactDamageEnabled = false;
+
+	/** 컨베이어에 실려있는 동안 충돌 데미지 무시용 */
+	UPROPERTY()
+	bool bOnConveyor = false;
+
 	UPROPERTY()
 	TWeakObjectPtr<AShelfActor> OccupyingShelf;
 
@@ -557,6 +575,10 @@ public:
 	int32 GetOccupyingShelfSlot() const { return OccupyingShelfSlotIndex; }
 	void AssignToShelf(AShelfActor* Shelf, int32 SlotIndex);
 	void ClearShelfAssignment(AShelfActor* Shelf);
+	const TArray<FParcelPackageContent>& GetPackageContents() const { return PackageContents; }
+	void SetOnConveyor(bool bInOnConveyor) { bOnConveyor = bInOnConveyor; }
+	bool IsOnConveyor() const { return bOnConveyor; }
+	void SetImpactDamageEnabled(bool bEnabled) { bImpactDamageEnabled = bEnabled; }
 
 protected:
 	/** 서브클래스에서 메시 업데이트를 위해 사용 */

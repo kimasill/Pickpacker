@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Blaster/Subsystem/AnchorRuntimeSubsystem.h"
+#include "Blaster/GameMode/PickpackerGameMode.h"
 
 APickpackerGameState::APickpackerGameState()
 {
@@ -161,6 +162,14 @@ void APickpackerGameState::SetTeamCredits(int32 NewCredits)
 	LastReplicatedTeamCredits = TeamCredits;
 
 	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
+
+	if (TeamCredits <= 0 && OldCredits > 0)
+	{
+		if (APickpackerGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<APickpackerGameMode>() : nullptr)
+		{
+			GameMode->OnGameOver(TEXT("Team credits depleted"));
+		}
+	}
 }
 
 void APickpackerGameState::ApplyCreditDelta(int32 Delta, const FString& Reason)
@@ -194,6 +203,14 @@ void APickpackerGameState::ApplyCreditDelta(int32 Delta, const FString& Reason)
 	}
 
 	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
+
+	if (TeamCredits <= 0 && OldCredits > 0)
+	{
+		if (APickpackerGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<APickpackerGameMode>() : nullptr)
+		{
+			GameMode->OnGameOver(TEXT("Team credits depleted"));
+		}
+	}
 }
 
 UAnchorRuntimeSubsystem* APickpackerGameState::GetAnchorSubsystem()

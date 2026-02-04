@@ -97,6 +97,16 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Data")
 	TArray<TObjectPtr<UDA_EndingData>> EndingDataAssets;
 
+	/** 엔딩 후 로비 복귀 (엔딩 맵 이동 없이 시퀀스만 재생할 때) */
+	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Ending")
+	bool bReturnToLobbyAfterEnding = true;
+
+	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Ending")
+	float PostEndingDelay = 0.5f;
+
+	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Ending")
+	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+
 	/** 월드 상태 플래그 */
 	UPROPERTY(Replicated)
 	TArray<FWorldFlagEntry> WorldFlags;
@@ -122,6 +132,13 @@ private:
 
 	FWorldFlagEntry* FindWorldFlagEntry(const FGameplayTag& Flag);
 	const FWorldFlagEntry* FindWorldFlagEntry(const FGameplayTag& Flag) const;
+
+	float GetSequenceDuration(ULevelSequence* Sequence) const;
+	void ScheduleReturnToLobby(float TotalDelay);
+	void ReturnPlayersToLobby();
+
+	FTimerHandle ReturnToLobbyTimerHandle;
+	bool bReturnScheduled = false;
 };
 
 

@@ -6,6 +6,8 @@
 #include "Blaster/Parcel/ParcelActor.h"
 #include "PackedParcelActor.generated.h"
 
+class AParcelSpawnMarker;
+
 /**
  * Packed Parcel Actor - 포장 전용
  * PackageRecipe의 RowName을 사용하여 설정됨
@@ -45,6 +47,7 @@ protected:
 	 * PackageRecipe RowName 기반 초기화
 	 */
 	void InitializeFromPackageRecipe();
+	void InitializeRandomContentsFromSpawnMarker(const FParcelPackageRecipe& Recipe);
 
 	/** PackageRecipe RowName (포장 레시피 선택용) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config", meta = (GetOptions = "GetPackageRecipeRowOptions"))
@@ -57,6 +60,16 @@ protected:
 	/** 초기 콘텐츠 (에디터에서 지정 가능, 런타임에는 PackageContents로 사용됨) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
 	TArray<FParcelPackageContent> InitialContents;
+
+	/** 랜덤 콘텐츠 생성에 사용할 스폰 마커 (직접 지정) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
+	TObjectPtr<AParcelSpawnMarker> ContentSpawnMarker = nullptr;
+
+	/** 콘텐츠에 사용할 Parcel 클래스 (일괄 적용) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel Config|Contents")
+	TSubclassOf<AParcelActor> ContentParcelClass;
+
+	void ApplyContentParcelClass(TArray<FParcelPackageContent>& Contents) const;
 
 public:
 	/**

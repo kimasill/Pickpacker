@@ -28,12 +28,14 @@
 #include "DrawDebugHelpers.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "Blaster/Interfaces/InteractableInterface.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 
 AMotherAIActor::AMotherAIActor()
 {
-	PrimaryActorTick.bCanEverTick = false; // Behavior Tree가 Tick을 대체
+	PrimaryActorTick.bCanEverTick = true; // 문 감지/드론 관리용
+	PrimaryActorTick.TickInterval = 0.1f;
 	bReplicates = true;
 	SetReplicateMovement(true);
 	// Character 설정
@@ -165,12 +167,13 @@ void AMotherAIActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Behavior Tree가 대부분의 로직을 처리하므로 여기서는 드론 관리만 수행
-	// Note: Tick is disabled (PrimaryActorTick.bCanEverTick = false), but if enabled, only manage drones
+	// Behavior Tree가 대부분의 로직을 처리하므로 여기서는 문 감지/드론 관리만 수행
 	if (!HasAuthority())
 	{
 		return;
 	}
+
+	TryOpenDoorAhead();
 
 	// Manage drones periodically
 	static float DroneManageTimer = 0.0f;
@@ -643,6 +646,13 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 		return;
 	}
 
+	if (!bIsExecutingPunishment)
+	{
+		return;
+	}
+
+	bIsExecutingPunishment = false;
+
 	// TargetPlayer 멤버 변수에서 플레이어 가져오기
 	ABlasterCharacter* BlasterCharacter = nullptr;
 	if (TargetPlayer.IsValid())
@@ -698,9 +708,6 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 		}
 	}
 
-	// 처벌 완료 플래그 해제
-	bIsExecutingPunishment = false;
-
 	// 점검 중이 아니었다면 통제 타워로 복귀
 	if (!bWasInspecting)
 	{
@@ -713,6 +720,36 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 		TargetPlayer = nullptr;
 		// AI 상태는 Inspecting으로 유지
 	}
+}
+
+void AMotherAIActor::StopPunishmentForTarget(ACharacter* Player)
+{
+	if (!HasAuthority() || !Player)
+	{
+		return;
+	}
+
+	if (!bIsExecutingPunishment)
+	{
+		return;
+	}
+
+	if (TargetPlayer.IsValid() && TargetPlayer.Get() != Player)
+	{
+		return;
+	}
+
+	GetWorld()->GetTimerManager().ClearTimer(PunishmentCameraRotationTimer);
+
+	if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		if (PunishmentMontage && AnimInstance->Montage_IsPlaying(PunishmentMontage))
+		{
+			AnimInstance->Montage_Stop(0.1f, PunishmentMontage);
+		}
+	}
+
+	OnPunishmentEnd(PunishmentMontage, true);
 }
 
 void AMotherAIActor::OnInspectionEnd()
@@ -1093,6 +1130,87 @@ void AMotherAIActor::ApplySpeedForState(EMotherAIState NewState)
 			? FRotator(0.f, 720.f, 0.f) // 추격 시 빠른 회전
 			: FRotator(0.f, 540.f, 0.f); // 기본 회전
 	}
+}
+
+void AMotherAIActor::TryOpenDoorAhead()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (GetVelocity().SizeSquared() < 1.0f)
+	{
+		return;
+	}
+
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		if (MovementComp->MovementMode == MOVE_None)
+		{
+			return;
+		}
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (Now - LastDoorInteractTime < DoorInteractCooldown)
+	{
+		return;
+	}
+
+	const float HalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.0f;
+	FVector Start = GetActorLocation() + FVector(0.f, 0.f, HalfHeight * 0.5f);
+	FVector End = Start + GetActorForwardVector() * DoorCheckDistance;
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MotherDoorCheck), false, this);
+	QueryParams.AddIgnoredActor(this);
+
+	FHitResult Hit;
+	const bool bHit = World->SweepSingleByChannel(
+		Hit,
+		Start,
+		End,
+		FQuat::Identity,
+		ECC_Visibility,
+		FCollisionShape::MakeSphere(DoorCheckRadius),
+		QueryParams
+	);
+
+	if (!bHit)
+	{
+		return;
+	}
+
+	AActor* HitActor = Hit.GetActor();
+	if (!HitActor || !HitActor->ActorHasTag(DoorActorTag))
+	{
+		return;
+	}
+
+	if (HitActor == LastDoorInteracted.Get() && (Now - LastDoorInteractTime) < DoorInteractCooldown)
+	{
+		return;
+	}
+
+	if (!HitActor->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+	{
+		return;
+	}
+
+	if (!IInteractableInterface::Execute_CanInteract(HitActor, this))
+	{
+		return;
+	}
+
+	IInteractableInterface::Execute_OnInteract(HitActor, this);
+	LastDoorInteracted = HitActor;
+	LastDoorInteractTime = Now;
 }
 
 FVector AMotherAIActor::GetControlTowerLocation() const

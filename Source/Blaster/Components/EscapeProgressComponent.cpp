@@ -11,6 +11,19 @@
 #include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
+#include "MovieScene.h"
+#include "TimerManager.h"
+#include "Misc/FileHelper.h"
+#include "HAL/PlatformFilemanager.h"
+
+namespace
+{
+	static void AppendDebugLog(const FString& JsonLine)
+	{
+		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+	}
+}
 
 UEscapeProgressComponent::UEscapeProgressComponent()
 {
@@ -212,6 +225,20 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 			}
 		}
 	}
+
+	if (bReturnToLobbyAfterEnding && EndingData->EndingLevel.IsNull())
+	{
+		float TotalDuration = 0.0f;
+		if (EndingData->TransitionSequence)
+		{
+			TotalDuration += GetSequenceDuration(EndingData->TransitionSequence);
+		}
+		if (EndingData->EndingSequence)
+		{
+			TotalDuration += GetSequenceDuration(EndingData->EndingSequence);
+		}
+		ScheduleReturnToLobby(TotalDuration + PostEndingDelay);
+	}
 }
 
 void UEscapeProgressComponent::BroadcastInputBlock(bool bBlocked)
@@ -301,6 +328,68 @@ void UEscapeProgressComponent::OnTransitionSequenceFinished()
 	{
 		CurrentSequencePlayer->OnFinished.RemoveDynamic(this, &UEscapeProgressComponent::OnTransitionSequenceFinished);
 		CurrentSequencePlayer = nullptr;
+	}
+}
+
+float UEscapeProgressComponent::GetSequenceDuration(ULevelSequence* Sequence) const
+{
+	if (!Sequence || !Sequence->GetMovieScene())
+	{
+		return 0.0f;
+	}
+
+	const UMovieScene* MovieScene = Sequence->GetMovieScene();
+	const FFrameRate TickResolution = MovieScene->GetTickResolution();
+	const TRange<FFrameNumber> PlaybackRange = MovieScene->GetPlaybackRange();
+	const FFrameNumber Start = PlaybackRange.GetLowerBoundValue();
+	const FFrameNumber End = PlaybackRange.GetUpperBoundValue();
+	const int32 DurationFrames = (End - Start).Value;
+
+	return TickResolution.AsSeconds(DurationFrames);
+}
+
+void UEscapeProgressComponent::ScheduleReturnToLobby(float TotalDelay)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || bReturnScheduled)
+	{
+		return;
+	}
+
+	if (LobbyTravelPath.IsEmpty())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		bReturnScheduled = true;
+		World->GetTimerManager().SetTimer(
+			ReturnToLobbyTimerHandle,
+			this,
+			&UEscapeProgressComponent::ReturnPlayersToLobby,
+			FMath::Max(0.1f, TotalDelay),
+			false
+		);
+	}
+}
+
+void UEscapeProgressComponent::ReturnPlayersToLobby()
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		// #region agent log
+		AppendDebugLog(FString::Printf(
+			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H20\",\"location\":\"EscapeProgressComponent.cpp:372\",\"message\":\"ReturnPlayersToLobby\",\"data\":{\"world\":\"%s\"},\"timestamp\":%lld}"),
+			World ? *World->GetMapName() : TEXT("none"),
+			FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+		// #endregion
+		const FString TravelPath = FString::Printf(TEXT("%s?listen"), *LobbyTravelPath);
+		World->ServerTravel(TravelPath, true);
 	}
 }
 

@@ -37,9 +37,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
 	bool bBlockInputOnLogin = true;
 
+	/** 엔딩 후 로비로 복귀 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	bool bReturnToLobbyAfterEnding = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	float PostEndingDelay = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+
 	void OnEndingPlayerReady(ABlasterPlayerController* PlayerController);
 
 private:
 	void ApplyEndingSetup(ABlasterPlayerController* PlayerController);
+	float GetEndingSequenceDuration() const;
+	void ReturnPlayersToLobby();
+
+	FTimerHandle ReturnToLobbyTimerHandle;
+	bool bReturnScheduled = false;
 };
 

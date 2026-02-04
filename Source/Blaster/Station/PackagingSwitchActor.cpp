@@ -90,6 +90,12 @@ void APackagingSwitchActor::ToggleSwitch()
 	PackagingStation->ToggleMode();
 	EPackagingMode NewMode = PackagingStation->GetMode();
 
+	// 언팩 모드로 전환 시 즉시 한 번 처리
+	if (NewMode == EPackagingMode::Unpack)
+	{
+		PackagingStation->ProcessInputArea();
+	}
+
 	if (bEnableDebugLogging)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[PackagingSwitchActor] Switch toggled: Mode changed to %s"),

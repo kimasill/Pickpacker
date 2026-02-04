@@ -48,6 +48,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Submission")
 	bool bRequiresPackagedParcel = true;
 
+	/** 사망한 플레이어 도착 시 관전 전환 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Submission")
+	bool bHandleDeadPlayers = true;
+
 	/** Optional debug logging */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Submission")
 	bool bEnableDebugLogging = false;

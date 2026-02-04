@@ -12,6 +12,7 @@
 #include "Components/Image.h"
 #include "Components/Border.h"
 #include "Engine/DataTable.h"
+#include "Blaster/UI/ParcelTagDisplayData.h"
 #include "ParcelHUDWidget.generated.h"
 
 USTRUCT(BlueprintType)
@@ -45,18 +46,6 @@ struct BLASTER_API FParcelHUDStyle
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Colors")
 	FLinearColor BackgroundCriticalTint = FLinearColor(1.0f, 0.1f, 0.1f, 0.28f);
-};
-
-USTRUCT(BlueprintType)
-struct BLASTER_API FParcelHUDTagDisplayRow : public FTableRowBase
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel HUD")
-	FGameplayTag Tag;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcel HUD")
-	FText DisplayText;
 };
 
 /**
@@ -105,6 +94,12 @@ public:
 	*/
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
 	void UpdateUnitDisplay(int32 Count);
+
+	/**
+	 * Update contents list display (packed parcel)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
+	void UpdateContentsList(const TArray<FText>& Contents);
 
 	/**
 	 * Update instability bar
@@ -170,8 +165,6 @@ protected:
 	 */
 	FString GetTagLastPart(const FGameplayTag& Tag) const;
 
-	bool TryGetTagDisplayText(const UDataTable* DataTable, const FGameplayTag& Tag, FText& OutText) const;
-
 public:
 	// UI Components
 	UPROPERTY(meta = (BindWidget))
@@ -201,6 +194,9 @@ public:
 
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ParcelNameText;
+
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* ContentsListText;
 
 	UPROPERTY(meta = (BindWidget))
 	UBorder* BackgroundBorder;

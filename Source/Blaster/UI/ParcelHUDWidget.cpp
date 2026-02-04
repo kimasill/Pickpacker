@@ -8,6 +8,7 @@
 #include "Engine/Texture2D.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
+#include "Blaster/UI/ParcelTagDisplayUtils.h"
 
 UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -60,6 +61,10 @@ void UParcelHUDWidget::NativeConstruct()
 	if (ParcelNameText)
 	{
 		ParcelNameText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ContentsListText)
+	{
+		ContentsListText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	if (BackgroundBorder)
@@ -213,6 +218,34 @@ void UParcelHUDWidget::UpdateUnitDisplay(int32 Count)
 	{
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[ParcelHUDWidget] Unit count updated - Count: %d"), Count);
 	}
+}
+
+void UParcelHUDWidget::UpdateContentsList(const TArray<FText>& Contents)
+{
+	if (!ContentsListText)
+	{
+		return;
+	}
+
+	if (Contents.Num() == 0 || bMinimalMode)
+	{
+		ContentsListText->SetVisibility(ESlateVisibility::Collapsed);
+		ContentsListText->SetText(FText::GetEmpty());
+		return;
+	}
+
+	FString Combined;
+	for (int32 Index = 0; Index < Contents.Num(); ++Index)
+	{
+		if (Index > 0)
+		{
+			Combined.Append(TEXT("\n"));
+		}
+		Combined.Append(Contents[Index].ToString());
+	}
+
+	ContentsListText->SetText(FText::FromString(Combined));
+	ContentsListText->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UParcelHUDWidget::UpdateInstabilityBar(float Instability, float MaxInstability)
@@ -442,7 +475,7 @@ FText UParcelHUDWidget::GetClassificationText(const FGameplayTag& Classification
 	}
 
 	FText DisplayText;
-	if (TryGetTagDisplayText(ClassificationDisplayTable, ClassificationTag, DisplayText))
+	if (FParcelTagDisplayUtils::TryGetTagDisplayText(ClassificationDisplayTable, ClassificationTag, DisplayText))
 	{
 		return DisplayText;
 	}
@@ -459,7 +492,7 @@ FText UParcelHUDWidget::GetParcelTagText(const FGameplayTag& ParcelTag) const
 	}
 
 	FText DisplayText;
-	if (TryGetTagDisplayText(ParcelTagDisplayTable, ParcelTag, DisplayText))
+	if (FParcelTagDisplayUtils::TryGetTagDisplayText(ParcelTagDisplayTable, ParcelTag, DisplayText))
 	{
 		return DisplayText;
 	}
@@ -468,29 +501,4 @@ FText UParcelHUDWidget::GetParcelTagText(const FGameplayTag& ParcelTag) const
 	return FText::FromString(LastPart);
 }
 
-bool UParcelHUDWidget::TryGetTagDisplayText(const UDataTable* DataTable, const FGameplayTag& Tag, FText& OutText) const
-{
-	if (!DataTable || !Tag.IsValid())
-	{
-		return false;
-	}
-
-	const TArray<FName> RowNames = DataTable->GetRowNames();
-	for (const FName& RowName : RowNames)
-	{
-		const FParcelHUDTagDisplayRow* Row = DataTable->FindRow<FParcelHUDTagDisplayRow>(RowName, TEXT("ParcelHUDTagLookup"));
-		if (!Row || !Row->Tag.IsValid())
-		{
-			continue;
-		}
-
-		if (Row->Tag.MatchesTagExact(Tag))
-		{
-			OutText = Row->DisplayText;
-			return true;
-		}
-	}
-
-	return false;
-}
 

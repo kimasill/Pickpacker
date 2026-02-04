@@ -3,12 +3,18 @@
 #include "Parcel/UnpackedParcelActor.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Components/BoxComponent.h"
 
 AParcelSpawnMarker::AParcelSpawnMarker()
 {
     MaxSimultaneous = 1;
     RespawnDelay = 10.0f;
 	ParcelActorClass = AParcelActor::StaticClass();
+
+	SpawnArea = CreateDefaultSubobject<UBoxComponent>(TEXT("SpawnArea"));
+	SpawnArea->SetupAttachment(RootComponent);
+	SpawnArea->SetBoxExtent(FVector(100.0f, 100.0f, 50.0f));
+	SpawnArea->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AParcelSpawnMarker::BeginPlay()
@@ -29,7 +35,6 @@ void AParcelSpawnMarker::OnSpawned(AActor* SpawnedActor)
     }
     SpawnedActors.Add(SpawnedActor);
     SpawnedActor->OnDestroyed.AddDynamic(this, &AParcelSpawnMarker::HandleSpawnedDestroyed);
-
 
 }
 
@@ -73,10 +78,12 @@ void AParcelSpawnMarker::TryRespawn()
 	const int32 RangeMin = FMath::Max(1, FMath::Min(SelectedRange.X, SelectedRange.Y));
 	const int32 RangeMax = FMath::Max(RangeMin, FMath::Max(SelectedRange.X, SelectedRange.Y));
 	const int32 SpawnCount = FMath::Min(FMath::RandRange(RangeMin, RangeMax), Remaining);
+	const bool bRandomizeLocation = SpawnCount > 1;
 
     for (int32 SpawnIndex = 0; SpawnIndex < SpawnCount; ++SpawnIndex)
     {
-        AActor* Spawned = SpawnParcel(SelectedRow);
+		const FTransform SpawnTransform = GetSpawnTransform(bRandomizeLocation);
+        AActor* Spawned = SpawnParcel(SelectedRow, SpawnTransform);
         if (!Spawned)
         {
             break;
@@ -111,7 +118,7 @@ void AParcelSpawnMarker::StartSpawning()
 	}
 }
 
-AActor* AParcelSpawnMarker::SpawnParcel(FName Row)
+AActor* AParcelSpawnMarker::SpawnParcel(FName Row, const FTransform& SpawnTransform)
 {
 	if (!HasAuthority())
 	{
@@ -130,24 +137,25 @@ AActor* AParcelSpawnMarker::SpawnParcel(FName Row)
 		return nullptr;
 	}
 
-	const FTransform SpawnTransform = GetActorTransform();
-	FActorSpawnParameters Params;
-	Params.Owner = this;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
 	// 기본적으로 UnpackedParcelActor 사용
 	if (!ParcelActorClass)
 	{
 		ParcelActorClass = AUnpackedParcelActor::StaticClass();
 	}
 
-	AParcelActor* Parcel = World->SpawnActor<AParcelActor>(ParcelActorClass, SpawnTransform, Params);
+	AParcelActor* Parcel = World->SpawnActorDeferred<AParcelActor>(
+		ParcelActorClass,
+		SpawnTransform,
+		this,
+		nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn
+	);
 	if (!Parcel)
 	{
 		return nullptr;
 	}
 
-	// 데이터 에셋 + RowName 주입 후 초기화
+	// 데이터 에셋 + RowName 주입 후 초기화 (BeginPlay 이전)
 	if (ParcelDataAsset)
 	{
 		Parcel->SetParcelDataAsset(ParcelDataAsset);
@@ -161,9 +169,30 @@ AActor* AParcelSpawnMarker::SpawnParcel(FName Row)
 			}
 		}
 	}
+	Parcel->FinishSpawning(SpawnTransform);
 
 	OnSpawned(Parcel);
 	return Parcel;
+}
+
+FTransform AParcelSpawnMarker::GetSpawnTransform(bool bRandomize) const
+{
+	if (!bRandomize || !SpawnArea)
+	{
+		return GetActorTransform();
+	}
+
+	const FVector Extent = SpawnArea->GetScaledBoxExtent();
+	const FVector LocalPoint(
+		FMath::RandRange(-Extent.X, Extent.X),
+		FMath::RandRange(-Extent.Y, Extent.Y),
+		FMath::RandRange(-Extent.Z, Extent.Z)
+	);
+	const FVector WorldPoint = SpawnArea->GetComponentTransform().TransformPosition(LocalPoint);
+
+	FTransform Result = GetActorTransform();
+	Result.SetLocation(WorldPoint);
+	return Result;
 }
 
 bool AParcelSpawnMarker::ChooseParcelCandidate(FName& OutRow, FIntPoint& OutRange) const

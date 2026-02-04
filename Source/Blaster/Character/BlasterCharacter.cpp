@@ -36,7 +36,10 @@
 #include "Blaster/Library/PickpackerSuspicionLibrary.h"
 #include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
 #include "Blaster/GameState/LobbyGameState.h"
+#include "Blaster/Environment/DeathLocationActor.h"
 #include "Components/InputComponent.h"
+#include "Misc/FileHelper.h"
+#include "HAL/PlatformFilemanager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
@@ -47,6 +50,18 @@
 #include "Engine/GameInstance.h"
 #include "Blaster/Components/ParcelStateComponent.h"
 #include "Blaster/Parcel/ParcelActor.h"
+#include "Blaster/AI/MotherAIActor.h"
+#include "Blaster/Environment/ConveyorBeltActor.h"
+#include "Blaster/Environment/LadderActor.h"
+
+namespace
+{
+	static void AppendDebugLog(const FString& JsonLine)
+	{
+		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+	}
+}
 
 ABlasterCharacter::ABlasterCharacter()
 {
@@ -107,6 +122,9 @@ ABlasterCharacter::ABlasterCharacter()
 	AttachedGrenade = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Attached Grenade"));
 	AttachedGrenade->SetupAttachment(GetMesh(), FName("GrenadeSocket"));
 	AttachedGrenade->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	EffectSocketBody = CreateDefaultSubobject<USceneComponent>(TEXT("EffectSocketBody"));
+	EffectSocketBody->SetupAttachment(GetMesh(), FName("spine_02"));
 
 	/**
 	* Hit boxes for server-side rewind
@@ -213,6 +231,9 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ABlasterCharacter, CurrentSuspiciousBehavior);
 	DOREPLIFETIME(ABlasterCharacter, bBeingPunished);
 	DOREPLIFETIME(ABlasterCharacter, bEndingInProgress);
+	DOREPLIFETIME(ABlasterCharacter, bOutOfLives);
+	DOREPLIFETIME(ABlasterCharacter, bIsOnLadder);
+	DOREPLIFETIME(ABlasterCharacter, CurrentLadder);
 }
 
 void ABlasterCharacter::OnRep_ReplicatedMovement()
@@ -220,6 +241,19 @@ void ABlasterCharacter::OnRep_ReplicatedMovement()
 	Super::OnRep_ReplicatedMovement();
 	SimProxiesTurn();
 	TimeSinceLastMovementReplication = 0.f;
+}
+
+void ABlasterCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	UpdateOverheadWidget();
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H45\",\"location\":\"BlasterCharacter.cpp:236\",\"message\":\"OnRep_PlayerState\",\"data\":{\"name\":\"%s\",\"world\":\"%s\"},\"timestamp\":%lld}"),
+		GetPlayerState() ? *GetPlayerState()->GetPlayerName() : TEXT("none"),
+		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
 }
 
 void ABlasterCharacter::Elim(bool bPlayerLeftGame)
@@ -234,9 +268,22 @@ void ABlasterCharacter::SetEndingInProgress(bool bInProgress)
 	bEndingInProgress = bInProgress;
 	bDisableGameplay = bInProgress;
 
+	// #region agent log
+	AppendDebugLog(FString::Printf(
+		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H42\",\"location\":\"BlasterCharacter.cpp:242\",\"message\":\"SetEndingInProgress\",\"data\":{\"inProgress\":%s,\"world\":\"%s\",\"movementMode\":%d},\"timestamp\":%lld}"),
+		bInProgress ? TEXT("true") : TEXT("false"),
+		GetWorld() ? *GetWorld()->GetMapName() : TEXT("none"),
+		GetCharacterMovement() ? static_cast<int32>(GetCharacterMovement()->MovementMode) : -1,
+		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
+	// #endregion
+
 	if (bEndingInProgress && GetCharacterMovement())
 	{
 		GetCharacterMovement()->DisableMovement();
+	}
+	else if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	}
 }
 
@@ -590,6 +637,41 @@ void ABlasterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (bIsOnLadder && CurrentLadder)
+	{
+		const FVector Bottom = CurrentLadder->GetBottomLocation();
+		const FVector Top = CurrentLadder->GetTopLocation();
+		const FVector LadderVector = Top - Bottom;
+		const float LadderLength = LadderVector.Size();
+		if (LadderLength > KINDA_SMALL_NUMBER)
+		{
+			const FVector LadderDir = LadderVector / LadderLength;
+			const float DistanceOnLadder = FVector::DotProduct(GetActorLocation() - Bottom, LadderDir);
+			float CapsuleHalfHeight = 0.f;
+			if (const UCapsuleComponent* Capsule = GetCapsuleComponent())
+			{
+				CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+			}
+			const float EffectiveBottomThreshold = LadderBottomExitThreshold + CapsuleHalfHeight;
+			if (LadderInputAxis > 0.f && DistanceOnLadder >= (LadderLength - LadderTopExitThreshold))
+			{
+				if (CanExitLadderAtTop())
+				{
+					StopLadder(true);
+				}
+				else if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+				{
+					MoveComp->StopMovementImmediately();
+					LadderInputAxis = 0.f;
+				}
+			}
+			else if (LadderInputAxis < 0.f && DistanceOnLadder <= EffectiveBottomThreshold)
+			{
+				StopLadder(false);
+			}
+		}
+	}
+
 	RotateInPlace(DeltaTime);
 	HideCameraIfCharacterClose();
 	HideCarriedCameraIfCharacterClose();
@@ -640,6 +722,8 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		if (MovementAction)
 		{
 			EnhancedInputComponent->BindAction(MovementAction, ETriggerEvent::Triggered, this, &ABlasterCharacter::OnMovement);
+			EnhancedInputComponent->BindAction(MovementAction, ETriggerEvent::Completed, this, &ABlasterCharacter::OnMovementCompleted);
+			EnhancedInputComponent->BindAction(MovementAction, ETriggerEvent::Canceled, this, &ABlasterCharacter::OnMovementCompleted);
 		}
 		
 		// Look action (2D Vector - Mouse X/Y)
@@ -985,13 +1069,169 @@ void ABlasterCharacter::OnMovement(const FInputActionValue& Value)
 {
 	// 2D Vector 입력 처리 (WASD 등)
 	const FVector2D MovementVector = Value.Get<FVector2D>();
-	
+
+	if (bIsOnLadder && CurrentLadder)
+	{
+		LadderInputAxis = MovementVector.Y;
+		if (FMath::Abs(LadderInputAxis) > KINDA_SMALL_NUMBER)
+		{
+			AddMovementInput(CurrentLadder->GetLadderUpVector(), LadderInputAxis);
+		}
+		return;
+	}
+
+	LadderInputAxis = 0.f;
 	// X축: 전후 이동 (W/S)
 	MoveForward(MovementVector.Y);
-	
 	// Y축: 좌우 이동 (A/D)
 	MoveRight(MovementVector.X);
 }
+
+void ABlasterCharacter::OnMovementCompleted(const FInputActionValue& Value)
+{
+	LadderInputAxis = 0.f;
+	if (bIsOnLadder)
+	{
+		if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+		{
+			MoveComp->StopMovementImmediately();
+		}
+	}
+}
+
+void ABlasterCharacter::StartLadder(ALadderActor* LadderActor)
+{
+	if (!LadderActor || !LadderActor->bCanAccess)
+	{
+		return;
+	}
+
+	if (GetWorld())
+	{
+		const float Now = GetWorld()->GetTimeSeconds();
+		if (Now - LastLadderExitTime < LadderReenterBlockSeconds)
+		{
+			return;
+		}
+	}
+
+	if (!HasAuthority())
+	{
+		ServerStartLadder(LadderActor);
+		return;
+	}
+
+	if (bIsOnLadder && CurrentLadder == LadderActor)
+	{
+		return;
+	}
+
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		CachedMovementMode = MoveComp->MovementMode;
+		CachedCustomMovementMode = MoveComp->CustomMovementMode;
+		CachedMaxFlySpeed = MoveComp->MaxFlySpeed;
+		MoveComp->StopMovementImmediately();
+		MoveComp->SetMovementMode(MOVE_Flying);
+		MoveComp->MaxFlySpeed = LadderClimbSpeed;
+	}
+
+	CurrentLadder = LadderActor;
+	bIsOnLadder = true;
+	LadderInputAxis = 0.f;
+}
+
+void ABlasterCharacter::StopLadder(bool bPlaceAtTop)
+{
+	if (!HasAuthority())
+	{
+		ServerStopLadder(bPlaceAtTop);
+		return;
+	}
+
+	if (!bIsOnLadder)
+	{
+		return;
+	}
+
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->SetMovementMode(CachedMovementMode, CachedCustomMovementMode);
+		if (CachedMaxFlySpeed > 0.f)
+		{
+			MoveComp->MaxFlySpeed = CachedMaxFlySpeed;
+		}
+	}
+
+	if (CurrentLadder && bPlaceAtTop)
+	{
+		const FVector ExitLocation = CurrentLadder->GetTopLocation() + CurrentLadder->GetActorForwardVector() * LadderExitForwardOffset;
+		SetActorLocation(ExitLocation);
+	}
+
+	bIsOnLadder = false;
+	CurrentLadder = nullptr;
+	LadderInputAxis = 0.f;
+
+	if (GetWorld())
+	{
+		LastLadderExitTime = GetWorld()->GetTimeSeconds();
+	}
+}
+
+bool ABlasterCharacter::CanExitLadderAtTop() const
+{
+	if (!CurrentLadder || !GetWorld())
+	{
+		return false;
+	}
+
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (!Capsule)
+	{
+		return false;
+	}
+
+	const FVector Start = CurrentLadder->GetTopLocation();
+	const FVector End = Start + CurrentLadder->GetActorForwardVector() * LadderExitForwardOffset;
+	const float Radius = Capsule->GetScaledCapsuleRadius();
+	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FCollisionShape Shape = FCollisionShape::MakeCapsule(Radius, HalfHeight);
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderExit), false, this);
+	FHitResult Hit;
+	const bool bBlocked = GetWorld()->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Pawn, Shape, Params);
+	return !bBlocked;
+}
+
+void ABlasterCharacter::ServerStartLadder_Implementation(ALadderActor* LadderActor)
+{
+	StartLadder(LadderActor);
+}
+
+void ABlasterCharacter::ServerStopLadder_Implementation(bool bPlaceAtTop)
+{
+	StopLadder(bPlaceAtTop);
+}
+
+void ABlasterCharacter::OnRep_LadderState()
+{
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		if (bIsOnLadder)
+		{
+			MoveComp->StopMovementImmediately();
+			MoveComp->SetMovementMode(MOVE_Flying);
+			MoveComp->MaxFlySpeed = LadderClimbSpeed;
+		}
+		else
+		{
+			MoveComp->SetMovementMode(MOVE_Walking);
+		}
+	}
+}
+
 
 void ABlasterCharacter::OnLook(const FInputActionValue& Value)
 {
@@ -1168,6 +1408,12 @@ void ABlasterCharacter::Jump()
 {
 	if (Combat && Combat->bHoldingTheFlag) return;
 	if (bDisableGameplay) return;
+	if (bIsOnLadder)
+	{
+		StopLadder(false);
+		Super::Jump();
+		return;
+	}
 	if (bIsCrouched)
 	{
 		UnCrouch();
@@ -2027,6 +2273,11 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 		bCameraRotationComplete = false;
 		PunisherActor = nullptr;
 
+		if (bOutOfLives)
+		{
+			return;
+		}
+
 		// 움직임 복구 - 명시적으로 활성화
 		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
 		{
@@ -2049,6 +2300,244 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Player %s punishment ended, movement restored"), *GetName());
+	}
+}
+
+void ABlasterCharacter::HandleOutOfLives()
+{
+	if (!HasAuthority() || bOutOfLives)
+	{
+		return;
+	}
+
+	bOutOfLives = true;
+	bDisableGameplay = true;
+
+	// 처벌 몽타주 종료(실행 중인 경우)
+	if (AMotherAIActor* Mother = Cast<AMotherAIActor>(PunisherActor))
+	{
+		Mother->StopPunishmentForTarget(this);
+	}
+
+	// 이동/입력 차단
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		MovementComp->DisableMovement();
+		MovementComp->StopMovementImmediately();
+	}
+	if (Controller)
+	{
+		Controller->SetIgnoreLookInput(true);
+		Controller->SetIgnoreMoveInput(true);
+	}
+
+	DropCarriedParcelIfAny();
+
+	Multicast_HandleOutOfLives();
+
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		Client_HandleOutOfLives();
+	}
+
+	// 사망 몽타주 종료 처리는 Notify에서 호출하도록 변경
+}
+
+void ABlasterCharacter::MoveToConveyorEntry()
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	if (bUseCustomDeathLocation)
+	{
+		TSubclassOf<AActor> SearchClass = DeathLocationActorClass;
+		if (!SearchClass)
+		{
+			SearchClass = ADeathLocationActor::StaticClass();
+		}
+
+		TArray<AActor*> FoundActors;
+		UGameplayStatics::GetAllActorsOfClass(this, SearchClass, FoundActors);
+		if (FoundActors.Num() > 0)
+		{
+			AActor* BestActor = FoundActors[0];
+			float BestDistanceSq = FVector::DistSquared(GetActorLocation(), BestActor->GetActorLocation());
+			for (int32 Index = 1; Index < FoundActors.Num(); ++Index)
+			{
+				AActor* Candidate = FoundActors[Index];
+				const float DistanceSq = FVector::DistSquared(GetActorLocation(), Candidate->GetActorLocation());
+				if (DistanceSq < BestDistanceSq)
+				{
+					BestDistanceSq = DistanceSq;
+					BestActor = Candidate;
+				}
+			}
+			SetActorLocation(BestActor->GetActorLocation());
+		}
+		else
+		{
+			SetActorLocation(CustomDeathLocation);
+		}
+		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+		{
+			// 사망 상태에서도 중력으로 떨어지도록 낙하 모드로 전환
+			MovementComp->SetMovementMode(MOVE_Falling);
+			MovementComp->Activate(true);
+			MovementComp->SetComponentTickEnabled(true);
+		}
+		return;
+	}
+
+	TArray<AActor*> Conveyors;
+	UGameplayStatics::GetAllActorsOfClass(this, AConveyorBeltActor::StaticClass(), Conveyors);
+	if (Conveyors.Num() == 0)
+	{
+		return;
+	}
+
+	if (AConveyorBeltActor* Belt = Cast<AConveyorBeltActor>(Conveyors[0]))
+	{
+		const FVector EntryLocation = Belt->GetConveyorEntryLocation();
+		SetActorLocation(EntryLocation);
+		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+		{
+			// 사망 상태에서도 중력으로 떨어지도록 낙하 모드로 전환
+			MovementComp->SetMovementMode(MOVE_Falling);
+			MovementComp->Activate(true);
+			MovementComp->SetComponentTickEnabled(true);
+		}
+	}
+}
+
+void ABlasterCharacter::Multicast_HandleOutOfLives_Implementation()
+{
+	if (bOutOfLivesVisualsApplied)
+	{
+		return;
+	}
+	bOutOfLivesVisualsApplied = true;
+
+	// 사망 시작 시 로컬 카메라를 3인칭으로 전환
+	if (bUseDeathThirdPersonCamera && IsLocallyControlled() && FollowCamera)
+	{
+		if (!bCachedDeathCamera)
+		{
+			CachedDeathCameraLocation = FollowCamera->GetRelativeLocation();
+			CachedDeathCameraUsePawnControlRotation = FollowCamera->bUsePawnControlRotation;
+			bCachedDeathCamera = true;
+		}
+
+		FollowCamera->SetRelativeLocation(FVector(-DeathThirdPersonDistance, 0.f, DeathThirdPersonHeight));
+		FollowCamera->SetRelativeRotation(FRotator(DeathThirdPersonRotationPitch, 0.f, 0.f));
+		FollowCamera->bUsePawnControlRotation = true;
+
+		// 1인칭 머리 숨김을 해제해 3인칭에서 머리가 보이도록
+		ToggleHeadMesh(false);
+	}
+
+	// 사망 포즈(선택)
+	if (DeathMontage && GetMesh() && GetMesh()->GetAnimInstance())
+	{
+		USkeletalMeshComponent* MeshComp = GetMesh();
+		UAnimInstance* AnimInstance = MeshComp->GetAnimInstance();
+		// 기존 몽타주가 재생 중이면 사망 몽타주가 막히는 경우가 있어 정리
+		AnimInstance->StopAllMontages(0.0f);
+		MeshComp->bPauseAnims = false;
+
+		bDeath = true;
+		AnimInstance->Montage_Play(DeathMontage);
+	}
+	else if (GetMesh())
+	{
+		GetMesh()->bPauseAnims = true;
+	}
+	if (ElimEffect)
+	{		
+		UNiagaraFunctionLibrary::SpawnSystemAttached(
+			ElimEffect,
+			EffectSocketBody,
+			FName(""),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			EAttachLocation::SnapToTarget,
+			false
+		);
+	}
+	if (ElimSound)
+	{
+		UGameplayStatics::SpawnSoundAtLocation(
+			this,
+			ElimSound,
+			GetActorLocation()
+		);
+	}
+}
+
+void ABlasterCharacter::Client_HandleOutOfLives_Implementation()
+{
+	Multicast_HandleOutOfLives_Implementation();
+}
+
+void ABlasterCharacter::OnRep_OutOfLives()
+{
+	if (bOutOfLives)
+	{
+		Multicast_HandleOutOfLives_Implementation();
+	}
+}
+
+void ABlasterCharacter::Multicast_FreezeDeathPose_Implementation()
+{
+	if (GetMesh())
+	{
+		GetMesh()->bPauseAnims = true;
+	}
+}
+
+void ABlasterCharacter::HandleDeathMontageFinished()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		if (PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->StartCameraFade(0.0f, 1.0f, DeathFadeOutDuration, FLinearColor::Black, false, true);
+		}
+	}
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(
+			DeathFadeTimerHandle,
+			this,
+			&ABlasterCharacter::HandleDeathFadeOutComplete,
+			FMath::Max(0.0f, DeathFadeOutDuration),
+			false
+		);
+	}
+}
+
+void ABlasterCharacter::HandleDeathFadeOutComplete()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MoveToConveyorEntry();
+
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		if (PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->StartCameraFade(1.0f, 0.0f, DeathFadeInDuration, FLinearColor::Black, false, false);
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ public:
 	ALobbyGameMode();
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void BeginPlay() override;
+	virtual void PostSeamlessTravel() override;
 
 	// 수동 시작 함수 (호스트 버튼 등에서 호출)
 	UFUNCTION(BlueprintCallable, Category = "Lobby")

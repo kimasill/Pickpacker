@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstance.h"
 #include "Particles/ParticleSystem.h"
+#include "NiagaraSystem.h"
 #include "Camera/CameraShakeBase.h"
 #include "Blaster/BlasterTypes/TurningInPlace.h"
 #include "Blaster/Interfaces/InteractWithCrosshairInterface.h"
@@ -20,6 +21,8 @@
 
 class UInputAction;
 class UPrimitiveComponent;
+class ALadderActor;
+class AActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
 
@@ -67,6 +70,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PostInitializeComponents() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void OnRep_PlayerState() override;
 
 	/** OverHeadWidget 업데이트 (플레이어 이름, 준비 상태 등) */
 	UFUNCTION(BlueprintCallable, Category = "Lobby")
@@ -94,6 +98,10 @@ public:
 	/** 처벌 중인지 (Mother AI 처벌 시) */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Punishment")
 	bool bBeingPunished = false;
+
+	/** 처벌 후 목숨이 모두 소진되었는지 */
+	UPROPERTY(ReplicatedUsing = OnRep_OutOfLives, BlueprintReadOnly, Category = "Death")
+	bool bOutOfLives = false;
 
 	/** 엔딩 진행 중 여부 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Ending")
@@ -161,6 +169,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Punishment")
 	void SetBeingPunished(bool bPunishing, AActor* Punisher = nullptr);
 
+	/** 목숨 소진 처리 (서버 전용) */
+	UFUNCTION(BlueprintCallable, Category = "Death")
+	void HandleOutOfLives();
+
 protected:
 	virtual void BeginPlay() override;
 	
@@ -180,6 +192,7 @@ protected:
 
 	/** Enhanced Input: Movement actions (2D Vector - WASD) */
 	void OnMovement(const FInputActionValue& Value);
+	void OnMovementCompleted(const FInputActionValue& Value);
 	
 	/** Enhanced Input: Look actions (2D Vector - Mouse X/Y) */
 	void OnLook(const FInputActionValue& Value);
@@ -208,6 +221,24 @@ protected:
 	void OnInventorySlotSeven(const FInputActionValue& Value);
 	void OnInventorySlotEight(const FInputActionValue& Value);
 	void OnInventorySlotNine(const FInputActionValue& Value);
+
+public:
+	// Ladder
+	UFUNCTION(BlueprintCallable, Category = "Ladder")
+	void StartLadder(ALadderActor* LadderActor);
+
+	UFUNCTION(BlueprintCallable, Category = "Ladder")
+	void StopLadder(bool bPlaceAtTop);
+
+protected:
+	UFUNCTION(Server, Reliable)
+	void ServerStartLadder(ALadderActor* LadderActor);
+
+	UFUNCTION(Server, Reliable)
+	void ServerStopLadder(bool bPlaceAtTop);
+
+	UFUNCTION()
+	void OnRep_LadderState();
 
 public:
 	/** Enhanced Input: Movement input action (2D Vector - WASD) */
@@ -269,6 +300,45 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InventorySlotNineAction;
+
+	// Ladder settings
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
+	float LadderClimbSpeed = 250.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
+	float LadderExitForwardOffset = 60.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
+	float LadderTopExitThreshold = 6.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
+	float LadderBottomExitThreshold = 10.f;
+
+	UPROPERTY(ReplicatedUsing = OnRep_LadderState, BlueprintReadOnly, Category = "Ladder")
+	bool bIsOnLadder = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Ladder")
+	ALadderActor* CurrentLadder = nullptr;
+
+	UPROPERTY()
+	float LadderInputAxis = 0.f;
+
+	UPROPERTY()
+	float CachedMaxFlySpeed = -1.f;
+
+	UPROPERTY()
+	TEnumAsByte<EMovementMode> CachedMovementMode = MOVE_Walking;
+
+	UPROPERTY()
+	uint8 CachedCustomMovementMode = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
+	float LadderReenterBlockSeconds = 0.35f;
+
+	UPROPERTY()
+	float LastLadderExitTime = -1000.f;
+
+	bool CanExitLadderAtTop() const;
 	void AimOffset(float DeltaTime);
 	void CalculateAO_Pitch();
 	void SimProxiesTurn();
@@ -337,6 +407,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Punishment")
 	bool IsBeingPunished() const { return bBeingPunished; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Death")
+	bool IsOutOfLives() const { return bOutOfLives; }
+
 	/** 카메라 회전이 완료되었는지 확인 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Punishment")
 	bool IsCameraRotationComplete() const { return bCameraRotationComplete; }
@@ -404,6 +477,7 @@ public:
 	UPROPERTY(EditAnywhere)
 	UBoxComponent* foot_r;
 #pragma endregion
+
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 	class UCameraComponent* FollowCamera;
@@ -417,6 +491,9 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	class AWeapon* OverlappingWeapon;
+
+	UPROPERTY(EditAnywhere)
+	class USceneComponent* EffectSocketBody;
 
 	UFUNCTION()
 	void OnRep_OverlappingWeapon(AWeapon* LastWeapon);
@@ -464,6 +541,40 @@ private:
 	UPROPERTY(EditAnywhere, Category = Combat)
 	UAnimMontage* UnCrouchMontage;
 
+	/** 사망 포즈/몽타주 (선택) */
+	UPROPERTY(EditAnywhere, Category = "Death")
+	UAnimMontage* DeathMontage;
+
+	/** 사망 시 이동할 위치를 직접 지정 */
+	UPROPERTY(EditAnywhere, Category = "Death")
+	bool bUseCustomDeathLocation = false;
+
+	/** 사망 위치를 찾기 위한 액터 클래스 */
+	UPROPERTY(EditAnywhere, Category = "Death", meta = (EditCondition = "bUseCustomDeathLocation", EditConditionHides))
+	TSubclassOf<AActor> DeathLocationActorClass;
+
+	UPROPERTY(EditAnywhere, Category = "Death", meta = (EditCondition = "bUseCustomDeathLocation", EditConditionHides))
+	FVector CustomDeathLocation = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "Death", meta = (ClampMin = "0.0"))
+	float DeathFadeOutDuration = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "Death", meta = (ClampMin = "0.0"))
+	float DeathFadeInDuration = 0.2f;
+
+	/** 사망 시 3인칭 카메라 오프셋 (로컬 전용) */
+	UPROPERTY(EditAnywhere, Category = "Death|Camera")
+	bool bUseDeathThirdPersonCamera = true;
+
+	UPROPERTY(EditAnywhere, Category = "Death|Camera")
+	float DeathThirdPersonDistance = 250.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Death|Camera")
+	float DeathThirdPersonHeight = 80.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Death|Camera")
+	float DeathThirdPersonRotationPitch = -15.0f;
+
 	void HideCameraIfCharacterClose();
 	void HideCarriedCameraIfCharacterClose();
 
@@ -492,6 +603,26 @@ private:
 	/** 처벌 시 카메라 회전 처리 */
 	void RotateCameraToPunisher(float DeltaTime);
 
+	void MoveToConveyorEntry();
+
+	/** 사망 몽타주 Notify에서 호출 */
+	UFUNCTION(BlueprintCallable, Category = "Death")
+	void HandleDeathMontageFinished();
+	void HandleDeathFadeOutComplete();
+
+	/** 사망 상태 비주얼을 모든 클라이언트에 적용 */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_HandleOutOfLives();
+
+	UFUNCTION(Client, Reliable)
+	void Client_HandleOutOfLives();
+
+	UFUNCTION()
+	void OnRep_OutOfLives();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_FreezeDeathPose();
+
 	/**
 	 * Update movement speed based on carried parcel weight
 	 */
@@ -502,6 +633,22 @@ private:
 
 	/** Cached original max walk speed for weight calculations */
 	float CachedOriginalMaxWalkSpeed = -1.0f;
+
+	FTimerHandle DeathMontageTimerHandle;
+	FTimerHandle DeathFadeTimerHandle;
+
+	/** 사망 비주얼 적용 중복 방지 */
+	UPROPERTY()
+	bool bOutOfLivesVisualsApplied = false;
+
+	UPROPERTY()
+	bool bCachedDeathCamera = false;
+
+	UPROPERTY()
+	FVector CachedDeathCameraLocation = FVector::ZeroVector;
+
+	UPROPERTY()
+	bool CachedDeathCameraUsePawnControlRotation = true;
 
 	bool bRotateRootBone;
 	float TurnThreshold = 0.5f; // Threshold to start turning in place
@@ -541,6 +688,8 @@ private:
 	class ABlasterPlayerController* BlasterPlayerController;
 
 	bool bElimmed = false;
+
+	bool bDeath = false;
 
 	FTimerHandle ElimTimer;
 
@@ -603,11 +752,17 @@ private:
 	UPROPERTY(EditAnywhere)
 	UParticleSystem* ElimBotEffect;
 
+	UPROPERTY(EditAnywhere)
+	UNiagaraSystem* ElimEffect;
+
 	UPROPERTY(VisibleAnywhere)
 	UParticleSystemComponent* ElimBotComponent;
 
 	UPROPERTY(EditAnywhere)
 	class USoundCue* ElimBotSound;
+
+	UPROPERTY(EditAnywhere)
+	class USoundCue* ElimSound;
 
 	UPROPERTY()
 	class ABlasterPlayerState* BlasterPlayerState;
@@ -648,6 +803,7 @@ public:
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
 	FORCEINLINE bool IsElimmed() const { return bElimmed; }
+	FORCEINLINE bool IsDeath() const { return bDeath; }
 	FORCEINLINE float GetHealth() const { return Health; }
 	FORCEINLINE float SetHealth(float Amount) { return Health = Amount; }
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }

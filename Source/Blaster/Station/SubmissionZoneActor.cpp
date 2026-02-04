@@ -5,6 +5,8 @@
 #include "GameFramework/Actor.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/GameMode/PickpackerGameMode.h"
+#include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/PlayerController/BlasterPlayerController.h"
 
 ASubmissionZoneActor::ASubmissionZoneActor()
 {
@@ -47,6 +49,28 @@ void ASubmissionZoneActor::HandleSubmissionOverlap(
 	if (!HasAuthority())
 	{
 		return;
+	}
+
+	if (bHandleDeadPlayers)
+	{
+		if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(OtherActor))
+		{
+			if (Character->IsOutOfLives())
+			{
+				if (APickpackerGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<APickpackerGameMode>() : nullptr)
+				{
+					if (GameMode->IsGameOverInProgress())
+					{
+						GameMode->RequestReturnToLobby();
+					}
+					else if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(Character->GetController()))
+					{
+						PC->ClientBeginDeathSpectate();
+					}
+				}
+				return;
+			}
+		}
 	}
 
 	AParcelActor* Parcel = Cast<AParcelActor>(OtherActor);

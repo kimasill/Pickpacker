@@ -12,6 +12,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
+#include "Engine/DataTable.h"
 #include "InventoryWidget.generated.h"
 
 class UInventoryItemSlotWidget;
@@ -81,6 +82,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	TSubclassOf<UInventoryItemSlotWidget> ItemSlotWidgetClass;
 
+	/** Parcel tag display table (same row as ParcelHUD) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+	UDataTable* ParcelTagDisplayTable = nullptr;
+
 	/** Maximum number of slots to display */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
 	int32 MaxDisplaySlots = 9;
@@ -116,6 +121,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetItem(AParcelActor* Item, int32 SlotIndex);
 
+	void SetParcelTagDisplayTable(UDataTable* InTable) { ParcelTagDisplayTable = InTable; }
+
 	/**
 	 * Get item
 	 */
@@ -142,6 +149,9 @@ private:
 	/** Item reference */
 	UPROPERTY()
 	TWeakObjectPtr<AParcelActor> Item;
+
+	UPROPERTY()
+	UDataTable* ParcelTagDisplayTable = nullptr;
 
 	/** Slot index */
 	FName SlotActionName;

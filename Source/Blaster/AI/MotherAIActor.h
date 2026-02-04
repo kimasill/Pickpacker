@@ -200,6 +200,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted);
 
+	/** 처벌 강제 종료 (플레이어 사망 등) */
+	UFUNCTION(BlueprintCallable)
+	void StopPunishmentForTarget(class ACharacter* Player);
+
 	UFUNCTION(BlueprintCallable)
 	void OnInspectionEnd();
 public:
@@ -433,6 +437,8 @@ private:
 	/** 카메라 회전 완료 후 처벌 모션 시작 */
 	void StartPunishmentMontage();
 
+	/** 이동 중 정면 문 감지 및 인터랙트 */
+	void TryOpenDoorAhead();
 	
 
 private:
@@ -488,6 +494,30 @@ public:
 
 	// 상태에 따른 속도 적용 헬퍼
 	void ApplySpeedForState(EMotherAIState NewState);
+
+	/** 문 태그 (문 액터에 설정) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Door", meta = (AllowPrivateAccess = "true"))
+	FName DoorActorTag = TEXT("Door");
+
+	/** 문 감지 거리 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Door", meta = (AllowPrivateAccess = "true"))
+	float DoorCheckDistance = 160.0f;
+
+	/** 문 감지 반경 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Door", meta = (AllowPrivateAccess = "true"))
+	float DoorCheckRadius = 40.0f;
+
+	/** 문 인터랙트 쿨다운 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Door", meta = (AllowPrivateAccess = "true"))
+	float DoorInteractCooldown = 0.5f;
+
+	/** 마지막 문 인터랙트 시간 */
+	UPROPERTY()
+	float LastDoorInteractTime = -1000.0f;
+
+	/** 마지막으로 인터랙트한 문 */
+	UPROPERTY()
+	TWeakObjectPtr<AActor> LastDoorInteracted;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
 	int32 InspectionCounter = 5;

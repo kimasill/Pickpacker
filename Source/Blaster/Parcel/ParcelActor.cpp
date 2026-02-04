@@ -36,6 +36,7 @@
 #include "Sound/SoundCue.h"
 #include "Blaster/Gate/GateActor.h"
 #include "Blaster/GameState/PickpackerGameState.h"
+#include "Blaster/Environment/ConveyorBeltActor.h"
 
 AParcelActor::AParcelActor()
 {
@@ -351,8 +352,14 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 	PackageRequiredCount = InRecipe->RequiredCount;
 	if (InRecipe->PackagedMeshes.Num() > 0)
 	{
-		const int32 MeshIndex = FMath::RandRange(0, InRecipe->PackagedMeshes.Num() - 1);
-		PackageMeshAsset = InRecipe->PackagedMeshes[MeshIndex];
+		const int32 ExistingIndex = PackageMeshAsset.IsNull()
+			? INDEX_NONE
+			: InRecipe->PackagedMeshes.IndexOfByKey(PackageMeshAsset);
+		if (ExistingIndex == INDEX_NONE)
+		{
+			const int32 MeshIndex = FMath::RandRange(0, InRecipe->PackagedMeshes.Num() - 1);
+			PackageMeshAsset = InRecipe->PackagedMeshes[MeshIndex];
+		}
 	}
 	else
 	{
@@ -408,6 +415,7 @@ void AParcelActor::UpdatePackagedConfigFromContents()
 	}
 
 	float TotalWeight = 0.0f;
+	int32 TotalUnits = 0;
 	bool bHasStats = false;
 	float MinDurability = 0.0f;
 	float MinInstability = 0.0f;
@@ -427,6 +435,7 @@ void AParcelActor::UpdatePackagedConfigFromContents()
 		}
 
 		TotalWeight += ContentConfig.BaseWeight * Entry.Count;
+		TotalUnits += FMath::Max(1, ContentConfig.PackagingSpaceUnits) * Entry.Count;
 		if (!bHasStats)
 		{
 			MinDurability = ContentConfig.BaseDurability;
@@ -454,6 +463,10 @@ void AParcelActor::UpdatePackagedConfigFromContents()
 	UpdatedConfig.BaseWeight = TotalWeight;
 	UpdatedConfig.BaseDurability = MinDurability;
 	UpdatedConfig.InstabilityFactor = MinInstability;
+	if (TotalUnits > 0)
+	{
+		UpdatedConfig.PackagingSpaceUnits = TotalUnits;
+	}
 	if (ContentTag.IsValid())
 	{
 		UpdatedConfig.ClassificationTag = ContentTag;
@@ -679,6 +692,7 @@ void AParcelActor::Server_RequestDrop_Implementation(FVector Impulse)
 
 	PendingDropper = Cast<ABlasterCharacter>(DroppingCarrier);
 	bPendingDropSuspicion = PendingDropper.IsValid();
+	bImpactDamageEnabled = PendingDropper.IsValid();
 
 	// Detach from character mesh
 	if (DroppingCarrier)
@@ -978,6 +992,32 @@ void AParcelActor::UpdateHUDWidget()
 		// ParcelConfig의 BaseDurability를 최대 내구도로 사용
 		const float MaxDurability = ParcelConfig.BaseDurability > 0.0f ? ParcelConfig.BaseDurability : 100.0f;
 		HUDWidget->UpdateParcelState(CurrentState, ParcelConfig.ParcelTag, ParcelConfig.ClassificationTag, MaxDurability);
+
+		TArray<FText> ContentNames;
+		if (bIsPackageBundle && bIsPackaged && ParcelDataAsset && PackageContents.Num() > 0)
+		{
+			for (const FParcelPackageContent& Content : PackageContents)
+			{
+				if (Content.Count <= 0 || Content.ParcelRowName == NAME_None)
+				{
+					continue;
+				}
+
+				FParcelConfig ContentConfig;
+				FText NameText = FText::FromString(Content.ParcelRowName.ToString());
+				if (ParcelDataAsset->GetParcelConfigByName(Content.ParcelRowName, ContentConfig))
+				{
+					if (!ContentConfig.ParcelName.IsEmpty())
+					{
+						NameText = FText::FromString(ContentConfig.ParcelName);
+					}
+				}
+
+				ContentNames.Add(NameText);
+			}
+		}
+
+		HUDWidget->UpdateContentsList(ContentNames);
 	}
 }
 
@@ -1047,8 +1087,42 @@ void AParcelActor::HandleParcelMeshHit(
 {
 	if (!HasAuthority() || !ParcelStateComponent) return;
 
+	const bool bHitByPlayer = OtherActor && OtherActor->IsA(ABlasterCharacter::StaticClass());
+	const bool bHasDropPending = bPendingDropSuspicion || bImpactDamageEnabled;
+
+	if (bOnConveyor || (OtherActor && OtherActor->IsA(AConveyorBeltActor::StaticClass())))
+	{
+		if (bHasDropPending)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+			bImpactDamageEnabled = false;
+		}
+		return;
+	}
+
+	if (!bHitByPlayer && !bImpactDamageEnabled)
+	{
+		if (bHasDropPending)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+			bImpactDamageEnabled = false;
+		}
+		return;
+	}
+
     const float RawImpulse = NormalImpulse.Size();
-    if (RawImpulse <= KINDA_SMALL_NUMBER) return;
+    if (RawImpulse <= KINDA_SMALL_NUMBER)
+    {
+		if (!bHitByPlayer && bHasDropPending)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+			bImpactDamageEnabled = false;
+		}
+		return;
+    }
 
     if (bIsAttached) return;
 
@@ -1058,7 +1132,16 @@ void AParcelActor::HandleParcelMeshHit(
         (CurrentSpeed < MinImpactSpeedForDamage) &&
         (RawImpulse < MinImpactImpulseForDamage) &&
         CarryPointsComponent->GetOccupiedSocketCount() == 0;
-    if (bBelowMotionThreshold) return;
+    if (bBelowMotionThreshold)
+	{
+		if (!bHitByPlayer && bHasDropPending)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+			bImpactDamageEnabled = false;
+		}
+		return;
+	}
 
     if ((Now - LastImpactTime) < ImpactDamageCooldown) return;
     LastImpactTime = Now;
@@ -1083,11 +1166,25 @@ void AParcelActor::HandleParcelMeshHit(
     // 최종 유효 임펄스: 임계치 차감 후 사용
     const float EffectiveImpact = FMath::Max(0.0f,
         FMath::Min(ClampedImpulse, VelocityWeighted) - MinImpactImpulseForDamage);
-    if (EffectiveImpact <= 0.0f) return;
+    if (EffectiveImpact <= 0.0f)
+	{
+		if (!bHitByPlayer && bHasDropPending)
+		{
+			bPendingDropSuspicion = false;
+			PendingDropper = nullptr;
+			bImpactDamageEnabled = false;
+		}
+		return;
+	}
 
 	const float AppliedDamage = ParcelStateComponent->ApplyImpactDamage(EffectiveImpact, TEXT("Impact"));
 	const float MaxDurability = ParcelConfig.BaseDurability > 0.0f ? ParcelConfig.BaseDurability : 100.0f;
 	const float DamageRatio = MaxDurability > 0.0f ? FMath::Clamp(AppliedDamage / MaxDurability, 0.0f, 1.0f) : 0.0f;
+
+	if (!bHitByPlayer && bImpactDamageEnabled)
+	{
+		bImpactDamageEnabled = false;
+	}
 
 	if (bPendingDropSuspicion)
 	{
@@ -1309,12 +1406,17 @@ void AParcelActor::SetPackaged(bool bPackaged)
 
 void AParcelActor::Destroyed()
 {
-	if (HasAuthority() && bIsPackageBundle && bIsPackaged && !bHasUnpacked)
-	{
-		FTransform ScatterTransform = GetActorTransform();
-		SpawnPackageContents(ScatterTransform, true);
-	}
 	Super::Destroyed();
+}
+
+void AParcelActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (EndPlayReason != EEndPlayReason::Destroyed)
+	{
+		bSkipContentSpawnOnDestroy = true;
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 //-----------------------------------------------
@@ -1413,11 +1515,7 @@ void AParcelActor::SpawnPackageContents(const FTransform& SpawnTransform, bool b
 				{
 					Spawned->SetParcelDataAsset(DataAssetToUse);
 					Spawned->SetParcelDefinitionRowName(RowNameToUse);
-					// UnpackedParcelActor는 BeginPlay에서 자동 초기화됨
-					if (!Spawned->IsA<AUnpackedParcelActor>())
-					{
-						Spawned->ApplyParcelConfigFromDataAsset(true);
-					}
+					Spawned->ApplyParcelConfigFromDataAsset(true);
 				}
 
 				if (bEnableDebugLogging)

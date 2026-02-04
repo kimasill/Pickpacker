@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Spawning/SpawnMarkerBase.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "Components/BoxComponent.h"
 #include "ParcelSpawnMarker.generated.h"
 
 class AParcelActor;
@@ -39,6 +40,10 @@ public:
     AParcelSpawnMarker();
 
     virtual void BeginPlay() override;
+
+	/** 랜덤 스폰 범위 (여러 개 동시 스폰 시 사용) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
+	UBoxComponent* SpawnArea = nullptr;
 
 	/** 스폰에 사용할 파슬 데이터 에셋 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ParcelSpawn")
@@ -82,8 +87,9 @@ protected:
     virtual void OnSpawned(AActor* SpawnedActor) override;
 
 private:
-	AActor* SpawnParcel(FName Row);
+	AActor* SpawnParcel(FName Row, const FTransform& SpawnTransform);
 	bool ChooseParcelCandidate(FName& OutRow, FIntPoint& OutRange) const;
+	FTransform GetSpawnTransform(bool bRandomize) const;
 
     UPROPERTY()
     TArray<TWeakObjectPtr<AActor>> SpawnedActors;

@@ -144,6 +144,8 @@ void ABlasterPlayerState::LoseLife()
 		ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
 		if (BlasterCharacter)
 		{
+			BlasterCharacter->HandleOutOfLives();
+
 			// 모든 드론에게 추격 명령
 			for (TActorIterator<ADroneActor> ActorItr(GetWorld()); ActorItr; ++ActorItr)
 			{
