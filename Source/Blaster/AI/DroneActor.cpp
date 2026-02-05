@@ -103,9 +103,9 @@ void ADroneActor::BeginPlay()
     {
         MovementComponent->SetUpdatedComponent(RootComponent);
         MovementComponent->MaxSpeed = PatrolSpeed;
-        
-        // APawnì˜ AddMovementInputì´ ì‘ë™í•˜ë ¤ë©´ MovementComponentê°€ í•„ìš”í•¨
-        // UFloatingPawnMovementëŠ” ì´ë¯¸ ìƒì„±ë˜ì—ˆìœ¼ë¯€ë¡œ, ì§ì ‘ ì‚¬ìš© ê°€ëŠ¥
+
+        // APawnÀÇ AddMovementInputÀÌ ÀÛµ¿ÇÏ·Á¸é MovementComponent°¡ ÇÊ¿äÇÔ
+        // UFloatingPawnMovement´Â ÀÌ¹Ì »ı¼ºµÇ¾úÀ¸¹Ç·Î, Á÷Á¢ »ç¿ë °¡´É
     }
 
     // Get game state
@@ -115,6 +115,7 @@ void ADroneActor::BeginPlay()
     if (DetectionSphere)
     {
         DetectionSphere->OnComponentBeginOverlap.AddDynamic(this, &ADroneActor::OnDetectionSphereOverlap);
+        DetectionSphere->OnComponentEndOverlap.AddDynamic(this, &ADroneActor::OnDetectionSphereEndOverlap);
     }
 
     // Bind perception updated
@@ -127,7 +128,7 @@ void ADroneActor::BeginPlay()
     {
         InitializeAI();
         
-        // SuspicionManagerì— êµ¬ë…
+        // SuspicionManager??êµ¬ë…
         if (UWorld* World = GetWorld())
         {
             if (UGameInstance* GameInstance = World->GetGameInstance())
@@ -171,7 +172,7 @@ void ADroneActor::Tick(float DeltaTime)
     {
         if (UBlackboardComponent* BlackboardComp = DroneController->FindComponentByClass<UBlackboardComponent>())
         {
-            // ë°°í„°ë¦¬ ë ˆë²¨
+            // ¹èÅÍ¸® ·¹º§
             BlackboardComp->SetValueAsFloat("BatteryLevel", CurrentBatteryLevel);
             BlackboardComp->SetValueAsBool("BatteryLow", IsBatteryLow());
         }
@@ -192,13 +193,12 @@ void ADroneActor::Tick(float DeltaTime)
         }
     }
 
-    // Update detection timer (Behavior Treeì—ì„œë„ ì‚¬ìš© ê°€ëŠ¥í•˜ë„ë¡ ë°ì´í„°ë§Œ ì—…ë°ì´íŠ¸)
+    // Update detection timer
     if (CurrentState == EDroneState::Detecting && DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
     {
         CurrentDetectionTime += DeltaTime;
     }
 
-    // ì‹œì•¼ ì•ˆì˜ í”Œë ˆì´ì–´ì˜ ì˜ì‹¬ í–‰ë™ ìƒíƒœ ì§€ì† ì²´í¬ (tickì—ì„œë§Œ ì²˜ë¦¬)
     CheckVisiblePlayersSuspiciousBehavior(DeltaTime);
 
     DrawPerceptionDebug();
@@ -225,17 +225,17 @@ void ADroneActor::UpdateBlackboard()
     {
         if (UBlackboardComponent* BlackboardComp = DroneController->FindComponentByClass<UBlackboardComponent>())
         {
-            // ë°°í„°ë¦¬ ë ˆë²¨
+            // ¹èÅÍ¸® ·¹º§
             BlackboardComp->SetValueAsFloat("BatteryLevel", CurrentBatteryLevel);
             BlackboardComp->SetValueAsBool("BatteryLow", IsBatteryLow());
             
-            // ì¶©ì „ ì¤‘
+            // ÃæÀü Áß
             BlackboardComp->SetValueAsBool("IsCharging", bIsCharging);
 
-            // ë¬´ê¸° ì‚¬ìš©
+            // ¹«±â »ç¿ë
             BlackboardComp->SetValueAsBool("ShouldUseWeapon", bUseWeapon);
 
-            // ê°ì§€ëœ í”Œë ˆì´ì–´ (ì²« ë²ˆì§¸ í”Œë ˆì´ì–´, í˜¸í™˜ì„± ìœ ì§€)
+            // °¨ÁöµÈ ÇÃ·¹ÀÌ¾î (Ã¹ ¹øÂ° ÇÃ·¹ÀÌ¾î, È£È¯¼º À¯Áö)
             if (DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
             {
                 BlackboardComp->SetValueAsObject("DetectedPlayer", DetectedPlayers[0].Get());
@@ -245,12 +245,12 @@ void ADroneActor::UpdateBlackboard()
                 BlackboardComp->ClearValue("DetectedPlayer");
             }
 
-            // í˜„ì¬ ìˆœì°° í¬ì¸íŠ¸
+            // ÇöÀç ¼øÂû Æ÷ÀÎÆ®
             if (PatrolPoints.IsValidIndex(CurrentPatrolIndex) && PatrolPoints[CurrentPatrolIndex])
             {
                 APatrolPointActor* CurrentPoint = PatrolPoints[CurrentPatrolIndex];
                 BlackboardComp->SetValueAsObject("CurrentPatrolPoint", CurrentPoint);
-                // ìœ„ì¹˜ë„ Vectorë¡œ ì €ì¥ (Move To Taskê°€ ì‚¬ìš©)
+                // À§Ä¡µµ Vector·Î ÀúÀå (Move To Task°¡ »ç¿ë)
                 BlackboardComp->SetValueAsVector("PatrolPointLocation", CurrentPoint->GetActorLocation());
             }
             else
@@ -259,7 +259,7 @@ void ADroneActor::UpdateBlackboard()
                 BlackboardComp->ClearValue("PatrolPointLocation");
             }
 
-            // ì¶©ì „ì¥ì¹˜
+            // ÃæÀüÀåÄ¡
             if (ChargingStation)
             {
                 BlackboardComp->SetValueAsObject("ChargingStation", ChargingStation);
@@ -270,12 +270,10 @@ void ADroneActor::UpdateBlackboard()
 
 void ADroneActor::InitializeAI()
 {
-    // AI Controller ê°€ì ¸ì˜¤ê¸° ë˜ëŠ” ìƒì„±
     AAIController* AIController = Cast<AAIController>(GetController());
 
     if (!AIController)
     {
-        // Controllerê°€ ì—†ìœ¼ë©´ ìƒì„±
         AIController = GetWorld()->SpawnActor<AAIController>(AAIController::StaticClass());
         if (AIController)
         {
@@ -365,7 +363,6 @@ APatrolPointActor* ADroneActor::GetNextPatrolPoint()
         return nullptr;
     }
 
-    // ë‹¤ìŒ ì¸ë±ìŠ¤ ê³„ì‚° (ìˆœí™˜)
     int32 NextIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
 
     if (PatrolPoints.IsValidIndex(NextIndex))
@@ -382,11 +379,8 @@ void ADroneActor::MoveToNextPatrolPoint()
     {
         return;
     }
-
-    // ë‹¤ìŒ ì¸ë±ìŠ¤ë¡œ ì´ë™ (ìˆœí™˜)
     CurrentPatrolIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
 
-    // Blackboard ì—…ë°ì´íŠ¸
     UpdateBlackboard();
 
     UE_LOG(LogTemp, Log, TEXT("[DroneActor] Moved to next patrol point. Index: %d"), CurrentPatrolIndex);
@@ -411,7 +405,7 @@ float ADroneActor::GetCurrentPatrolPointWaitTime() const
     {
         return CurrentPoint->WaitTime;
     }
-    return 2.0f; // ê¸°ë³¸ê°’
+    return 2.0f; // ±âº»°ª
 }
 #pragma endregion
 
@@ -448,13 +442,13 @@ void ADroneActor::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 
     if (Stimulus.WasSuccessfullySensed())
     {
-        // Check line of sight (íˆ¬ì‹œ ë¶ˆê°€ëŠ¥)
+        // Check line of sight
         if (!CanSeePlayer(Character))
         {
             return;
         }
 
-        // Check if player is in detection angle (ì „ë°© 120ë„)
+        // Check if player is in detection angle
         FVector ToPlayer = (Character->GetActorLocation() - GetActorLocation()).GetSafeNormal();
         FVector Forward = GetActorForwardVector();
         float DotProduct = FVector::DotProduct(Forward, ToPlayer);
@@ -466,46 +460,13 @@ void ADroneActor::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
             return;
         }
 
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Player %s detected within line of sight and angle."), *Character->GetName());
-		
-		// í”Œë ˆì´ì–´ë¥¼ ê°ì§€ ëª©ë¡ì— ì¶”ê°€ (ì—¬ëŸ¬ ëª… ê°ì§€ ê°€ëŠ¥)
-        if (CurrentState == EDroneState::Patrol || CurrentState == EDroneState::Returning)
-        {
-            // ì´ë¯¸ ëª©ë¡ì— ìˆëŠ”ì§€ í™•ì¸
-            bool bAlreadyDetected = false;
-            for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
-            {
-                if (Detected.Get() == Character)
-                {
-                    bAlreadyDetected = true;
-                    break;
-                }
-            }
-
-            if (!bAlreadyDetected)
-            {
-                DetectedPlayers.Add(Character);
-                OnPlayerDetected.Broadcast(Character);
-                // ìƒíƒœëŠ” Patrol ìœ ì§€ (Detectingìœ¼ë¡œ ë³€ê²½í•˜ì§€ ì•ŠìŒ)
-                if (DetectedPlayers.Num() == 1)
-                {
-                    CurrentDetectionTime = 0.0f;
-                }
-            }
-        }
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Player %s detected within line of sight and angle."), *Character->GetName());
+        
+        AddDetectedPlayer(Character);
     }
     else
     {
-        // Lost sight - ê°ì§€ ëª©ë¡ì—ì„œ ì œê±°
-        for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
-        {
-            if (DetectedPlayers[i].Get() == Character)
-            {
-                DetectedPlayers.RemoveAt(i);
-                OnPlayerLost.Broadcast(Character);
-                break;
-            }
-        }
+        return;
     }
 }
 
@@ -517,6 +478,57 @@ void ADroneActor::OnDetectionSphereOverlap(UPrimitiveComponent* OverlappedCompon
         FAIStimulus DummyStimulus; // not used, we just reuse logic path
         OnTargetPerceptionUpdated(Character, DummyStimulus);
     }
+}
+
+void ADroneActor::OnDetectionSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+    ACharacter* Character = Cast<ACharacter>(OtherActor);
+    if (!Character)
+    {
+        return;
+    }
+
+    for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
+    {
+        if (DetectedPlayers[i].Get() == Character)
+        {
+            DetectedPlayers.RemoveAt(i);
+            OnPlayerLost.Broadcast(Character);
+            break;
+        }
+    }
+}
+
+void ADroneActor::AddDetectedPlayer(ACharacter* Character)
+{
+    if (!Character)
+    {
+        return;
+    }
+
+    bool bAlreadyDetected = false;
+    for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
+    {
+        if (Detected.Get() == Character)
+        {
+            bAlreadyDetected = true;
+            break;
+        }
+    }
+
+    if (!bAlreadyDetected)
+    {
+        DetectedPlayers.Add(Character);
+        OnPlayerDetected.Broadcast(Character);
+        CurrentDetectionTime = 0.0f;
+    }
+
+    if (CurrentState == EDroneState::Patrol || CurrentState == EDroneState::Detecting)
+    {
+        SetDroneState(EDroneState::Detecting);
+    }
+
+    UpdateBlackboard();
 }
 
 void ADroneActor::AddSuspicion(float Points)
@@ -552,7 +564,7 @@ void ADroneActor::OnAttackCooldownFinished()
 
 void ADroneActor::DrawPerceptionDebug()
 {
-    // ìƒ‰ìƒ ì •ì˜
+    // »ö»ó Á¤ÀÇ
     const FColor SightColor = FColor::Green;
     const FColor LoseSightColor = FColor::Yellow;
     const FColor FOVEdgeColor = FColor::Cyan;
@@ -563,7 +575,7 @@ void ADroneActor::DrawPerceptionDebug()
     const float HalfAngleDeg = SightConfig ? SightConfig->PeripheralVisionAngleDegrees * 0.5f : 0.f;
     const float HalfAngleRad = FMath::DegreesToRadians(HalfAngleDeg);
 
-    // ê¸°ë³¸ ë°˜ê²½
+    // ±âº» ¹İ°æ
     if (SightR > 0.f)
     {
         DrawDebugSphere(GetWorld(), Origin, SightR, 24, SightColor, false, 0.f, 0, 1.f);
@@ -573,21 +585,21 @@ void ADroneActor::DrawPerceptionDebug()
         DrawDebugSphere(GetWorld(), Origin, LoseSightR, 24, LoseSightColor, false, 0.f, 0, 0.5f);
     }
 
-    // FOV ì‹œê°í™”: Forward ê¸°ì¤€ìœ¼ë¡œ ì–‘ìª½ ê²½ê³„ ë²¡í„°
+    // FOV ½Ã°¢È­: Forward ±âÁØÀ¸·Î ¾çÂÊ °æ°è º¤ÅÍ
     const FVector Forward = GetActorForwardVector();
     const FVector Right = GetActorRightVector();
     const FVector Up = FVector::UpVector;
 
-    // ì˜¤ë¥¸ìª½ ê²½ê³„
+    // ¿À¸¥ÂÊ °æ°è
     FVector EdgeRight = (Forward.RotateAngleAxis(HalfAngleDeg, Up)).GetSafeNormal();
-    // ì™¼ìª½ ê²½ê³„
+    // ¿ŞÂÊ °æ°è
     FVector EdgeLeft = (Forward.RotateAngleAxis(-HalfAngleDeg, Up)).GetSafeNormal();
 
     DrawDebugLine(GetWorld(), Origin, Origin + EdgeRight * SightR, FOVEdgeColor, false, 0.f, 0, 1.f);
     DrawDebugLine(GetWorld(), Origin, Origin + EdgeLeft * SightR, FOVEdgeColor, false, 0.f, 0, 1.f);
     DrawDebugLine(GetWorld(), Origin, Origin + Forward * SightR, SightColor, false, 0.f, 0, 1.f);
 
-    // ê°ì§€ëœ í”Œë ˆì´ì–´ í‘œì‹œ
+    // °¨ÁöµÈ ÇÃ·¹ÀÌ¾î Ç¥½Ã
     for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
     {
         if (Detected.IsValid())
@@ -609,7 +621,6 @@ void ADroneActor::OnRep_BatteryLevel(float OldBatteryLevel)
     // Battery level changed
 }
 
-
 bool ADroneActor::CanSeePlayer(ACharacter* Player) const
 {
     if (!Player)
@@ -617,10 +628,10 @@ bool ADroneActor::CanSeePlayer(ACharacter* Player) const
         return false;
     }
 
-    // Line trace to check line of sight (íˆ¬ì‹œ ë¶ˆê°€ëŠ¥)
+    // Line trace to check line of sight (Åõ½Ã ºÒ°¡´É)
     FVector StartLocation = GetActorLocation();
     FVector EndLocation = Player->GetActorLocation();
-    
+
     FHitResult HitResult;
     FCollisionQueryParams QueryParams;
     QueryParams.AddIgnoredActor(this);
@@ -673,8 +684,8 @@ void ADroneActor::FireWeapon(ACharacter* Target)
     if (ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Target))
     {
         // Apply damage through character's damage system
-		UGameplayStatics::ApplyDamage(BlasterCharacter, WeaponDamage, GetController(), this, UDamageType::StaticClass());
-        
+        UGameplayStatics::ApplyDamage(BlasterCharacter, WeaponDamage, GetController(), this, UDamageType::StaticClass());
+
         // Add suspicion
         AddSuspicion(WeaponDamage);
     }
@@ -754,7 +765,7 @@ void ADroneActor::StartChasing(ACharacter* Target)
         return;
     }
 
-    // ê°ì§€ ëª©ë¡ì— ì¶”ê°€ (ì—†ìœ¼ë©´)
+    // °¨Áö ¸ñ·Ï¿¡ Ãß°¡ (¾øÀ¸¸é)
     bool bAlreadyDetected = false;
     for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
     {
@@ -771,7 +782,7 @@ void ADroneActor::StartChasing(ACharacter* Target)
     }
 
     SetDroneState(EDroneState::Chasing);
-    
+
     UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Started chasing player: %s"), *Target->GetName());
 }
 
@@ -783,29 +794,29 @@ void ADroneActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
     }
 
     ABlasterCharacter* BlasterCharacter = EventData.Player;
-    
-    // ì‹œì•¼ ë° ê°ë„ í™•ì¸ (ê³µí†µ ë¡œì§ì€ ProcessPlayerSuspiciousBehaviorì—ì„œ ì²˜ë¦¬)
+
+    // ½Ã¾ß ¹× °¢µµ È®ÀÎ (°øÅë ·ÎÁ÷Àº ProcessPlayerSuspiciousBehavior¿¡¼­ Ã³¸®)
     if (!CanSeePlayer(BlasterCharacter))
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s not in line of sight"), 
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s not in line of sight"),
             *BlasterCharacter->GetName());
         return;
     }
 
-    // Detection angle í™•ì¸
+    // Detection angle È®ÀÎ
     FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
     FVector Forward = GetActorForwardVector();
     float DotProduct = FVector::DotProduct(Forward, ToPlayer);
     float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-    
+
     if (Angle > DetectionAngle * 0.5f)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s outside detection angle"), 
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s outside detection angle"),
             *BlasterCharacter->GetName());
         return;
     }
 
-    // ê³µí†µ ì²˜ë¦¬ í•¨ìˆ˜ í˜¸ì¶œ
+    // °øÅë Ã³¸® ÇÔ¼ö È£Ãâ
     ProcessPlayerSuspiciousBehavior(BlasterCharacter, EventData.Behavior);
 }
 
@@ -816,7 +827,7 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
         return;
     }
 
-    // ì²´í¬ ê°„ê²© í™•ì¸
+    // Ã¼Å© °£°İ È®ÀÎ
     float CurrentTime = GetWorld()->GetTimeSeconds();
     if (CurrentTime - LastSuspiciousBehaviorCheckTime < SuspiciousBehaviorCheckInterval)
     {
@@ -824,14 +835,14 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
     }
     LastSuspiciousBehaviorCheckTime = CurrentTime;
 
-    // SuspicionManagerì—ì„œ í”Œë ˆì´ì–´ ìƒíƒœ í™•ì¸
+    // SuspicionManager¿¡¼­ ÇÃ·¹ÀÌ¾î »óÅÂ È®ÀÎ
     if (UWorld* World = GetWorld())
     {
         if (UGameInstance* GameInstance = World->GetGameInstance())
         {
             if (USuspicionManagerSubsystem* SuspicionManager = GameInstance->GetSubsystem<USuspicionManagerSubsystem>())
             {
-                // ì‹œì•¼ ì•ˆì˜ ëª¨ë“  í”Œë ˆì´ì–´ ì²´í¬
+                // ½Ã¾ß ¾ÈÀÇ ¸ğµç ÇÃ·¹ÀÌ¾î Ã¼Å©
                 if (!PerceptionComp)
                 {
                     return;
@@ -848,13 +859,13 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
                         continue;
                     }
 
-                    // Line of sight í™•ì¸
+                    // Line of sight È®ÀÎ
                     if (!CanSeePlayer(BlasterCharacter))
                     {
                         continue;
                     }
 
-                    // Detection angle í™•ì¸
+                    // Detection angle È®ÀÎ
                     FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
                     FVector Forward = GetActorForwardVector();
                     float DotProduct = FVector::DotProduct(Forward, ToPlayer);
@@ -865,12 +876,12 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
                         continue;
                     }
 
-                    // SuspicionManagerì—ì„œ í”Œë ˆì´ì–´ì˜ í˜„ì¬ ì˜ì‹¬ í–‰ë™ ìƒíƒœ ê°€ì ¸ì˜¤ê¸°
+                    // SuspicionManager¿¡¼­ ÇÃ·¹ÀÌ¾îÀÇ ÇöÀç ÀÇ½É Çàµ¿ »óÅÂ °¡Á®¿À±â
                     ESuspiciousBehavior Behavior = SuspicionManager->GetPlayerSuspiciousBehavior(BlasterCharacter);
-                    
+
                     if (Behavior != ESuspiciousBehavior::None)
                     {
-                        // ê³µí†µ ì²˜ë¦¬ í•¨ìˆ˜ í˜¸ì¶œ
+                        // °øÅë Ã³¸® ÇÔ¼ö È£Ãâ
                         ProcessPlayerSuspiciousBehavior(BlasterCharacter, Behavior);
                     }
                 }
@@ -886,7 +897,7 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
         return;
     }
 
-    // ì‹œì•¼ ë° ê°ë„ í™•ì¸ (ì´ë¯¸ í™•ì¸í–ˆì§€ë§Œ ì•ˆì „ì„ ìœ„í•´ ë‹¤ì‹œ í™•ì¸)
+    // ½Ã¾ß ¹× °¢µµ È®ÀÎ (ÀÌ¹Ì È®ÀÎÇßÁö¸¸ ¾ÈÀüÀ» À§ÇØ ´Ù½Ã È®ÀÎ)
     if (!CanSeePlayer(BlasterCharacter))
     {
         return;
@@ -896,47 +907,51 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
     FVector Forward = GetActorForwardVector();
     float DotProduct = FVector::DotProduct(Forward, ToPlayer);
     float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-    
+
     if (Angle > DetectionAngle * 0.5f)
     {
         return;
     }
 
-    // ì¤‘ë³µ ì²˜ë¦¬ ë°©ì§€: ê°™ì€ í”Œë ˆì´ì–´ì˜ ê°™ì€ í–‰ë™ì„ ì§§ì€ ì‹œê°„ ë‚´ì— ë‹¤ì‹œ ì²˜ë¦¬í•˜ì§€ ì•ŠìŒ
+    // Áßº¹ Ã³¸® ¹æÁö: °°Àº ÇÃ·¹ÀÌ¾îÀÇ °°Àº Çàµ¿À» ÂªÀº ½Ã°£ ³»¿¡ ´Ù½Ã Ã³¸®ÇÏÁö ¾ÊÀ½
     float CurrentTime = GetWorld()->GetTimeSeconds();
     float* LastProcessedTime = LastProcessedSuspicionTime.Find(BlasterCharacter);
     if (LastProcessedTime && (CurrentTime - *LastProcessedTime) < SuspicionProcessCooldown)
     {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Duplicate suspicion processing ignored - Player: %s, Behavior: %s (cooldown: %.2f)"), 
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Duplicate suspicion processing ignored - Player: %s, Behavior: %s (cooldown: %.2f)"),
             *BlasterCharacter->GetName(), *UEnum::GetValueAsString(Behavior), SuspicionProcessCooldown);
         return;
     }
 
-    // ë§ˆì§€ë§‰ ì²˜ë¦¬ ì‹œê°„ ì—…ë°ì´íŠ¸
+    // ¸¶Áö¸· Ã³¸® ½Ã°£ ¾÷µ¥ÀÌÆ®
     LastProcessedSuspicionTime.Add(BlasterCharacter, CurrentTime);
 
-    // ê°œì¸ë³„ ì˜ì‹¬ ìˆ˜ì¹˜ ì¶”ê°€
+    // °³ÀÎº° ÀÇ½É ¼öÄ¡ Ãß°¡
     ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
     if (BlasterPlayerState)
     {
         BlasterPlayerState->AddPersonalSuspicion(50.0f);
-        
-        // ê²½ê³  ì¶œë ¥
+
+        // °æ°í Ãâ·Â
         FString BehaviorName = UEnum::GetValueAsString(Behavior);
-        FString WarningMessage = FString::Printf(TEXT("ê²½ê³ : %sì˜ ì˜ì‹¬ìŠ¤ëŸ¬ìš´ í–‰ë™ì´ ê°ì§€ë˜ì—ˆìŠµë‹ˆë‹¤! (%s, ì˜ì‹¬ ìˆ˜ì¹˜ +50)"), 
-            *BlasterCharacter->GetName(), *BehaviorName);
+        FString WarningMessage = FString::Format(
+            TEXT("°æ°í: {0}ÀÇ ÀÇ½É½º·¯¿î Çàµ¿ÀÌ °¨ÁöµÇ¾ú½À´Ï´Ù! ({1}, ÀÇ½É ¼öÄ¡ +50)"),
+            { BlasterCharacter->GetName(), BehaviorName }
+        );
         UE_LOG(LogTemp, Warning, TEXT("[DroneActor] %s"), *WarningMessage);
-        
-        // ë””ë²„ê·¸ ë¡œê·¸
-        UE_LOG(LogTemp, Log, TEXT("[DroneActor] Suspicion detected - Player: %s, Behavior: %s, Location: %s, Distance: %.2f, Angle: %.2f"), 
-            *BlasterCharacter->GetName(), *BehaviorName, 
+
+        // µğ¹ö±× ·Î±×
+        UE_LOG(LogTemp, Log, TEXT("[DroneActor] Suspicion detected - Player: %s, Behavior: %s, Location: %s, Distance: %.2f, Angle: %.2f"),
+            *BlasterCharacter->GetName(), *BehaviorName,
             *BlasterCharacter->GetActorLocation().ToString(),
             FVector::Dist(GetActorLocation(), BlasterCharacter->GetActorLocation()),
             Angle);
-        
-        // í™”ë©´ ë””ë²„ê·¸ ë©”ì‹œì§€
-        FString Msg = FString::Printf(TEXT("Suspicion Event: Player %s, Behavior %s"), 
-            *BlasterCharacter->GetName(), *UEnum::GetValueAsString(Behavior));
+
+        // È­¸é µğ¹ö±× ¸Ş½ÃÁö
+        FString Msg = FString::Format(
+            TEXT("Suspicion Event: Player {0}, Behavior {1}"),
+            { BlasterCharacter->GetName(), UEnum::GetValueAsString(Behavior) }
+        );
         if (GEngine)
         {
             GEngine->AddOnScreenDebugMessage(
@@ -946,8 +961,8 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
                 Msg
             );
         }
-        
-        // ë§ˆë” AIì—ê²Œ ê²½ê³  ì „ë‹¬
+
+        // ¸¶´õ AI¿¡°Ô °æ°í Àü´Ş
         if (GameState)
         {
             AMotherAIActor* MotherAI = nullptr;

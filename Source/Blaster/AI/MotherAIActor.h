@@ -495,6 +495,20 @@ public:
 	// 상태에 따른 속도 적용 헬퍼
 	void ApplySpeedForState(EMotherAIState NewState);
 
+	FVector GetAvoidanceDirection(const FVector& DesiredDirection) const;
+
+	/** 장애물 회피 체크 거리 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Movement", meta = (AllowPrivateAccess = "true"))
+	float AvoidanceCheckDistance = 150.0f;
+
+	/** 장애물 회피 스윕 반경 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Movement", meta = (AllowPrivateAccess = "true"))
+	float AvoidanceCheckRadius = 35.0f;
+
+	/** 장애물 회피 각도 (도) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Movement", meta = (AllowPrivateAccess = "true"))
+	float AvoidanceAngleDegrees = 45.0f;
+
 	/** 문 태그 (문 액터에 설정) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Door", meta = (AllowPrivateAccess = "true"))
 	FName DoorActorTag = TEXT("Door");

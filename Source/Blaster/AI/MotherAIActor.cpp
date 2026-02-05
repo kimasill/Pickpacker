@@ -173,16 +173,16 @@ void AMotherAIActor::Tick(float DeltaTime)
 		return;
 	}
 
-	TryOpenDoorAhead();
+	//TryOpenDoorAhead();
 
-	// Manage drones periodically
-	static float DroneManageTimer = 0.0f;
-	DroneManageTimer += DeltaTime;
-	if (DroneManageTimer >= 5.0f) // Every 5 seconds
-	{
-		ManageDrones();
-		DroneManageTimer = 0.0f;
-	}
+	//// Manage drones periodically
+	//static float DroneManageTimer = 0.0f;
+	//DroneManageTimer += DeltaTime;
+	//if (DroneManageTimer >= 5.0f) // Every 5 seconds
+	//{
+	//	ManageDrones();
+	//	DroneManageTimer = 0.0f;
+	//}
 }
 
 void AMotherAIActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -697,6 +697,7 @@ void AMotherAIActor::OnPunishmentEnd(UAnimMontage* Montage, bool bInterrupted)
 		{
 			Blackboard->SetValueAsObject(FName("TargetPlayer"), nullptr);
 			// 점검 중이었다면 점검을 계속하기 위해 ShouldInspect는 true로 유지
+			// (OnPunishmentEnd에서 처리)
 			if (bWasInspecting)
 			{
 				// 점검 위치로 복귀하도록 TargetLocation 설정
@@ -968,18 +969,92 @@ void AMotherAIActor::ReturnToControlTower()
 void AMotherAIActor::MoveToLocation(const FVector& TargetLocation, float Speed)
 {
 	FVector CurrentLocation = GetActorLocation();
-	FVector Direction = (TargetLocation - CurrentLocation).GetSafeNormal();
+	FVector DesiredDirection = (TargetLocation - CurrentLocation).GetSafeNormal();
 	float Distance = FVector::Dist(CurrentLocation, TargetLocation);
 
 	if (Distance > 10.0f)
 	{
-		FVector NewLocation = CurrentLocation + Direction * Speed * GetWorld()->GetDeltaSeconds();
+		FVector MoveDirection = GetAvoidanceDirection(DesiredDirection);
+		FVector NewLocation = CurrentLocation + MoveDirection * Speed * GetWorld()->GetDeltaSeconds();
 		SetActorLocation(NewLocation);
 
 		// 목표를 바라보기
-		FRotator LookAtRotation = FRotationMatrix::MakeFromX(Direction).Rotator();
+		FRotator LookAtRotation = FRotationMatrix::MakeFromX(MoveDirection).Rotator();
 		SetActorRotation(LookAtRotation);
 	}
+}
+
+FVector AMotherAIActor::GetAvoidanceDirection(const FVector& DesiredDirection) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return DesiredDirection;
+	}
+
+	const FVector Start = GetActorLocation();
+	const FVector End = Start + DesiredDirection * AvoidanceCheckDistance;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MotherAvoidance), false, this);
+	Params.AddIgnoredActor(this);
+
+	FHitResult ForwardHit;
+	const bool bForwardBlocked = World->SweepSingleByChannel(
+		ForwardHit,
+		Start,
+		End,
+		FQuat::Identity,
+		ECC_Visibility,
+		FCollisionShape::MakeSphere(AvoidanceCheckRadius),
+		Params
+	);
+
+	if (!bForwardBlocked)
+	{
+		return DesiredDirection;
+	}
+
+	const FVector Up = FVector::UpVector;
+	const FVector LeftDirection = DesiredDirection.RotateAngleAxis(-AvoidanceAngleDegrees, Up).GetSafeNormal();
+	const FVector RightDirection = DesiredDirection.RotateAngleAxis(AvoidanceAngleDegrees, Up).GetSafeNormal();
+
+	FHitResult LeftHit;
+	const bool bLeftBlocked = World->SweepSingleByChannel(
+		LeftHit,
+		Start,
+		Start + LeftDirection * AvoidanceCheckDistance,
+		FQuat::Identity,
+		ECC_Visibility,
+		FCollisionShape::MakeSphere(AvoidanceCheckRadius),
+		Params
+	);
+
+	FHitResult RightHit;
+	const bool bRightBlocked = World->SweepSingleByChannel(
+		RightHit,
+		Start,
+		Start + RightDirection * AvoidanceCheckDistance,
+		FQuat::Identity,
+		ECC_Visibility,
+		FCollisionShape::MakeSphere(AvoidanceCheckRadius),
+		Params
+	);
+
+	if (!bLeftBlocked && bRightBlocked)
+	{
+		return LeftDirection;
+	}
+
+	if (!bRightBlocked && bLeftBlocked)
+	{
+		return RightDirection;
+	}
+
+	if (!bLeftBlocked && !bRightBlocked)
+	{
+		return LeftDirection;
+	}
+
+	return DesiredDirection;
 }
 
 bool AMotherAIActor::CanSeePlayer(ACharacter* Player) const

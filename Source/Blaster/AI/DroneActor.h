@@ -291,17 +291,29 @@ protected:
 	UFUNCTION()
 	void OnDetectionSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
+	/**
+	 * Handle leaving the detection sphere
+	 */
+	UFUNCTION()
+	void OnDetectionSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
 		/**
 	 * Check if player can be seen (line of sight check)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Drone")
 	bool CanSeePlayer(class ACharacter* Player) const;
 
-	/**
-	 * Get current battery level (0-100)
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Drone|Battery")
-	float GetBatteryLevel() const { return CurrentBatteryLevel; }
+		bool IsCharacterInSight(class ACharacter* Character) const;
+
+		void RefreshDetectedPlayers();
+
+		void RemoveDetectedPlayer(class ACharacter* Character);
+
+    /**
+     * Get current battery level (0-100)
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Drone|Battery")
+    float GetBatteryLevel() const { return CurrentBatteryLevel; }
 
 	/**
 	 * Check if battery is low
@@ -366,6 +378,8 @@ protected:
 	 * @param Behavior - 의심 행동 타입
 	 */
 	void ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterCharacter, ESuspiciousBehavior Behavior);
+
+	void AddDetectedPlayer(class ACharacter* Character);
 
 	/** 플레이어별 마지막 의심 행동 처리 시간 (중복 방지용) */
 	UPROPERTY()

@@ -231,6 +231,7 @@ void UParcelHUDWidget::UpdateContentsList(const TArray<FText>& Contents)
 	{
 		ContentsListText->SetVisibility(ESlateVisibility::Collapsed);
 		ContentsListText->SetText(FText::GetEmpty());
+		OnParcelContentListUpdated.Broadcast(false);
 		return;
 	}
 
@@ -246,6 +247,7 @@ void UParcelHUDWidget::UpdateContentsList(const TArray<FText>& Contents)
 
 	ContentsListText->SetText(FText::FromString(Combined));
 	ContentsListText->SetVisibility(ESlateVisibility::Visible);
+	OnParcelContentListUpdated.Broadcast(true);
 }
 
 void UParcelHUDWidget::UpdateInstabilityBar(float Instability, float MaxInstability)
@@ -500,5 +502,4 @@ FText UParcelHUDWidget::GetParcelTagText(const FGameplayTag& ParcelTag) const
 	const FString LastPart = GetTagLastPart(ParcelTag);
 	return FText::FromString(LastPart);
 }
-
 

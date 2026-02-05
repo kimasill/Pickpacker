@@ -48,6 +48,8 @@ struct BLASTER_API FParcelHUDStyle
 	FLinearColor BackgroundCriticalTint = FLinearColor(1.0f, 0.1f, 0.1f, 0.28f);
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelContentListUpdated, bool, bListed);
+
 /**
  * Parcel HUD Widget - Displays parcel state information
  */
@@ -132,6 +134,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Parcel HUD")
 	void SetParcelName(const FText& InName);
 
+
 protected:
 	/**
 	 * Get color for durability bar
@@ -164,6 +167,7 @@ protected:
 	 * Extract the last part of a gameplay tag (e.g., "Pickpacker.Parcel.Classification.Standard" -> "Standard")
 	 */
 	FString GetTagLastPart(const FGameplayTag& Tag) const;
+
 
 public:
 	// UI Components
@@ -207,6 +211,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parcel HUD")
 	UDataTable* ParcelTagDisplayTable = nullptr;
+
+
+	UPROPERTY(BlueprintAssignable, Category = "Parcel HUD")
+	FOnParcelContentListUpdated OnParcelContentListUpdated;
 
 protected:
 	// Current parcel state
