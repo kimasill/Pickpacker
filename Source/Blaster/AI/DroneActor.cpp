@@ -199,6 +199,11 @@ void ADroneActor::Tick(float DeltaTime)
         CurrentDetectionTime += DeltaTime;
     }
 
+    if(OverlappedPlayers.Num() > 0)
+    {
+       RefreshDetectedPlayers();
+	}
+
     CheckVisiblePlayersSuspiciousBehavior(DeltaTime);
 
     DrawPerceptionDebug();
@@ -442,30 +447,18 @@ void ADroneActor::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 
     if (Stimulus.WasSuccessfullySensed())
     {
-        // Check line of sight
-        if (!CanSeePlayer(Character))
+        if (!IsCharacterInSight(Character))
         {
-            return;
-        }
-
-        // Check if player is in detection angle
-        FVector ToPlayer = (Character->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-        FVector Forward = GetActorForwardVector();
-        float DotProduct = FVector::DotProduct(Forward, ToPlayer);
-        float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-        
-        if (Angle > DetectionAngle * 0.5f)
-        {
-            // Player is outside detection angle
             return;
         }
 
         UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Player %s detected within line of sight and angle."), *Character->GetName());
-        
+
         AddDetectedPlayer(Character);
     }
     else
     {
+        RemoveDetectedPlayer(Character);
         return;
     }
 }
@@ -474,9 +467,15 @@ void ADroneActor::OnDetectionSphereOverlap(UPrimitiveComponent* OverlappedCompon
 {
     if (ACharacter* Character = Cast<ACharacter>(OtherActor))
     {
-        // Fallback overlap path: mimic perception
-        FAIStimulus DummyStimulus; // not used, we just reuse logic path
-        OnTargetPerceptionUpdated(Character, DummyStimulus);
+		OverlappedPlayers.Add(Character);
+        if (IsCharacterInSight(Character))
+        {
+            AddDetectedPlayer(Character);
+        }
+        else
+        {
+            RemoveDetectedPlayer(Character);
+        }
     }
 }
 
@@ -487,16 +486,9 @@ void ADroneActor::OnDetectionSphereEndOverlap(UPrimitiveComponent* OverlappedCom
     {
         return;
     }
+	OverlappedPlayers.Remove(Character);
 
-    for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
-    {
-        if (DetectedPlayers[i].Get() == Character)
-        {
-            DetectedPlayers.RemoveAt(i);
-            OnPlayerLost.Broadcast(Character);
-            break;
-        }
-    }
+    RemoveDetectedPlayer(Character);
 }
 
 void ADroneActor::AddDetectedPlayer(ACharacter* Character)
@@ -530,6 +522,104 @@ void ADroneActor::AddDetectedPlayer(ACharacter* Character)
 
     UpdateBlackboard();
 }
+
+bool ADroneActor::CanSeePlayer(ACharacter* Player) const
+{
+    if (!Player)
+    {
+        return false;
+    }
+
+    // Line trace to check line of sight (투시 불가능)
+    FVector StartLocation = GetActorLocation();
+    FVector EndLocation = Player->GetActorLocation();
+
+    FHitResult HitResult;
+    FCollisionQueryParams QueryParams;
+    QueryParams.AddIgnoredActor(this);
+    QueryParams.AddIgnoredActor(Player);
+    QueryParams.bTraceComplex = true;
+
+    bool bHit = GetWorld()->LineTraceSingleByChannel(
+        HitResult,
+        StartLocation,
+        EndLocation,
+        ECC_Visibility,
+        QueryParams
+    );
+
+    // If hit something, player is obstructed
+    return !bHit;
+}
+
+void ADroneActor::RemoveDetectedPlayer(ACharacter* Character)
+{
+    if (!Character)
+    {
+        return;
+    }
+
+    for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
+    {
+        if (DetectedPlayers[i].Get() == Character)
+        {
+            DetectedPlayers.RemoveAt(i);
+            OnPlayerLost.Broadcast(Character);
+            UpdateBlackboard();
+            break;
+        }
+    }
+}
+
+void ADroneActor::RefreshDetectedPlayers()
+{
+    if (!bIsActive || !HasAuthority() || !DetectionSphere)
+    {
+        return;
+    }
+
+    TArray<AActor*> OverlappingActors;
+    DetectionSphere->GetOverlappingActors(OverlappingActors, ACharacter::StaticClass());
+
+    TSet<ACharacter*> VisibleCharacters;
+    for (AActor* Actor : OverlappingActors)
+    {
+        ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(Actor);
+        if (!BlasterCharacter)
+        {
+            continue;
+        }
+
+        if (IsCharacterInSight(BlasterCharacter))
+        {
+            VisibleCharacters.Add(BlasterCharacter);
+        }
+    }
+
+    for (int32 i = DetectedPlayers.Num() - 1; i >= 0; --i)
+    {
+        ACharacter* Character = DetectedPlayers[i].Get();
+        if (!Character)
+        {
+            DetectedPlayers.RemoveAt(i);
+            continue;
+        }
+
+        if (!VisibleCharacters.Contains(Character))
+        {
+            DetectedPlayers.RemoveAt(i);
+            OnPlayerLost.Broadcast(Character);
+            UpdateBlackboard();
+        }
+    }
+
+    for (ACharacter* Character : VisibleCharacters)
+    {
+        AddDetectedPlayer(Character);
+    }
+}
+
+#pragma region Suspicion
 
 void ADroneActor::AddSuspicion(float Points)
 {
@@ -621,33 +711,25 @@ void ADroneActor::OnRep_BatteryLevel(float OldBatteryLevel)
     // Battery level changed
 }
 
-bool ADroneActor::CanSeePlayer(ACharacter* Player) const
+bool ADroneActor::IsCharacterInSight(ACharacter* Character) const
 {
-    if (!Player)
+    if (!Character)
     {
         return false;
     }
 
-    // Line trace to check line of sight (투시 불가능)
-    FVector StartLocation = GetActorLocation();
-    FVector EndLocation = Player->GetActorLocation();
+    if (!CanSeePlayer(Character))
+    {
+        return false;
+    }
 
-    FHitResult HitResult;
-    FCollisionQueryParams QueryParams;
-    QueryParams.AddIgnoredActor(this);
-    QueryParams.AddIgnoredActor(Player);
-    QueryParams.bTraceComplex = true;
+    FVector ToPlayer = (Character->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+    FVector Forward = GetActorForwardVector();
+    float DotProduct = FVector::DotProduct(Forward, ToPlayer);
+    float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
 
-    bool bHit = GetWorld()->LineTraceSingleByChannel(
-        HitResult,
-        StartLocation,
-        EndLocation,
-        ECC_Visibility,
-        QueryParams
-    );
 
-    // If hit something, player is obstructed
-    return !bHit;
+    return Angle <= DetectionAngle * 0.5f;
 }
 
 void ADroneActor::StartCharging()
@@ -795,26 +877,6 @@ void ADroneActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
 
     ABlasterCharacter* BlasterCharacter = EventData.Player;
 
-    // 시야 및 각도 확인 (공통 로직은 ProcessPlayerSuspiciousBehavior에서 처리)
-    if (!CanSeePlayer(BlasterCharacter))
-    {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s not in line of sight"),
-            *BlasterCharacter->GetName());
-        return;
-    }
-
-    // Detection angle 확인
-    FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-    FVector Forward = GetActorForwardVector();
-    float DotProduct = FVector::DotProduct(Forward, ToPlayer);
-    float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-
-    if (Angle > DetectionAngle * 0.5f)
-    {
-        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion event received but player %s outside detection angle"),
-            *BlasterCharacter->GetName());
-        return;
-    }
 
     // 공통 처리 함수 호출
     ProcessPlayerSuspiciousBehavior(BlasterCharacter, EventData.Behavior);
@@ -859,22 +921,11 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
                         continue;
                     }
 
-                    // Line of sight 확인
-                    if (!CanSeePlayer(BlasterCharacter))
-                    {
+                    if(!IsCharacterInSight(BlasterCharacter)) {
+                        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion check ignored - Player: %s not in line of sight"),
+							*BlasterCharacter->GetName());
                         continue;
-                    }
-
-                    // Detection angle 확인
-                    FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-                    FVector Forward = GetActorForwardVector();
-                    float DotProduct = FVector::DotProduct(Forward, ToPlayer);
-                    float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-                    
-                    if (Angle > DetectionAngle * 0.5f)
-                    {
-                        continue;
-                    }
+					}
 
                     // SuspicionManager에서 플레이어의 현재 의심 행동 상태 가져오기
                     ESuspiciousBehavior Behavior = SuspicionManager->GetPlayerSuspiciousBehavior(BlasterCharacter);
@@ -897,20 +948,10 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
         return;
     }
 
-    // 시야 및 각도 확인 (이미 확인했지만 안전을 위해 다시 확인)
-    if (!CanSeePlayer(BlasterCharacter))
-    {
-        return;
-    }
-
-    FVector ToPlayer = (BlasterCharacter->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-    FVector Forward = GetActorForwardVector();
-    float DotProduct = FVector::DotProduct(Forward, ToPlayer);
-    float Angle = FMath::RadiansToDegrees(FMath::Acos(DotProduct));
-
-    if (Angle > DetectionAngle * 0.5f)
-    {
-        return;
+    if (!IsCharacterInSight(BlasterCharacter)) {
+        UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion processing ignored - Player: %s not in line of sight"),
+            *BlasterCharacter->GetName());
+			return;
     }
 
     // 중복 처리 방지: 같은 플레이어의 같은 행동을 짧은 시간 내에 다시 처리하지 않음
@@ -940,12 +981,6 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
         );
         UE_LOG(LogTemp, Warning, TEXT("[DroneActor] %s"), *WarningMessage);
 
-        // 디버그 로그
-        UE_LOG(LogTemp, Log, TEXT("[DroneActor] Suspicion detected - Player: %s, Behavior: %s, Location: %s, Distance: %.2f, Angle: %.2f"),
-            *BlasterCharacter->GetName(), *BehaviorName,
-            *BlasterCharacter->GetActorLocation().ToString(),
-            FVector::Dist(GetActorLocation(), BlasterCharacter->GetActorLocation()),
-            Angle);
 
         // 화면 디버그 메시지
         FString Msg = FString::Format(

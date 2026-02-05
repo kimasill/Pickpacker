@@ -197,7 +197,7 @@ void AParcelActor::BeginPlay()
 
 	if (bEnableDebugLogging)
 	{
-		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Initialized - Classification: %s, Location: %s"),
+		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Initialize~12=-098d - Classification: %s, Location: %s"),
 			*ParcelConfig.ClassificationTag.ToString(), *GetActorLocation().ToString());
 	}
 }

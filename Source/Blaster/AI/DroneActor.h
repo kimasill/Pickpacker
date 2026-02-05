@@ -303,11 +303,11 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Drone")
 	bool CanSeePlayer(class ACharacter* Player) const;
 
-		bool IsCharacterInSight(class ACharacter* Character) const;
+	bool IsCharacterInSight(class ACharacter* Character) const;
 
-		void RefreshDetectedPlayers();
+	void RefreshDetectedPlayers();
 
-		void RemoveDetectedPlayer(class ACharacter* Character);
+	void RemoveDetectedPlayer(class ACharacter* Character);
 
     /**
      * Get current battery level (0-100)
@@ -418,6 +418,9 @@ private:
 	/** Detected players (여러 명 감지 가능) */
 	UPROPERTY(Replicated)
 	TArray<TWeakObjectPtr<class ACharacter>> DetectedPlayers;
+
+	UPROPERTY()
+	TArray<TWeakObjectPtr<class ACharacter>> OverlappedPlayers;
 
 	/** Detection timer */
 	UPROPERTY()
