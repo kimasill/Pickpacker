@@ -15,6 +15,8 @@
 
 링크 · [프로젝트 페이지](https://kimasill.github.io/projects/pickpacker.html) · [진행·구조 (pickpacker-process)](https://kimasill.github.io/projects/pickpacker-process.html) · [웹 포트폴리오](https://kimasill.github.io/)
 
+> UE5 기반 협동 멀티플레이 **Pickpacker** 소스 레포지토리입니다. 서버 권한·복제를 축으로 한 핵심 구현과 코드 위치를 아래에 개조식으로 정리합니다.
+
 ### Overview
 
 | 항목 | 내용 |
@@ -25,8 +27,8 @@
 
 ### Role
 
-- 게임 플레이 루프·상호작용·시네마틱·인벤토리·AI·멀티플레이(Online Subsystem 세션).
-- 주문·레시피·배치 규칙을 데이터 중심으로 정리, 콘텐츠 확장 시 코드 수정 최소화.
+- 게임 플레이 루프·상호작용·시네마틱·인벤토리·AI·멀티플레이(Online Subsystem 세션) 담당
+- 주문·레시피·배치 규칙을 데이터 중심으로 정리, 콘텐츠 확장 시 코드 수정 최소화
 
 ---
 
@@ -34,7 +36,8 @@
 
 ### 1. GameFlow – 게임 진행 흐름에서 스트리밍 먼저 고정
 
-에디터와 달리 패키지 빌드에서 스트리밍 레벨이 늦게 붙으면 매치 시작 시점에 액터 참조가 비어 크래시 등 각종 문제가 발생했다. 서버 권한(`HasAuthority`)에서 `SetShouldBeLoaded`·`SetShouldBeVisible` 후 `FlushLevelStreaming`으로 반영해, 레벨이 실제로 붙은 뒤에만 이후 로직을 시작하게 했다.
+- **문제**: 패키지 빌드에서 스트리밍 레벨 지연 시 매치 시작 시점 액터 참조 공백·크래시 등 발생
+- **대응**: `HasAuthority`에서 `SetShouldBeLoaded` / `SetShouldBeVisible` 후 `FlushLevelStreaming`으로 로드 완료 보장 뒤 후속 로직 진행
 
 > 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L61-L72) — 스트리밍 레벨 선행 로드
 
@@ -53,13 +56,8 @@ UGameplayStatics::FlushLevelStreaming(World);
 
 ### 2. GameMode & GameState – 주문·크레딧 서버 권한
 
-태그·수량·포장 조건과 서버 `GameState`가 어긋나면 협동 주문이 클라 추측에만 의존한다.
-
-크레딧·이력이 팀원마다 다르면 협동 목표와 게임오버 판정도 함께 흔들린다.
-
-활성 주문 소모는 서버에서만 적용하고 완료 시 `HandleOrderSuccess` 후 `SyncOrdersToGameState`로 반영했다. 크레딧·이력도 서버 델타만 `CreditHistory`·`OnCreditsChanged`로 맞춘다.
-
-멀티플레이 구현에서 각자 상태를 처리하고 동기화 하는것보다 서버에 요청하는 구조로 작동하는게 디버깅 비용이 적었다. 팀원 간 주문·잔액 불일치도 결국 `GameState` 한곳만 보면 원인이 드러났다.
+- **문제**: 주문·크레딧이 서버 `GameState`와 어긋나면 협동 목표·게임오버 판정 흔들림
+- **대응**: 주문 소모·완료는 서버 전용, `HandleOrderSuccess` → `SyncOrdersToGameState`, 크레딧·이력은 서버 델타·`CreditHistory` 등으로 일원화, 디버깅은 `GameState` 중심으로 수렴
 
 > 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L988-L998) — 주문 수량 판정 + 완료 처리
 
@@ -101,9 +99,8 @@ void APickpackerGameMode::SyncOrdersToGameState()
 
 <img src="https://kimasill.github.io/images/Pickpacker/상호작용.png" alt="Pickpacker 상호작용" width="640" />
 
-Parcel이 카메라 앞을 가리면 타깃이 안 잡히고, 클라이언트를 기반으로 상호작용을 진행하면 서버와 어긋나 유실·중복처럼 보인다. 이런식으로 특히 상호작용 부분에서 서버와 클라이언트 상태가 다르게 동작하는 부분이 많았다.
-
-`CarriedParcel`과 부착 부모를 `AddIgnoredActor`로 트레이스에서 빼고, 권한이 없으면 `Server_CollectItem`으로 보내 `CollectedItems`는 서버에서만 갱신하게 했다.
+- **문제**: Parcel 가림·클라 선행 상호작용 시 서버와 불일치, 유실·중복 체감
+- **대응**: `CarriedParcel`·부착 부모를 `AddIgnoredActor`로 트레이스 제외, 비권한 시 `Server_CollectItem`, `CollectedItems`는 서버에서만 갱신
 
 > 📄 [`Source/Blaster/Components/InteractionComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/InteractionComponent.cpp#L265-L278) — 트레이스 보정
 
@@ -139,7 +136,8 @@ Item->SetActorHiddenInGame(true);
 
 ### 4. AI – BT·블랙보드 일원화·순찰 클램프
 
-BT·블랙보드 초기화가 제각각이면 AI를 추가할 때마다 세팅 누락으로 깨진다. 초기화 문제로 순찰 지점이 지정된 순찰 박스 밖으로 나가면 내비 실패 → 유닛 정체 → 프레임 저하로 이어진다. `RunBehaviorTreeWithBlackboard`로 블랙보드를 주입한 뒤 BT를 시작하고, 순찰은 박스 내 랜덤 샘플 후 최소·최대 반경으로 클램프해서 이 두 가지를 같이 최적화했다.
+- **문제**: BT/BB 초기화 분산 시 유닛 추가 시 세팅 누락, 순찰 박스 이탈 시 내비 실패·정체·프레임 저하
+- **대응**: `RunBehaviorTreeWithBlackboard`로 BB 주입 후 BT 시작, 순찰은 박스 내 샘플·반경 클램프로 안정화
 
 > 📄 [`Source/Blaster/AI/PPAIControllerBase.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/AI/PPAIControllerBase.cpp#L21-L49) — `RunBehaviorTreeWithBlackboard`
 
@@ -170,11 +168,8 @@ bool APPAIControllerBase::RunBehaviorTreeWithBlackboard(UBehaviorTree* BTAsset, 
 
 ### 5. Escape & Ending – 플래그 변동 시 엔딩 재평가
 
-월드 플래그나 탈출 인원이 바뀐 뒤 엔딩을 다시 평가하지 않으면 조건을 채워도 분기가 빠진다.
-
-탈출 조건을 만족해도 엔딩 실행이 되지 않으면 세션 전체가 마비된다.
-
-`SetWorldFlag`·승인 플레이어 갱신 시 `EvaluateEndings`를 호출하고 `EndingData`를 `IsEndingConditionMet`로 순회했다. 엔딩을 데이터 에셋으로 빼 두면 기획·밸런스 수정 때 코드 재컴파일을 줄이기 편할것이라고 생각했다.
+- **문제**: 월드 플래그·탈출 인원 변화 후 엔딩 미재평가 시 조건 충족에도 분기 누락·세션 정체
+- **대응**: `SetWorldFlag`·승인 플레이어 갱신 시 `EvaluateEndings`, `UDA_EndingData`로 조건 분기·기획 변경 비용 감소
 
 > 📄 [`Source/Blaster/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/EscapeProgressComponent.cpp#L79-L99) — `SetWorldFlag` → `EvaluateEndings`
 
@@ -224,9 +219,8 @@ void UEscapeProgressComponent::EvaluateEndings()
 
 ### 6. Multiplayer Sessions – LAN·온라인 세션 분기 한곳에
 
-LAN·온라인에서 세션 설정·검색 쿼리가 달라 분기가 흩어지면, 친구 방이 안 보이는 식으로 멀티 자체가 동작하지 않았다.
-
-`bIsLANMatch`·`bIsLanQuery`로 로컬 서브시스템을 구분하고 `SEARCH_LOBBIES` / `SEARCH_PRESENCE`를 전처리 분기로 맞춰 플랫폼별 예외를 세션 모듈 한곳에 모았다.
+- **문제**: LAN/온라인 세션 설정·검색 쿼리 분기 분산 시 방 검색 실패 등 멀티 미동작
+- **대응**: `bIsLANMatch`·`bIsLanQuery`로 NULL 서브시스템 구분, `SEARCH_LOBBIES` / `SEARCH_PRESENCE` 전처리 분기를 세션 서브시스템에 집중
 
 > 📄 [`Plugins/MultiplayerSessions/.../MultiplayerSessionsSubsystem.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Plugins/MultiplayerSessions/Source/MultiplayerSessions/Private/MultiplayerSessionsSubsystem.cpp#L77) — 세션 생성 LAN 분기
 
@@ -262,11 +256,10 @@ LastSessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName() == 
 
 *씬 캡처 틱·빈도 조정 후*
 
-- **프로파일링·측정** — GPU 약 **9 ms** 수준. 드로우 콜 과다로 CPU 병목 시 FPS **약 25**까지 하락(개발 빌드·프로파일러).
-- **HISM·씬 캡처** — 정적 메시 HISM 병합으로 평균 FPS **약 43**까지 상승. 병목은 Scene Capture 과다 호출로 판정.  
-  매 프레임 캡처 → 이동 시만 캡처로 전환, 드로우 콜 **약 10,518 → 4,600**, FPS **약 94**.  
-  루멘 설정과 라이팅 최적화 조정 후 드로우 콜 **약 3,200**(초기 **약 11,061** 대비 **약 71%** 감소), Prims **약 400K**, FPS **약 100** 부근.  
-- **상호작용** — Parcel이 시야를 가리는 등 예외를 트레이스·채널 설계에 반영.
+- **프로파일링·측정**: GPU 약 **9 ms** 수준, 드로우 콜 과다 시 CPU 병목·FPS **약 25**까지 하락(개발 빌드·프로파일러)
+- **HISM·씬 캡처**: HISM 병합으로 FPS **약 43**까지 상승 → Scene Capture 과다가 병목으로 판정 → 이동 시에만 캡처로 전환, 드로우 콜 **약 10,518 → 4,600**, FPS **약 94**
+- **추가 튜닝**: 루멘·라이팅 조정 후 드로우 콜 **약 3,200**(초기 **약 11,061** 대비 **약 71%** 감소), Prims **약 400K**, FPS **약 100** 부근
+- **상호작용**: Parcel 가림 등은 트레이스·채널 설계에 반영 (위 Interaction 섹션과 연계)
 
 | 최적화 단계 (요약) | FPS (대략) | Draw Calls | Prims |
 | --- | --- | --- | --- |
@@ -277,15 +270,15 @@ LastSessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName() == 
 
 ## Result
 
-- 서버 권한·복제 기준으로 루프 전체가 연결된 협동 게임임을 보여 줌.
+- 서버 권한·복제 기준으로 루프가 연결된 협동 멀티플레이 구조를 코드로 확인 가능
 
 ---
 
 ## Getting Started
 
-이 레포는 UE5 프로젝트입니다.
+UE5 프로젝트입니다.
 
-1. Unreal Editor에서 프로젝트를 열고 실행합니다.
-2. 온라인 세션은 Online Subsystem 설정(플러그인/플랫폼)에 따라 동작합니다.
+1. Unreal Editor에서 프로젝트를 연 뒤 실행합니다.
+2. 온라인 세션은 Online Subsystem·플랫폼 설정에 따라 동작이 달라질 수 있습니다.
 
-> 실행 절차는 개발 환경(에디터/패키징/Steam)별로 달라, 추후 `docs/`로 분리해 보강할 예정입니다.
+> 상세 실행 절차(패키징·Steam 등)는 환경별로 다르므로, 필요 시 `docs/`로 보강 예정입니다.
