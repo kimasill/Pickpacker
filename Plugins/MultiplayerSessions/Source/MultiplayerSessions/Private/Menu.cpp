@@ -4,25 +4,33 @@
 #include "Menu.h"
 #include "OnlineSessionSettings.h"
 #include "OnlineSubsystem.h"
+#if WITH_EDITOR
+#include "UnrealEdMisc.h"
+#endif
+#include "Engine/LocalPlayer.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "Engine/NetDriver.h"
 #include "GameFramework/GameModeBase.h"
 #include "UObject/Class.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-// Debug logging (NDJSON) for run-pre3
-#define DEBUG_LOG_PATH TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log")
+// Debug logging: Saved/Logs/BlasterDebug.log (개발·패키징 빌드 공통)
+static FString GetDebugLogPath() { return FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log"); }
 // #region agent log
 static void MenuWriteDebugLog(const FString& Location, const FString& Message, const FString& DataJson, const FString& HypothesisId, const FString& RunId)
 {
+#if !UE_BUILD_SHIPPING
 	const int64 Ms = FDateTime::UtcNow().ToUnixTimestamp() * 1000 + FDateTime::UtcNow().GetMillisecond();
 	const FString Line = FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"%s\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"%s\",\"data\":%s,\"timestamp\":%lld}\n"),
 		*RunId, *HypothesisId, *Location, *Message, *DataJson, Ms);
-	FFileHelper::SaveStringToFile(Line, DEBUG_LOG_PATH, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+#endif
 }
 // #endregion
 
@@ -40,7 +48,8 @@ UMultiplayerSessionsSubsystem* UMenu::EnsureMultiplayerSubsystem()
 
 void UMenu::MenuSetup(int32 NumberOfPublicConnections, FString TypeOfMatch, FString LobbyPath)
 {
-	PathToLobby = LobbyPath;
+	// 참조: PathToLobby에 ?listen 보장 (ServerTravel에 필요)
+	PathToLobby = LobbyPath.Contains(TEXT("?listen")) ? LobbyPath : FString::Printf(TEXT("%s?listen"), *LobbyPath.TrimEnd());
 	NumPublicConnections = NumberOfPublicConnections;
 	MatchType = TypeOfMatch;
 	AddToViewport();
@@ -96,9 +105,10 @@ void UMenu::OnCreateSession(bool bWasSuccessful)
 		return;
 	}
 
-	if (bWasSuccessful)
+		if (bWasSuccessful)
 	{
 		bHasHandledCreateSessionSuccess = true;
+#if !UE_BUILD_SHIPPING
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(
@@ -108,27 +118,25 @@ void UMenu::OnCreateSession(bool bWasSuccessful)
 				FString(TEXT("Session Created Successfully!"))
 			);
 		}
+#endif
 		UWorld* World = GetWorld();
 		if (World)
 		{
-			// 클라이언트 넷 모드에서도 자신이 리슨 서버가 되도록 OpenLevel + listen 사용
+#if WITH_EDITOR
+			// 패키징/쿡 중 ServerTravel 호출 시 "Server travel should never create a pending net game" 에러 방지
+			if (IsRunningCommandlet() || IsRunningCookCommandlet())
+			{
+				return;
+			}
+#endif
 			FString TargetPath = PathToLobby;
-
-			// ?listen 제거 후 맵 경로/이름 준비
+			if (TargetPath.IsEmpty()) TargetPath = TEXT("/Game/Maps/Lobby?listen");
 			FString CleanPath = TargetPath;
 			CleanPath.RemoveFromEnd(TEXT("?listen"));
-			MenuWriteDebugLog(
-				TEXT("Menu.cpp:OnCreateSession"),
-				TEXT("OpenLevel"),
-				FString::Printf(TEXT("{\"map\":\"%s\",\"netMode\":%d,\"hasAuthority\":%s}"),
-					*CleanPath,
-					static_cast<int32>(World->GetNetMode()),
-					World->IsNetMode(NM_Client) ? TEXT("false") : TEXT("true")),
-				TEXT("H2"),
-				TEXT("run-pre3"));
-
-			const FString TravelURL = FString::Printf(TEXT("%s?listen"), *CleanPath);			
-			UGameplayStatics::OpenLevel(this, FName(*CleanPath), true, "listen");
+			CleanPath.TrimStartAndEndInline();
+			if (CleanPath.IsEmpty()) CleanPath = TEXT("/Game/Maps/Lobby");
+			const FString TravelURL = FString::Printf(TEXT("%s?listen"), *CleanPath);
+			World->ServerTravel(TravelURL);
 		}
 	}
 	else
@@ -139,6 +147,7 @@ void UMenu::OnCreateSession(bool bWasSuccessful)
 			TEXT("{}"),
 			TEXT("H1"),
 			TEXT("run-pre3"));
+#if !UE_BUILD_SHIPPING
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(
@@ -148,6 +157,7 @@ void UMenu::OnCreateSession(bool bWasSuccessful)
 				FString(TEXT("Failed to Create Session!"))
 			);
 		}
+#endif
 	}
 
 	// 버튼 상태 관리는 블루프린트에서 처리
@@ -201,7 +211,7 @@ void UMenu::OnFindSessions(const TArray<FOnlineSessionSearchResult>& SessionResu
 			const FString Line = FString::Printf(
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H1\",\"location\":\"Menu.cpp:OnFindSessions\",\"message\":\"FindSessions empty or fail\",\"data\":{\"count\":%d,\"success\":%s},\"timestamp\":%lld}\n"),
 				SessionResults.Num(), bWasSuccessful ? TEXT("true") : TEXT("false"), Ms);
-			FFileHelper::SaveStringToFile(Line, DEBUG_LOG_PATH, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 		}
 		// #endregion
 		return;
@@ -214,7 +224,7 @@ void UMenu::OnFindSessions(const TArray<FOnlineSessionSearchResult>& SessionResu
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H1\",\"location\":\"Menu.cpp:OnFindSessions\",\"message\":\"FindSessions results\",\"data\":{\"count\":%d,\"firstVisibility\":%d},\"timestamp\":%lld}\n"),
 			LastSessionInfos.Num(), FirstVisibility, Ms);
-		FFileHelper::SaveStringToFile(Line, DEBUG_LOG_PATH, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 	OnSessionListUpdated(LastSessionInfos);
@@ -222,62 +232,94 @@ void UMenu::OnFindSessions(const TArray<FOnlineSessionSearchResult>& SessionResu
 
 void UMenu::OnJoinSession(EOnJoinSessionCompleteResult::Type Result)
 {
-	if(Result != EOnJoinSessionCompleteResult::Success)
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] OnJoinSession entry: Result=%d (%s)"),
+		static_cast<int32>(Result),
+		Result == EOnJoinSessionCompleteResult::Success ? TEXT("Success") :
+		Result == EOnJoinSessionCompleteResult::SessionIsFull ? TEXT("SessionIsFull") :
+		Result == EOnJoinSessionCompleteResult::SessionDoesNotExist ? TEXT("SessionDoesNotExist") :
+		Result == EOnJoinSessionCompleteResult::CouldNotRetrieveAddress ? TEXT("CouldNotRetrieveAddress") :
+		Result == EOnJoinSessionCompleteResult::AlreadyInSession ? TEXT("AlreadyInSession") : TEXT("UnknownError"));
+	// #endregion
+
+	if (Result != EOnJoinSessionCompleteResult::Success)
 	{
-		// 버튼 상태 관리는 블루프린트에서 처리
-		// 조인 실패 이벤트를 블루프린트에 알릴 수 있음 (선택사항)
+		FString ErrorMsg;
+		switch (Result)
+		{
+		case EOnJoinSessionCompleteResult::SessionIsFull: ErrorMsg = TEXT("방이 가득 찼습니다."); break;
+		case EOnJoinSessionCompleteResult::SessionDoesNotExist: ErrorMsg = TEXT("세션이 더 이상 존재하지 않습니다."); break;
+		case EOnJoinSessionCompleteResult::CouldNotRetrieveAddress: ErrorMsg = TEXT("연결 주소를 가져올 수 없습니다. (Steam/방화벽 확인)"); break;
+		case EOnJoinSessionCompleteResult::AlreadyInSession: ErrorMsg = TEXT("이미 세션에 있습니다."); break;
+		case EOnJoinSessionCompleteResult::UnknownError:
+		default: ErrorMsg = TEXT("참가 실패. (빌드 버전/Steam 설정 확인)"); break;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession FAILED: %s (Result=%d)"), *ErrorMsg, static_cast<int32>(Result));
+#if !UE_BUILD_SHIPPING
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				15.f,
-				FColor::Red,
-				FString(TEXT("Failed to join session."))
-			);
+			GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red, ErrorMsg);
 		}
+#endif
 		return;
 	}
 
+	// Steam 세션 기반: GetResolvedConnectString(steam.xxx) 우선 - NetDriver가 SteamNetDriver여야 함
+	// IP 우선은 임시방편(LAN만 가능) - Steam NAT/P2P 이점 손실
+	FString Address;
 	IOnlineSubsystem* Subsystem = MultiplayerSessionsSubsystem ? MultiplayerSessionsSubsystem->GetOnlineSubsystem() : IOnlineSubsystem::Get();
 	if (Subsystem)
 	{
 		IOnlineSessionPtr SessionInterface = Subsystem->GetSessionInterface();
 		if (SessionInterface.IsValid())
 		{
-			FString Address;
-			if (SessionInterface->GetResolvedConnectString(NAME_GameSession, Address))
-			{
-				APlayerController* PlayerController = GetGameInstance()->GetFirstLocalPlayerController();
-				if (PlayerController)
-				{
-					PlayerController->ClientTravel(Address, ETravelType::TRAVEL_Absolute);
-				}
-			}
-			else
-			{
-				if (GEngine)
-				{
-					GEngine->AddOnScreenDebugMessage(
-						-1,
-						15.f,
-						FColor::Red,
-						FString(TEXT("Failed to resolve session address."))
-					);
-				}
-			}
+			SessionInterface->GetResolvedConnectString(NAME_GameSession, Address);
 		}
-		else
+	}
+	// GetResolvedConnectString 빈 경우에만 LAN/NULL 폴백
+	if (Address.IsEmpty() && !CachedHostAddressForJoin.IsEmpty())
+	{
+		Address = CachedHostAddressForJoin;
+		if (!Address.Contains(TEXT(":"))) Address += TEXT(":7777");
+		CachedHostAddressForJoin.Empty();
+	}
+
+	if (Address.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Join] GetResolvedConnectString FAILED - no address"));
+#if !UE_BUILD_SHIPPING
+		if (GEngine)
 		{
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(
-					-1,
-					15.f,
-					FColor::Red,
-					FString(TEXT("Session interface is not valid."))
-				);
-			}
+			GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red, TEXT("연결 주소를 가져올 수 없습니다."));
 		}
+#endif
+		return;
+	}
+
+	APlayerController* PlayerController = GetGameInstance() ? GetGameInstance()->GetFirstLocalPlayerController() : nullptr;
+	if (PlayerController)
+	{
+		// #region agent log - NetDriver 검증 (SteamNetDriver vs IpNetDriver)
+		UWorld* W = GetWorld();
+		UNetDriver* NetDriver = W ? W->GetNetDriver() : nullptr;
+		FString NetDriverClass = NetDriver && NetDriver->GetClass() ? NetDriver->GetClass()->GetName() : TEXT("null");
+		FString OSSName = Subsystem ? Subsystem->GetSubsystemName().ToString() : TEXT("null");
+		{
+			FString AddrPrefix = Address.Len() > 40 ? Address.Left(40) + TEXT("...") : Address;
+			const FString Line = FString::Printf(
+				TEXT("{\"hypothesisId\":\"H_NetDriver\",\"location\":\"Menu.cpp:OnJoinSession\",\"message\":\"ClientTravel\",\"data\":{\"address\":\"%s\",\"netDriver\":\"%s\",\"oss\":\"%s\",\"addressType\":\"%s\"},\"timestamp\":%lld}\n"),
+				*AddrPrefix, *NetDriverClass, *OSSName,
+				Address.StartsWith(TEXT("steam.")) ? TEXT("steam") : (Address.StartsWith(TEXT("steamid:")) ? TEXT("steamid") : TEXT("ip")),
+				FDateTime::UtcNow().ToUnixTimestamp() * 1000);
+			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		}
+		// #endregion
+		UE_LOG(LogTemp, Warning, TEXT("[Join] ClientTravel: addr=\"%s\" netDriver=%s oss=%s"), *Address, *NetDriverClass, *OSSName);
+		PlayerController->ClientTravel(Address, ETravelType::TRAVEL_Absolute);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Join] ClientTravel SKIPPED: PlayerController is null"));
 	}
 }
 
@@ -290,30 +332,33 @@ void UMenu::OnDestroySession(bool bWasSuccessful)
 }
 void UMenu::CreateSession(const FString& SessionTitle)
 {
-	UWorld* World = GetWorld();
-	if (!World)
+	if (!EnsureMultiplayerSubsystem())
 	{
 		return;
 	}
-
-	FString TargetPath = PathToLobby;
-	if (TargetPath.IsEmpty())
+	FString Title = SessionTitle;
+	if (Title.IsEmpty() && GetWorld())
 	{
-		TargetPath = TEXT("/Game/Maps/Lobby?listen");
+		if (ULocalPlayer* LP = GetWorld()->GetFirstLocalPlayerFromController())
+		{
+			Title = FString::Printf(TEXT("%s의 로비"), *LP->GetNickname());
+		}
 	}
-
+	if (Title.IsEmpty()) Title = TEXT("호스트의 로비");
+	FString TargetPath = PathToLobby;
+	if (TargetPath.IsEmpty()) TargetPath = TEXT("/Game/Maps/Lobby?listen");
 	FString CleanPath = TargetPath;
 	CleanPath.RemoveFromEnd(TEXT("?listen"));
-
-	MenuWriteDebugLog(
-		TEXT("Menu.cpp:CreateSession"),
-		TEXT("OpenLevel (no session create)"),
-		FString::Printf(TEXT("{\"map\":\"%s\",\"netMode\":%d}"),
-			*CleanPath,
-			World ? static_cast<int32>(World->GetNetMode()) : -1),
-		TEXT("H1"),
-		TEXT("run-pre3"));
-	UGameplayStatics::OpenLevel(World, FName(*CleanPath), false, TEXT("listen"));
+	CleanPath.TrimStartAndEndInline();
+	if (CleanPath.IsEmpty()) CleanPath = TEXT("/Game/Maps/Lobby");
+	// 서브시스템 CreateSession → OnCreateSession → ServerTravel 흐름 (LobbyGameMode AutoCreate 불필요)
+	MultiplayerSessionsSubsystem->CreateSession(
+		NumPublicConnections,
+		MatchType,
+		Title,
+		ESessionVisibility::Public,
+		CleanPath,
+		TEXT(""));
 }
 
 void UMenu::FindSessions()
@@ -328,7 +373,7 @@ void UMenu::FindSessions()
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"Menu.cpp:FindSessions\",\"message\":\"FindSessions triggered\",\"data\":{},\"timestamp\":%lld}\n"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, DEBUG_LOG_PATH, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 	MultiplayerSessionsSubsystem->FindSessions(10000);
@@ -338,6 +383,7 @@ void UMenu::RefreshSessionList()
 {
 	LastSessionSearchResults.Empty();
 	LastSessionInfos.Empty();
+	CachedHostAddressForJoin.Empty();
 	OnSessionListCleared();
 	if (EnsureMultiplayerSubsystem())
 	{
@@ -353,43 +399,63 @@ void UMenu::StartGameDirectly(const FString& LobbyMapPath)
 		return;
 	}
 
+#if WITH_EDITOR
+	// 패키징/쿡 중 OpenLevel 호출 시 "Server travel should never create a pending net game" 에러 방지
+	if (IsRunningCommandlet() || IsRunningCookCommandlet())
+	{
+		return;
+	}
+#endif
+
 	FString TargetPath = LobbyMapPath.IsEmpty() ? PathToLobby : LobbyMapPath;
 	
 	// ?listen 제거 (맵 경로만 추출)
 	FString CleanPath = TargetPath;
 	CleanPath.RemoveFromEnd(TEXT("?listen"));
 	
-	// 맵 경로에서 맵 이름만 추출 (예: /Game/Maps/Lobby -> Lobby)
-	FString MapName = CleanPath;
-	if (MapName.Contains(TEXT("/")))
-	{
-		// 마지막 "/" 이후의 부분을 추출
-		int32 LastSlashIndex = -1;
-		if (MapName.FindLastChar(TEXT('/'), LastSlashIndex))
-		{
-			MapName = MapName.Mid(LastSlashIndex + 1);
-		}
-	}
+	// 패키징 시 안정성을 위해 전체 맵 경로 사용 (short name은 느린 디스크 검색 유발)
+	FString LevelName = CleanPath;
+	if (LevelName.IsEmpty()) LevelName = TEXT("/Game/Maps/Lobby");
 	
 	// OpenLevel을 사용하여 레벨 이동 (자동으로 서버가 됨)
 	// listen 옵션을 추가하여 리슨 서버로 동작하도록 함 (호스트가 되도록)
-	UGameplayStatics::OpenLevel(World, FName(*MapName), false, TEXT("listen"));
+	UGameplayStatics::OpenLevel(World, FName(*LevelName), true, TEXT("listen"));
 }
 
 void UMenu::JoinSessionByIndex(int32 SessionIndex)
 {
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSessionByIndex: index=%d, results=%d"), SessionIndex, LastSessionSearchResults.Num());
+	// #endregion
 	if (!MultiplayerSessionsSubsystem)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSessionByIndex: subsystem null"));
 		return;
 	}
 
 	if (!LastSessionSearchResults.IsValidIndex(SessionIndex))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Invalid session index: %d"), SessionIndex);
+		UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSessionByIndex: invalid index %d (count=%d)"), SessionIndex, LastSessionSearchResults.Num());
 		return;
 	}
 
-	MultiplayerSessionsSubsystem->JoinSession(LastSessionSearchResults[SessionIndex]);
+	// 세션에 저장된 호스트 IP 우선 캐시 (GetAddressInfo 실패 회피)
+	CachedHostAddressForJoin.Empty();
+	FString HostAddr;
+	if (LastSessionSearchResults[SessionIndex].Session.SessionSettings.Get(FName(TEXT("HostAddress")), HostAddr) && !HostAddr.IsEmpty())
+	{
+		CachedHostAddressForJoin = HostAddr;
+		UE_LOG(LogTemp, Warning, TEXT("[Join] Cached HostAddress from session: \"%s\""), *CachedHostAddressForJoin);
+	}
+
+	// Steam OSS: JoinSession 시 bUsesPresence/bUseLobbiesIfAvailable 일치 필요
+	FOnlineSessionSearchResult ModifiedResult = LastSessionSearchResults[SessionIndex];
+	ModifiedResult.Session.SessionSettings.bUsesPresence = true;
+	ModifiedResult.Session.SessionSettings.bUseLobbiesIfAvailable = true;
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession API call: sessionId=\"%s\""), *ModifiedResult.GetSessionIdStr());
+	// #endregion
+	MultiplayerSessionsSubsystem->JoinSession(ModifiedResult);
 }
 
 void UMenu::UpdateSessionVisibility(ESessionVisibility NewVisibility)
@@ -407,7 +473,7 @@ void UMenu::UpdateSessionVisibility(ESessionVisibility NewVisibility)
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H3\",\"location\":\"Menu.cpp:UpdateSessionVisibility\",\"message\":\"Menu update visibility\",\"data\":{\"visibility\":%d},\"timestamp\":%lld}\n"),
 			static_cast<int32>(NewVisibility), Ms);
-		FFileHelper::SaveStringToFile(Line, DEBUG_LOG_PATH, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -490,8 +556,7 @@ FSessionInfo UMenu::GetCurrentSessionInfo() const
 			{
 				FSessionInfo Info;
 
-				FString SessionTitle;
-				Session->SessionSettings.Get(FName("SessionTitle"), SessionTitle);
+				const FString SessionTitle = UMultiplayerSessionsSubsystem::ExtractSessionTitleFromSettings(Session->SessionSettings);
 				Info.SessionTitle = SessionTitle.IsEmpty() ? TEXT("로비") : SessionTitle;
 				Info.RoomName = Info.SessionTitle;
 

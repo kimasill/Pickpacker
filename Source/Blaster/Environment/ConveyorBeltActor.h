@@ -76,6 +76,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Conveyor")
 	FVector GetConveyorEntryLocation() const;
 
+	/** 컨베이어에서 제출되는 파슬을 컨베이어 목록에서 해제 (파괴 전 호출) */
+	UFUNCTION(BlueprintCallable, Category = "Conveyor")
+	void ReleaseParcelIfConveyed(class AParcelActor* Parcel);
+
 protected:
 	UFUNCTION()
 	void HandleConveyorBeginOverlap(

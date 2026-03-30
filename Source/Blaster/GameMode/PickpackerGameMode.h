@@ -49,6 +49,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
 	void EndWarehouseSimulation();
 
+	/** 탈출 시퀀스 시작 시 오더 웨이브 중지 (탈출 과정 방해 방지) */
+	void StopOrderWaves();
+
 	/**
 	 * Get current level variant data
 	 */
@@ -143,6 +146,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits")
 	int32 StartingTeamCredits = 30;
 
+	/** 게임 시작 시 로드할 스트리밍 레벨 이름 (예: controlroom). 패키징 빌드에서 텔레포트/참조 실패 방지 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Level")
+	TArray<FName> StreamingLevelNamesToLoadAtStart;
+
 	/** Apply a credit delta (server only) */
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Credits")
 	void ApplyCreditDelta(int32 Delta, const FString& Reason);
@@ -150,6 +157,11 @@ public:
 	/** Wave started event (Blueprint UI hook) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|Orders")
 	void BP_OnOrderWaveStarted(int32 WaveNumber);
+
+	/** 파슬 제출 시 Blueprint에서 사운드/이펙트 등 처리용 이벤트 (제출 직후, 파슬 파괴 전 브로드캐스트) */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelSubmitted, AParcelActor*, Parcel, bool, bAccepted);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
+	FOnParcelSubmitted OnParcelSubmitted;
 
 	/** 게임 오버 연출 (선택) */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Pickpacker|GameOver")

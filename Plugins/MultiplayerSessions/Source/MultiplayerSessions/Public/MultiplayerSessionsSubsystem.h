@@ -43,6 +43,12 @@ public:
 	void UpdateSessionVisibility(ESessionVisibility NewVisibility);
 	void UpdateSessionSettings(int32 NumPublicConnections, const FString& MatchType, const FString& SessionTitle, ESessionVisibility Visibility, const FString& SelectedMap, const FString& GameMode);
 
+	/** 호스트 IP:포트를 세션에 저장 (GetAddressInfo 실패 회피 - Steam ID 대신 IP로 연결) */
+	void UpdateSessionHostAddress(const FString& HostAddressPort);
+
+	/** 기존 세션이 유효한지 확인 (불필요한 Destroy→Create 방지) */
+	bool HasActiveSession() const;
+
 	// Delegate to bind to the CreateSession function
 	FMultiplayerOnCreateSessionComplete MultiplayerOnCreateSessionComplete;
 	FMultiplayerOnFindSessionsComplete MultiplayerOnFindSessionsComplete;
@@ -64,6 +70,10 @@ private:
 
 	UPROPERTY(Config)
 	bool bUseNullSubsystemInEditor = true;
+
+	/** true면 BuildUniqueId를 0으로 고정하여 Development/Shipping 빌드 간 세션 검색 호환 */
+	UPROPERTY(Config, EditAnywhere, Category = "Session")
+	bool bForceCrossBuildCompatible = true;
 
 	// To add th the Online Session Interface Delegate list.
 	// we'll bind our MultiplayerSessionsSubsystem to these delegates
@@ -98,4 +108,6 @@ public:
 
 	// Utility to read session title from search result
 	static FString ExtractSessionTitle(const FOnlineSessionSearchResult& SessionResult);
+	/** SessionSettings에서 제목 추출 (Base64 포함, 한글 지원) */
+	static FString ExtractSessionTitleFromSettings(const FOnlineSessionSettings& SessionSettings);
 };

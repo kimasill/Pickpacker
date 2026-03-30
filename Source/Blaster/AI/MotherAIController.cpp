@@ -2,18 +2,10 @@
 
 #include "MotherAIController.h"
 #include "Blaster/AI/MotherAIActor.h"
-#include "BehaviorTree/BehaviorTreeComponent.h"
-#include "BehaviorTree/BlackboardComponent.h"
 
-AMotherAIController::AMotherAIController()
+AMotherAIController::AMotherAIController(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	PrimaryActorTick.bCanEverTick = false;
-	
-	// Create Behavior Tree Component
-	BehaviorTreeComponent = CreateDefaultSubobject<UBehaviorTreeComponent>(TEXT("BehaviorTreeComponent"));
-	
-	// Create Blackboard Component
-	BlackboardComponent = CreateDefaultSubobject<UBlackboardComponent>(TEXT("BlackboardComponent"));
 }
 
 void AMotherAIController::BeginPlay()
@@ -26,21 +18,10 @@ void AMotherAIController::OnPossess(APawn* InPawn)
 	Super::OnPossess(InPawn);
 
 	MotherAI = Cast<AMotherAIActor>(InPawn);
-	
 	if (MotherAI)
 	{
 		InitializeBehaviorTree();
 	}
-}
-
-void AMotherAIController::OnUnPossess()
-{
-	if (BehaviorTreeComponent)
-	{
-		BehaviorTreeComponent->StopTree();
-	}
-
-	Super::OnUnPossess();
 }
 
 AMotherAIActor* AMotherAIController::GetMotherAI() const
@@ -52,23 +33,12 @@ void AMotherAIController::InitializeBehaviorTree()
 {
 	if (!BlackboardAsset || !BehaviorTreeAsset)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MotherAIController] Blackboard or Behavior Tree asset not set"));
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIController] Blackboard or Behavior Tree asset not set - check BP_MotherAI defaults"));
 		return;
 	}
 
-	// Initialize Blackboard
-	if (UseBlackboard(BlackboardAsset, BlackboardComponent))
+	if (RunBehaviorTreeWithBlackboard(BehaviorTreeAsset, BlackboardAsset))
 	{
-		// Run Behavior Tree
-		if (BehaviorTreeComponent)
-		{
-			RunBehaviorTree(BehaviorTreeAsset);
-			UE_LOG(LogTemp, Log, TEXT("[MotherAIController] Behavior Tree initialized"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[MotherAIController] Failed to initialize Blackboard"));
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIController] Behavior Tree initialized"));
 	}
 }
-

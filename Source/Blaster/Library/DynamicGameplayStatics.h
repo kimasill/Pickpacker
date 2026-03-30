@@ -19,4 +19,7 @@ class BLASTER_API UDynamicGameplayStatics : public UBlueprintFunctionLibrary
 public:
 	UFUNCTION(BlueprintCallable, Category = "Helper")
 	static UObject* GetActorOrComponentWithInterface(AActor* InActor, TSubclassOf<UInterface> InterfaceClass);
+
+	UFUNCTION(BlueprintCallable, Category = "Helper")
+	static void GetActorAndChildObjectsWithInterface(AActor* InActor, TSubclassOf<UInterface> InterfaceClass, TArray<UObject*>& OutObjects);
 };

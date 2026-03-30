@@ -81,8 +81,10 @@ void UBlasterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		
 		FTransform MuzzleTipTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("MuzzleFlash"), ERelativeTransformSpace::RTS_World);
 		FVector MuzzleX(FRotationMatrix(MuzzleTipTransform.GetRotation().Rotator()).GetUnitAxis(EAxis::X));
+#if !UE_BUILD_SHIPPING
 		DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), MuzzleTipTransform.GetLocation() + MuzzleX * 1000.0f, FColor::Red, false, -1.0f, 0, 2.0f);
 		DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), BlasterCharacter->GetHitTarget(), FColor::Orange);
+#endif
 	}
 	UCarryIKComponent* CarryIKComp = BlasterCharacter->GetCarryIKComponent();
 	if (CarryIKComp)

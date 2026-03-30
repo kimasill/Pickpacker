@@ -17,6 +17,8 @@
 #include "Blaster/BlasterTypes/Team.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "InputActionValue.h"
+#include "OnlineSubsystem.h"
+#include "Interfaces/onlineSessionInterface.h"
 #include "BlasterCharacter.generated.h"
 
 class UInputAction;
@@ -72,6 +74,8 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void OnRep_PlayerState() override;
 
+
+	TSharedPtr<IOnlineSession, ESPMode::ThreadSafe> OnlineSessionInterface;
 	/** OverHeadWidget 업데이트 (플레이어 이름, 준비 상태 등) */
 	UFUNCTION(BlueprintCallable, Category = "Lobby")
 	void UpdateOverheadWidget();
@@ -134,9 +138,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Camera|Shake", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float HitCameraShakeScale = 1.0f;
 
+	/** 처벌(Punishment) 노티파이 시 화면 흔들림 세기 (기본 2.0 = Hit보다 강함) */
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Shake", meta = (ClampMin = "0.0", UIMin = "0.0"))
+	float PunishmentCameraShakeScale = 2.0f;
+
 	// 소유 클라이언트 RPC
 	UFUNCTION(Client, Reliable)
 	void Client_PlayHitCameraShake(float Scale = 1.0f);
+
+	/** 처벌 노티파이 시 화면 흔들림 (Mother AI OnPunishmentHit에서 호출) */
+	UFUNCTION(Client, Reliable)
+	void Client_PlayPunishmentCameraShake();
 
 	UFUNCTION(Server, Reliable)
 	void ServerLeaveGame();
@@ -230,12 +242,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ladder")
 	void StopLadder(bool bPlaceAtTop);
 
+	/** 꼭대기 도달 시 LineTrace로 바닥 보정 후 Walking 전환 */
+	void HandleTopExit();
+	/** 아래 도달 시 바닥에 배치 후 Walking 전환. bUseAsFloor=true면 Point가 바닥 충돌점, false면 Point에서 아래로 트레이스 */
+	void HandleBottomExit(const FVector& Point, bool bUseAsFloorPoint = true);
+
+	/** Trigger overlap 시 LadderActor에서 호출. bCanClimb와 CurrentLadder 설정 */
+	UFUNCTION(BlueprintCallable, Category = "Ladder")
+	void SetCanClimbLadder(bool bCanClimb, ALadderActor* Ladder);
+
 protected:
 	UFUNCTION(Server, Reliable)
 	void ServerStartLadder(ALadderActor* LadderActor);
 
 	UFUNCTION(Server, Reliable)
 	void ServerStopLadder(bool bPlaceAtTop);
+
+	UFUNCTION(Server, Unreliable)
+	void ServerUpdateLadderInput(float AxisValue);
 
 	UFUNCTION()
 	void OnRep_LadderState();
@@ -316,6 +340,14 @@ public:
 
 	UPROPERTY(ReplicatedUsing = OnRep_LadderState, BlueprintReadOnly, Category = "Ladder")
 	bool bIsOnLadder = false;
+
+	/** Trigger 안에 있으면 true (overlap으로 설정) */
+	UPROPERTY(BlueprintReadOnly, Category = "Ladder")
+	bool bCanClimb = false;
+
+	/** 스플라인 거리 기반 현재 위치 (클라이밍 중) */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Ladder")
+	float LadderCurrentDistance = 0.f;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Ladder")
 	ALadderActor* CurrentLadder = nullptr;

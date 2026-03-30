@@ -116,6 +116,8 @@ void AParcelActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AParcelActor, PackageTargetTag);
 	DOREPLIFETIME(AParcelActor, PackageTargetRowName);
 	DOREPLIFETIME(AParcelActor, PackageRequiredCount);
+	DOREPLIFETIME(AParcelActor, PackageMinRequiredCount);
+	DOREPLIFETIME(AParcelActor, PackageMaxRequiredCount);
 	DOREPLIFETIME(AParcelActor, bIsPackageBundle);
 }
 
@@ -340,6 +342,8 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 		PackageTargetTag = FGameplayTag();
 		PackageTargetRowName = NAME_None;
 		PackageRequiredCount = 0;
+		PackageMinRequiredCount = 0;
+		PackageMaxRequiredCount = 0;
 		PackageMeshAsset.Reset();
 		PackageParcelDataAsset = nullptr;
 		PackageContents.Reset();
@@ -349,7 +353,9 @@ void AParcelActor::SetPackageRecipe(const FParcelPackageRecipe* InRecipe, UDA_Pa
 	bIsPackageBundle = true;
 	PackageTargetTag = InRecipe->TargetParcelTags.Num() > 0 ? InRecipe->TargetParcelTags[0] : FGameplayTag();
 	PackageTargetRowName = InRecipe->TargetParcelRowNames.Num() > 0 ? InRecipe->TargetParcelRowNames[0] : NAME_None;
-	PackageRequiredCount = InRecipe->RequiredCount;
+	PackageRequiredCount = InRecipe->MaxRequiredCount;
+	PackageMinRequiredCount = InRecipe->MinRequiredCount;
+	PackageMaxRequiredCount = InRecipe->MaxRequiredCount;
 	if (InRecipe->PackagedMeshes.Num() > 0)
 	{
 		const int32 ExistingIndex = PackageMeshAsset.IsNull()
@@ -1562,6 +1568,121 @@ void AParcelActor::ClearShelfAssignment(AShelfActor* Shelf)
 int32 AParcelActor::GetPackagingSpaceUnits() const
 {
 	return FMath::Max(1, ParcelConfig.PackagingSpaceUnits);
+}
+
+int32 AParcelActor::GetContentUnitTotal() const
+{
+	if (bIsPackaged && PackageContents.Num() > 0)
+	{
+		UDA_ParcelData* DataAsset = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+		if (DataAsset)
+		{
+			int32 Total = 0;
+			for (const FParcelPackageContent& Entry : PackageContents)
+			{
+				if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None) continue;
+				FParcelConfig ContentConfig;
+				if (DataAsset->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig))
+				{
+					Total += FMath::Max(1, ContentConfig.PackagingSpaceUnits) * Entry.Count;
+				}
+			}
+			if (Total > 0) return Total;
+		}
+	}
+	return GetPackagingSpaceUnits();
+}
+
+int32 AParcelActor::GetContentValueTotal() const
+{
+	if (bIsPackaged && PackageContents.Num() > 0)
+	{
+		UDA_ParcelData* DataAsset = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+		if (DataAsset)
+		{
+			int32 Total = 0;
+			for (const FParcelPackageContent& Entry : PackageContents)
+			{
+				if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None) continue;
+				FParcelConfig ContentConfig;
+				if (DataAsset->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig))
+				{
+					Total += FMath::Max(0, ContentConfig.BasePrice) * Entry.Count;
+				}
+			}
+			if (Total > 0) return Total;
+		}
+	}
+	return GetParcelPrice();
+}
+
+int32 AParcelActor::GetContentUnitsForTag(FGameplayTag RequiredTag) const
+{
+	if (!RequiredTag.IsValid())
+	{
+		return GetContentUnitTotal();
+	}
+	if (bIsPackaged && PackageContents.Num() > 0)
+	{
+		UDA_ParcelData* DataAsset = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+		if (DataAsset)
+		{
+			int32 Total = 0;
+			for (const FParcelPackageContent& Entry : PackageContents)
+			{
+				if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None) continue;
+				FParcelConfig ContentConfig;
+				if (DataAsset->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig))
+				{
+					if (ContentConfig.ParcelTag == RequiredTag)
+					{
+						Total += FMath::Max(1, ContentConfig.PackagingSpaceUnits) * Entry.Count;
+					}
+				}
+			}
+			return Total;
+		}
+	}
+	// 언팩 파슬: 단일 아이템, ParcelTag 비교
+	if (ParcelConfig.ParcelTag == RequiredTag)
+	{
+		return GetPackagingSpaceUnits();
+	}
+	return 0;
+}
+
+int32 AParcelActor::GetContentValueForTag(FGameplayTag RequiredTag) const
+{
+	if (!RequiredTag.IsValid())
+	{
+		return GetContentValueTotal();
+	}
+	if (bIsPackaged && PackageContents.Num() > 0)
+	{
+		UDA_ParcelData* DataAsset = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+		if (DataAsset)
+		{
+			int32 Total = 0;
+			for (const FParcelPackageContent& Entry : PackageContents)
+			{
+				if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None) continue;
+				FParcelConfig ContentConfig;
+				if (DataAsset->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig))
+				{
+					if (ContentConfig.ParcelTag == RequiredTag)
+					{
+						Total += FMath::Max(0, ContentConfig.BasePrice) * Entry.Count;
+					}
+				}
+			}
+			return Total;
+		}
+	}
+	if (ParcelConfig.ParcelTag == RequiredTag)
+	{
+		return GetParcelPrice();
+	}
+	return 0;
 }
 
 void AParcelActor::SetItemData(const FItemData& NewItemData)

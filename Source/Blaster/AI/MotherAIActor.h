@@ -11,8 +11,8 @@
 
 class USkeletalMeshComponent;
 class UWidgetComponent;
-class UAIPerceptionComponent;
-class UAISenseConfig_Sight;
+class UPPSightPerceptionComponent;
+class UMotherGameplayComponent;
 
 /**
  * Mother AI State Enumeration
@@ -38,6 +38,8 @@ UCLASS(BlueprintType, Blueprintable)
 class BLASTER_API AMotherAIActor : public ACharacter
 {
 	GENERATED_BODY()
+
+	friend class UMotherGameplayComponent;
 
 public:
 	AMotherAIActor();
@@ -239,9 +241,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Control Tower")
 	AActor* ControlTowerActor = nullptr;
 
+	/** 통제 타워 폴백 태그: ControlTowerActor가 null일 때 이 태그로 월드에서 액터를 찾음 (패키징/SeamlessTravel용) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Control Tower", meta = (DisplayName = "Control Tower Tag (Fallback)"))
+	FName ControlTowerTag;
+
 	/** 시설 점검 액터 목록 (위치는 각 액터의 위치에서 가져옴) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
 	TArray<AActor*> InspectionActorLocations;
+
+	/** 점검 액터 폴백 태그: InspectionActorLocations가 null일 때 이 태그로 월드에서 액터를 찾음 (패키징 빌드용) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection", meta = (DisplayName = "Inspection Actor Tag (Fallback)"))
+	FName InspectionActorTag;
 
 	/** 시설 점검 시간 (게임시간 기준, 하루에 두번) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mother AI|Inspection")
@@ -376,10 +386,10 @@ private:
 	UWidgetComponent* StatusWidget;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	UAIPerceptionComponent* PerceptionComp;
+	UPPSightPerceptionComponent* PerceptionComp;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	UAISenseConfig_Sight* SightConfig;
+	UMotherGameplayComponent* MotherGameplay;
 
 	/** Detected players (여러 명 감지 가능) */
 	UPROPERTY(Replicated)
@@ -465,9 +475,30 @@ public:
 	/** 다음 점검 시간 계산 */
 	void ScheduleNextInspection();
 
+	/** Blackboard 초기 TargetLocation 설정 (패키징 빌드 대비) */
+	void EnsureBlackboardInitialized();
+
+	/** BT/BB 초기화 재시도 (패키징 빌드에서 OnPossess 지연 시) */
+	void EnsureBehaviorTreeInitialized();
+
+	/** BP 참조가 null일 때 태그로 ControlTowerActor, InspectionActorLocations 갱신 (패키징/SeamlessTravel용) */
+	void RefreshReferencesFromTags();
+
 	/** 점검 타이머 핸들 */
 	UPROPERTY()
 	FTimerHandle InspectionTimerHandle;
+
+	/** ScheduleNextInspection 재시도 타이머 (GameState 미준비 시) */
+	UPROPERTY()
+	FTimerHandle ScheduleRetryTimerHandle;
+
+	/** BT 초기화 재시도 타이머 (패키징 빌드 대비) */
+	UPROPERTY()
+	FTimerHandle BTInitRetryTimerHandle;
+
+	/** 태그 기반 참조 갱신 지연 타이머 */
+	UPROPERTY()
+	FTimerHandle RefreshReferencesTimerHandle;
 
 	/** 처벌 모션 실행 전 카메라 회전 대기 타이머 */
 	UPROPERTY()

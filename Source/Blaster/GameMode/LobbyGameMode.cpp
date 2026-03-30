@@ -21,15 +21,19 @@
 #include "OnlineSessionSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Kismet/GameplayStatics.h"
+#include "SocketSubsystem.h"
 
 namespace
 {
 	static void AppendDebugLog_LobbyGameMode(const FString& JsonLine)
 	{
-		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+#if !UE_BUILD_SHIPPING
+		const FString LogDir = FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+#endif
 	}
 }
 
@@ -58,11 +62,13 @@ void ALobbyGameMode::BeginPlay()
 		case NM_Client: NetModeStr = "Client"; break;
 		}
 
+#if !UE_BUILD_SHIPPING
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 60.f, FColor::Yellow,
 				FString::Printf(TEXT("[Lobby NetMode] : %s"), *NetModeStr));
 		}
+#endif
 	}
 	// LobbyPawnClass가 설정되어 있으면 DefaultPawnClass로 설정
 	// 설정되지 않았으면 BlasterCharacter를 기본값으로 사용 (로비에서도 이동/입력 허용)
@@ -77,7 +83,15 @@ void ALobbyGameMode::BeginPlay()
 
 	if (HasAuthority() && bAutoCreateSessionOnBeginPlay)
 	{
-		AutoCreateLobbySession();
+		// 메뉴 CreateSession 직후 OpenLevel 진입 시 세션 등록 타이밍 이슈 방지
+		FTimerHandle DelayedCreateHandle;
+		GetWorld()->GetTimerManager().SetTimer(DelayedCreateHandle, this, &ALobbyGameMode::AutoCreateLobbySession, 0.2f, false);
+	}
+	// 호스트 IP 세션에 저장 (참가 시 GetAddressInfo 실패 회피 - Steam ID 대신 IP로 연결)
+	if (HasAuthority())
+	{
+		FTimerHandle HostAddrHandle;
+		GetWorld()->GetTimerManager().SetTimer(HostAddrHandle, this, &ALobbyGameMode::TryUpdateSessionHostAddress, 1.2f, false);
 	}
 
 	// 초기 준비 인원 수 동기화
@@ -324,6 +338,39 @@ void ALobbyGameMode::AutoCreateLobbySession()
 
 	if (UMultiplayerSessionsSubsystem* Subsystem = GameInstance->GetSubsystem<UMultiplayerSessionsSubsystem>())
 	{
+		// 패키징 빌드: 메뉴에서 CreateSession 성공 후 OpenLevel으로 진입한 경우, 세션이 이미 존재함.
+		// 이때 다시 CreateSession을 호출하면 Destroy→Recreate 루프가 발생하고, Steam에서 Recreate가 실패할 수 있음.
+		if (Subsystem->HasActiveSession())
+		{
+			UE_LOG(LogTemp, Log, TEXT("AutoCreateLobbySession: Session already exists (from menu), skipping create"));
+			if (ALobbyGameState* LobbyGS = GetGameState<ALobbyGameState>())
+			{
+				const ESessionVisibility EffectiveVisibility = Subsystem->DesiredSessionVisibility != ESessionVisibility::Private
+					? Subsystem->DesiredSessionVisibility
+					: DefaultLobbyVisibility;
+				// 기존 세션의 실제 제목 사용 (재생성 없이 UI만 동기화)
+				FString Title;
+				if (IOnlineSubsystem* OSS = Subsystem->GetOnlineSubsystem())
+				{
+					if (IOnlineSessionPtr SI = OSS->GetSessionInterface())
+					{
+						if (FNamedOnlineSession* Session = SI->GetNamedSession(NAME_GameSession))
+						{
+							Title = UMultiplayerSessionsSubsystem::ExtractSessionTitleFromSettings(Session->SessionSettings);
+						}
+					}
+				}
+				if (Title.IsEmpty()) Title = TEXT("호스트의 로비");
+				LobbyGS->UpdateRoomSettings(
+					DefaultLobbyMaxPlayers,
+					DefaultMatchType,
+					Title,
+					EffectiveVisibility,
+					DefaultLobbyMap,
+					DefaultMatchType);
+			}
+			return;
+		}
 
 		// 현재 원하는 가시성을 사용 (기본값 대신)
 		const ESessionVisibility EffectiveVisibility = Subsystem->DesiredSessionVisibility != ESessionVisibility::Private
@@ -659,6 +706,43 @@ FString ALobbyGameMode::ResolveTargetMap() const
 
 	// 4) 최종 폴백: EntryMapPath
 	return EntryMapPath;
+}
+
+void ALobbyGameMode::TryUpdateSessionHostAddress()
+{
+	if (!HasAuthority() || !GetWorld()) return;
+	UGameInstance* GI = GetGameInstance();
+	if (!GI) return;
+	UMultiplayerSessionsSubsystem* Subsystem = GI->GetSubsystem<UMultiplayerSessionsSubsystem>();
+	if (!Subsystem || !Subsystem->HasActiveSession()) return;
+
+	FString HostAddress;
+	if (UNetDriver* NetDriver = GetWorld()->GetNetDriver())
+	{
+		HostAddress = NetDriver->LowLevelGetNetworkNumber();
+	}
+	if (HostAddress.IsEmpty()) return;
+
+	// 0.0.0.0 = 바인드 전 인터페이스. 원격 클라이언트용 실제 LAN IP 필요
+	if (HostAddress.StartsWith(TEXT("0.0.0.0")))
+	{
+		if (ISocketSubsystem* SS = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM))
+		{
+			bool bCanBindAll = false;
+			TSharedRef<FInternetAddr> Addr = SS->GetLocalHostAddr(*GLog, bCanBindAll);
+			HostAddress = Addr->ToString(false);
+		}
+		if (HostAddress.StartsWith(TEXT("0.0.0.0")) || HostAddress.StartsWith(TEXT("127.")))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Host] TryUpdateSessionHostAddress: cannot get LAN IP for remote join, skipping"));
+			return;
+		}
+	}
+	if (!HostAddress.Contains(TEXT(":")))
+	{
+		HostAddress += TEXT(":7777");
+	}
+	Subsystem->UpdateSessionHostAddress(HostAddress);
 }
 
 void ALobbyGameMode::StartFadeOnAllPlayers(bool bFadeOut) const

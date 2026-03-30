@@ -56,6 +56,9 @@ public:
     bool CanInteract() const;
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
+	bool CanInteractWith(AActor* Target) const;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
     UObject* GetCurrentInteractableObject() const;
 
     void SetCarriedParcel(class AParcelActor* NewParcel);

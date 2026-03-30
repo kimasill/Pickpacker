@@ -58,9 +58,42 @@ public:
 	void SetInputBlocked(bool bBlocked);
 
 	UFUNCTION(Client, Reliable)
-	void ClientPlayEndingSequence(const TSoftObjectPtr<ULevelSequence>& SequenceAsset);
+	void ClientPlayEndingSequence(const TSoftObjectPtr<ULevelSequence>& SequenceAsset, bool bHidePlayerInSequence = true);
 	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
-	void BP_PlayEndingSequence(ULevelSequence* Sequence);
+	void BP_PlayEndingSequence(ULevelSequence* Sequence, bool bHidePlayerInSequence);
+
+	/** 시퀀스 시작 시 플레이어/HUD 숨김 (탈출 시퀀스 등, 블루프린트에서 구현) */
+	UFUNCTION(Client, Reliable)
+	void Client_HideForSequence(bool bIncludeSelf = true);
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
+	void BP_HideForSequence();
+
+	/** 크레딧 재생 (엔딩 시퀀스 후 호출, 블루프린트에서 구현) */
+	UFUNCTION(Client, Reliable)
+	void ClientPlayCredits();
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
+	void BP_PlayCredits();
+
+	/** 크레딧 종료 시 블루프린트에서 호출. 서버에 맵 이동 요청 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Ending")
+	void ServerRequestTravelAfterCredits();
+
+	/** 엔딩 레벨 로드 완료 시 서버에 알림 (동시 시퀀스 재생용) */
+	UFUNCTION(Server, Reliable, Category = "Ending")
+	void Server_NotifyEndingLevelReady();
+	UFUNCTION(Client, Reliable, Category = "Ending")
+	void Client_RequestEndingLevelReady();
+
+	/** 시퀀스 시작 전까지 검은 화면 표시 (별도 위젯 블루프린트에서 구현) */
+	UFUNCTION(Client, Reliable, Category = "Ending")
+	void Client_ShowEndingBlackScreen();
+	UFUNCTION(Client, Reliable, Category = "Ending")
+	void Client_HideEndingBlackScreen();
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
+	void BP_ShowEndingBlackScreen();
+	UFUNCTION(BlueprintImplementableEvent, Category = "Ending")
+	void BP_HideEndingBlackScreen();
+
 
 	/** 사망 후 관전 시작 */
 	UFUNCTION(Client, Reliable)
@@ -107,6 +140,16 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
 	void TogglePanel();
 
+	/** 시맨틱 트래블 후 블루프린트 HUD 재생성용. BP_BlasterPlayerController에서 이벤트 구현 시 WBP_PickPackerHUD Create Widget + Add to Viewport 호출 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void OnPostSeamlessTravel_RecreateHUD();
+
+	/** 지연 HUD 생성 (패키징 빌드 클라이언트에서 BeginPlay 타이밍 이슈 회피). BP에서 CreateHUD와 동일 로직 구현 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void BP_DeferredCreateHUD();
+
+	/** 타이머 콜백: BP_DeferredCreateHUD 호출 */
+	void TriggerDeferredHUDCreation();
 
 	/**
 	* Sync time between server and client
@@ -199,7 +242,8 @@ private:
 
 	bool bLobbySettingsOpen = false;
 
-	class UReturnToMainMenu* ReturnToMainMenu;
+	UPROPERTY()  // UPROPERTY 필수 - 없으면 GC에 의해 위젯이 수거되어 ESC 메뉴 열 때 크래시 (파슬 제출 후 등)
+	TObjectPtr<class UReturnToMainMenu> ReturnToMainMenu;
 
 	bool bReturnToMainMenuOpen = false; // Flag to check if the return to main menu widget is open
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "TimerManager.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/DataAssets/DA_ItemData.h"
 #include "Components/ScrollBox.h"
@@ -30,6 +31,9 @@ public:
 
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+
+	/** PlayerInventoryComponent 바인딩 시도 (Pawn 미준비 시 재시도용) */
+	void TryBindToInventoryComponent();
 
 	/**
 	 * Update inventory display
@@ -100,6 +104,10 @@ private:
 	/** Current item slots */
 	UPROPERTY()
 	TMap<AParcelActor*, UInventoryItemSlotWidget*> ItemSlots;
+
+	FTimerHandle RetryBindTimerHandle;
+	static constexpr int32 MaxRetryBindCount = 50;  // 5초 (0.1초 × 50)
+	int32 RetryBindCount = 0;
 };
 
 /**

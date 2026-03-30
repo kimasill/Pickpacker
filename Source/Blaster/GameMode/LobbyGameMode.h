@@ -93,6 +93,9 @@ private:
 	// 게임 시작 시 사용할 대상 맵을 결정
 	FString ResolveTargetMap() const;
 
+	// 호스트 IP를 세션에 저장 (참가 시 IP로 연결 가능하도록)
+	void TryUpdateSessionHostAddress();
+
 	// 레벨 트래블용 페이드 및 지연 트래블 처리
 	void StartFadeOnAllPlayers(bool bFadeOut) const;
 	void DoServerTravelWithFade(const FString& TravelPath);

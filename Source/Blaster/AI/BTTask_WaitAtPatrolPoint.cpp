@@ -3,8 +3,7 @@
 #include "BTTask_WaitAtPatrolPoint.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/DroneActor.h"
-#include "Blaster/AI/PatrolPointActor.h"
+#include "Blaster/AI/PPPatrolRouteComponent.h"
 
 UBTTask_WaitAtPatrolPoint::UBTTask_WaitAtPatrolPoint()
 {
@@ -27,29 +26,27 @@ EBTNodeResult::Type UBTTask_WaitAtPatrolPoint::ExecuteTask(UBehaviorTreeComponen
 		return EBTNodeResult::Failed;
 	}
 
-	ADroneActor* Drone = Cast<ADroneActor>(Pawn);
-	if (!Drone)
+	UPPPatrolRouteComponent* PatrolRoute = UPPPatrolRouteComponent::FindPatrolRoute(Pawn);
+	if (!PatrolRoute)
 	{
 		return EBTNodeResult::Failed;
 	}
 
-	// Get wait time
 	float ActualWaitTime = WaitTime;
 	if (bUsePatrolPointWaitTime)
 	{
-		ActualWaitTime = Drone->GetCurrentPatrolPointWaitTime();
+		ActualWaitTime = PatrolRoute->GetCurrentPatrolPointWaitTime();
 	}
 
 	if (ActualWaitTime <= 0.0f)
 	{
-		// No wait time, succeed immediately
 		return EBTNodeResult::Succeeded;
 	}
 
 	ElapsedTime = 0.0f;
-	
+
 	UE_LOG(LogTemp, Log, TEXT("[BTTask_WaitAtPatrolPoint] Waiting for %.2f seconds"), ActualWaitTime);
-	
+
 	return EBTNodeResult::InProgress;
 }
 
@@ -60,15 +57,13 @@ void UBTTask_WaitAtPatrolPoint::TickTask(UBehaviorTreeComponent& OwnerComp, uint
 	float ActualWaitTime = WaitTime;
 	if (bUsePatrolPointWaitTime)
 	{
-		AAIController* AIController = OwnerComp.GetAIOwner();
-		if (AIController)
+		if (AAIController* AIController = OwnerComp.GetAIOwner())
 		{
-			APawn* Pawn = AIController->GetPawn();
-			if (Pawn)
+			if (APawn* Pawn = AIController->GetPawn())
 			{
-				if (ADroneActor* Drone = Cast<ADroneActor>(Pawn))
+				if (UPPPatrolRouteComponent* PatrolRoute = UPPPatrolRouteComponent::FindPatrolRoute(Pawn))
 				{
-					ActualWaitTime = Drone->GetCurrentPatrolPointWaitTime();
+					ActualWaitTime = PatrolRoute->GetCurrentPatrolPointWaitTime();
 				}
 			}
 		}
@@ -80,17 +75,3 @@ void UBTTask_WaitAtPatrolPoint::TickTask(UBehaviorTreeComponent& OwnerComp, uint
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

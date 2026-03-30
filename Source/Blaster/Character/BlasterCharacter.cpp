@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "BlasterCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -39,6 +36,7 @@
 #include "Blaster/Environment/DeathLocationActor.h"
 #include "Components/InputComponent.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -48,6 +46,7 @@
 #include "Animation/AnimInstance.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Engine/Engine.h"
 #include "Blaster/Components/ParcelStateComponent.h"
 #include "Blaster/Parcel/ParcelActor.h"
 #include "Blaster/AI/MotherAIActor.h"
@@ -58,8 +57,10 @@ namespace
 {
 	static void AppendDebugLog_BlasterCharacter(const FString& JsonLine)
 	{
-		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+#if !UE_BUILD_SHIPPING
+		const FString LogDir = FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+#endif
 	}
 }
 
@@ -67,7 +68,7 @@ ABlasterCharacter::ABlasterCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// 1인칭 카메라를 Capsule에 직접 부착 (SpringArm 제거)
+	// 1인칭 카메라 Capsule에 직접 부착 (SpringArm 제거)
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(GetCapsuleComponent());
 	FollowCamera->SetRelativeLocation(FVector(0.f, 0.f, EyeHeight));
@@ -234,6 +235,7 @@ void ABlasterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ABlasterCharacter, bOutOfLives);
 	DOREPLIFETIME(ABlasterCharacter, bIsOnLadder);
 	DOREPLIFETIME(ABlasterCharacter, CurrentLadder);
+	DOREPLIFETIME(ABlasterCharacter, LadderCurrentDistance);
 }
 
 void ABlasterCharacter::OnRep_ReplicatedMovement()
@@ -495,11 +497,16 @@ void ABlasterCharacter::MulticastLostTheLead_Implementation()
 
 void ABlasterCharacter::Client_PlayHitCameraShake_Implementation(float Scale)
 {
-	// 로컬 컨트롤러에서만 실행
+	// 로컬 컨트롤러에서 실행
 	ABlasterPlayerController* PC = BlasterPlayerController == nullptr ? Cast<ABlasterPlayerController>(Controller) : BlasterPlayerController;
 	if (!PC || !CameraShakeClass) return;
 	
 	PC->ClientStartCameraShake(CameraShakeClass, Scale);
+}
+
+void ABlasterCharacter::Client_PlayPunishmentCameraShake_Implementation()
+{
+	Client_PlayHitCameraShake(PunishmentCameraShakeScale);
 }
 
 void ABlasterCharacter::SetTeamColor(ETeam Team)
@@ -547,6 +554,20 @@ void ABlasterCharacter::BeginPlay()
 	{
 		AttachedGrenade->SetVisibility(false);
 	}
+	IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+	if (OnlineSub)
+	{
+		OnlineSessionInterface = OnlineSub->GetSessionInterface();
+		if(GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1, 
+				5.f, 
+				FColor::Blue, 
+				FString::Printf(TEXT("OnlineSubsystem: %s"), *OnlineSub->GetSubsystemName().ToString())
+				);
+		}
+	}
 
 	ToggleHeadMesh(IsPerspectiveFirstPerson());
 	ApplyDebugCollisionVisibility();
@@ -557,17 +578,17 @@ void ABlasterCharacter::BeginPlay()
 		FollowCamera->SetRelativeLocation(FVector(0.f, 0.f, EyeHeight));
 	}
 	
-	// Mesh 회전 설정: Mesh는 Controller 회전을 따르지 않도록 설정 (카메라 흔들림 방지)
+	// Mesh 회전 설정: Mesh는 Controller 회전 플래그를 쓰지 않으므로 World/Relative 회전 좌표 기본 사용
 	if (GetMesh())
 	{
-		// SkeletalMeshComponent에는 컨트롤러 회전 플래그가 없으므로 World/Relative 회전을 유지하도록 기본값 사용
+		// SkeletalMeshComponent는 컨트롤러 회전 플래그를 쓰므로 World/Relative 회전 좌표 기본 사용
 		GetMesh()->SetUsingAbsoluteRotation(false);
 	}
  	
  	// Reset cached speed on begin play
 
-	// OverHeadWidget 업데이트 (로비에서 플레이어 이름과 준비 상태 표시)
-	// 약간의 지연을 두어 PlayerState가 완전히 초기화된 후 업데이트
+	// OverHeadWidget 업데이트 (로비에서 플레이어 이름/준비 상태 표시)
+	// 시간이 지날 때까지 기다려 PlayerState가 회전 초기화된 후 업데이트
 	FTimerHandle TempHandle;
 	GetWorld()->GetTimerManager().SetTimer(
 		TempHandle,
@@ -584,6 +605,9 @@ void ABlasterCharacter::UpdateOverheadWidget()
 	{
 		return;
 	}
+
+	// 자기 자신은 머리 위 이름 표시 안 함 (SetOwnerNoSee는 WidgetComponent에서 불안정)
+	OverHeadWidget->SetHiddenInGame(IsLocallyControlled());
 
 	UOverHeadWidget* Widget = Cast<UOverHeadWidget>(OverHeadWidget->GetWidget());
 	if (!Widget)
@@ -613,7 +637,7 @@ void ABlasterCharacter::UpdateOverheadWidget()
 	}
 	else
 	{
-		// PlayerState 캐스팅 실패 시에도 기본값 사용 (로비 초기화 타이밍 보완)
+		// PlayerState 캐스팅 실패 시 기본값 적용 (로비 초기화 타이밍 보완)
 		bIsReady = PS->IsOnlyASpectator() ? false : bIsReady;
 	}
 
@@ -625,7 +649,7 @@ void ABlasterCharacter::UpdateOverheadWidget()
 	}
 	else
 	{
-		// 로비가 아니면 준비 표시를 숨김
+		// 로비가 아니면 준비 표시 숨김
 		if (Widget->ReadyStatusText)
 		{
 			Widget->ReadyStatusText->SetText(FText());
@@ -637,37 +661,56 @@ void ABlasterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bIsOnLadder && CurrentLadder)
+	// 스플라인 기반 사다리 클라이밍 (서버에서 실행, 발 기준)
+	if (bIsOnLadder && HasAuthority())
 	{
-		const FVector Bottom = CurrentLadder->GetBottomLocation();
-		const FVector Top = CurrentLadder->GetTopLocation();
-		const FVector LadderVector = Top - Bottom;
-		const float LadderLength = LadderVector.Size();
-		if (LadderLength > KINDA_SMALL_NUMBER)
+		// nullptr 선행 검사 (BP/멀티플레이어에서 CurrentLadder 단절 시 크래시 방지)
+		if (!CurrentLadder || !IsValid(CurrentLadder))
 		{
-			const FVector LadderDir = LadderVector / LadderLength;
-			const float DistanceOnLadder = FVector::DotProduct(GetActorLocation() - Bottom, LadderDir);
-			float CapsuleHalfHeight = 0.f;
-			if (const UCapsuleComponent* Capsule = GetCapsuleComponent())
+			StopLadder(false);
+			return;
+		}
+		if (!CurrentLadder->HasValidSpline())
+		{
+			StopLadder(false);
+			return;
+		}
+		const float SplineLength = CurrentLadder->GetSplineLength();
+		const UCapsuleComponent* Capsule = GetCapsuleComponent();
+		const float CapsuleHalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 88.f;
+
+		if (SplineLength > KINDA_SMALL_NUMBER)
+		{
+			// 거리 업데이트 (발 기준이므로 바닥 별도 감지 불필요)
+			LadderCurrentDistance += LadderInputAxis * LadderClimbSpeed * DeltaTime;
+			LadderCurrentDistance = FMath::Clamp(LadderCurrentDistance, 0.f, SplineLength);
+
+			// 스플라인 위치 = 발(캡슐 하단) 기준
+			const FVector FeetSplineLocation = CurrentLadder->GetLocationAtDistanceAlongSpline(LadderCurrentDistance);
+			const FVector ActorLocation = FeetSplineLocation + FVector(0.f, 0.f, CapsuleHalfHeight);
+
+			SetActorLocation(ActorLocation, false);
+
+			// 회전: 사다리 방향(벽 쪽)을 향하도록 GetLadderForwardVector 사용
+			FVector Direction = CurrentLadder ? CurrentLadder->GetLadderForwardVector() : FVector(1.f, 0.f, 0.f);
+			if (!Direction.IsNearlyZero())
 			{
-				CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+				const FRotator NewRotation(0.f, Direction.Rotation().Yaw, 0.f);
+				SetActorRotation(NewRotation);
 			}
-			const float EffectiveBottomThreshold = LadderBottomExitThreshold + CapsuleHalfHeight;
-			if (LadderInputAxis > 0.f && DistanceOnLadder >= (LadderLength - LadderTopExitThreshold))
+
+			// 꼭대기/바닥 도달 시 이동만 멈춤 (탈출은 Jump 키로)
+			if (LadderCurrentDistance >= SplineLength - LadderTopExitThreshold)
 			{
-				if (CanExitLadderAtTop())
-				{
-					StopLadder(true);
-				}
-				else if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+				if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
 				{
 					MoveComp->StopMovementImmediately();
 					LadderInputAxis = 0.f;
 				}
 			}
-			else if (LadderInputAxis < 0.f && DistanceOnLadder <= EffectiveBottomThreshold)
+			else if (LadderCurrentDistance <= LadderBottomExitThreshold)
 			{
-				StopLadder(false);
+				LadderInputAxis = 0.f;
 			}
 		}
 	}
@@ -715,7 +758,7 @@ void ABlasterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// Enhanced Input으로 전환
+	// Enhanced Input으로 변환
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		// Movement action (2D Vector - WASD)
@@ -1067,19 +1110,17 @@ void ABlasterCharacter::CrouchButtonPressed()
 // Enhanced Input handlers
 void ABlasterCharacter::OnMovement(const FInputActionValue& Value)
 {
-	// 2D Vector 입력 처리 (WASD 등)
+	// 2D Vector 입력 처리 (WASD)
 	const FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (bIsOnLadder && CurrentLadder)
 	{
 		LadderInputAxis = MovementVector.Y;
-		if (FMath::Abs(LadderInputAxis) > KINDA_SMALL_NUMBER)
-		{
-			AddMovementInput(CurrentLadder->GetLadderUpVector(), LadderInputAxis);
-		}
+		ServerUpdateLadderInput(LadderInputAxis);
 		return;
 	}
 
+	// 사다리 범위 안 + 미부착: 이동 입력으로는 부착되지 않음 (Jump 키로만 부착)
 	LadderInputAxis = 0.f;
 	// X축: 전후 이동 (W/S)
 	MoveForward(MovementVector.Y);
@@ -1090,6 +1131,7 @@ void ABlasterCharacter::OnMovement(const FInputActionValue& Value)
 void ABlasterCharacter::OnMovementCompleted(const FInputActionValue& Value)
 {
 	LadderInputAxis = 0.f;
+	ServerUpdateLadderInput(0.f);
 	if (bIsOnLadder)
 	{
 		if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
@@ -1099,6 +1141,12 @@ void ABlasterCharacter::OnMovementCompleted(const FInputActionValue& Value)
 	}
 }
 
+void ABlasterCharacter::SetCanClimbLadder(bool bInCanClimb, ALadderActor* Ladder)
+{
+	bCanClimb = bInCanClimb;
+	CurrentLadder = bInCanClimb ? Ladder : nullptr;
+}
+
 void ABlasterCharacter::StartLadder(ALadderActor* LadderActor)
 {
 	if (!LadderActor || !LadderActor->bCanAccess)
@@ -1106,7 +1154,8 @@ void ABlasterCharacter::StartLadder(ALadderActor* LadderActor)
 		return;
 	}
 
-	if (GetWorld())
+	// 동일 사다리 재부착(트리거 안에 머문 경우)은 블록 생략
+	if (GetWorld() && CurrentLadder != LadderActor)
 	{
 		const float Now = GetWorld()->GetTimeSeconds();
 		if (Now - LastLadderExitTime < LadderReenterBlockSeconds)
@@ -1134,11 +1183,18 @@ void ABlasterCharacter::StartLadder(ALadderActor* LadderActor)
 		MoveComp->StopMovementImmediately();
 		MoveComp->SetMovementMode(MOVE_Flying);
 		MoveComp->MaxFlySpeed = LadderClimbSpeed;
+		MoveComp->GravityScale = 0.f;
 	}
 
 	CurrentLadder = LadderActor;
 	bIsOnLadder = true;
 	LadderInputAxis = 0.f;
+
+	// 스플라인 거리 기반: 발(캡슐 하단) 위치 기준으로 초기화
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const float HalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 88.f;
+	const FVector FeetLocation = GetActorLocation() - FVector(0.f, 0.f, HalfHeight);
+	LadderCurrentDistance = LadderActor->FindDistanceAlongSplineForWorldLocation(FeetLocation);
 }
 
 void ABlasterCharacter::StopLadder(bool bPlaceAtTop)
@@ -1158,26 +1214,125 @@ void ABlasterCharacter::StopLadder(bool bPlaceAtTop)
 	{
 		MoveComp->StopMovementImmediately();
 		MoveComp->SetMovementMode(CachedMovementMode, CachedCustomMovementMode);
+		MoveComp->GravityScale = 1.f;
 		if (CachedMaxFlySpeed > 0.f)
 		{
 			MoveComp->MaxFlySpeed = CachedMaxFlySpeed;
 		}
 	}
 
-	if (CurrentLadder && bPlaceAtTop)
+	if (CurrentLadder)
 	{
-		const FVector ExitLocation = CurrentLadder->GetTopLocation() + CurrentLadder->GetActorForwardVector() * LadderExitForwardOffset;
-		SetActorLocation(ExitLocation);
+		if (bPlaceAtTop)
+		{
+			HandleTopExit();
+		}
+		else if (LadderCurrentDistance <= LadderBottomExitThreshold)
+		{
+			// 스플라인 끝: 바닥에 배치
+			const FVector TraceStart = CurrentLadder->HasValidSpline()
+				? CurrentLadder->GetLocationAtDistanceAlongSpline(LadderCurrentDistance)
+				: (GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f));
+			HandleBottomExit(TraceStart, false);
+		}
 	}
 
 	bIsOnLadder = false;
-	CurrentLadder = nullptr;
+	// CurrentLadder는 overlap End 시에만 초기화 (트리거 안에 있으면 재부착 가능)
 	LadderInputAxis = 0.f;
+	LadderCurrentDistance = 0.f;
 
 	if (GetWorld())
 	{
 		LastLadderExitTime = GetWorld()->GetTimeSeconds();
 	}
+}
+
+void ABlasterCharacter::HandleTopExit()
+{
+	if (!CurrentLadder || !GetWorld())
+	{
+		return;
+	}
+
+	// GetDirectionAtDistanceAlongSpline 대신 GetLadderUpVector/GetActorForwardVector 사용 (spline 크래시 방지)
+	const float SplineLength = CurrentLadder->GetSplineLength();
+	FVector EndLocation = CurrentLadder->HasValidSpline()
+		? CurrentLadder->GetLocationAtDistanceAlongSpline(SplineLength)
+		: CurrentLadder->GetTopLocation();
+	FVector Forward = CurrentLadder->GetActorForwardVector();
+	if (Forward.IsNearlyZero())
+	{
+		Forward = CurrentLadder->GetLadderUpVector();
+	}
+	FVector TargetLocation = EndLocation + (Forward * 50.f);
+
+	// LineTrace: 위에서 아래로 바닥 체크
+	const FVector TraceStart = TargetLocation + FVector(0.f, 0.f, 50.f);
+	const FVector TraceEnd = TargetLocation - FVector(0.f, 0.f, 200.f);
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderTopExit), false, this);
+	FHitResult Hit;
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Params);
+
+	if (bHit && Hit.bBlockingHit)
+	{
+		// 캡슐 바닥이 바닥에 닿도록 오프셋
+		float CapsuleHalfHeight = 0.f;
+		if (const UCapsuleComponent* Capsule = GetCapsuleComponent())
+		{
+			CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		}
+		const FVector FinalLocation = Hit.ImpactPoint + FVector(0.f, 0.f, CapsuleHalfHeight);
+		SetActorLocation(FinalLocation);
+	}
+	else
+	{
+		// 히트 없으면 TargetLocation 사용
+		SetActorLocation(TargetLocation);
+	}
+}
+
+void ABlasterCharacter::HandleBottomExit(const FVector& Point, bool bUseAsFloorPoint)
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	float CapsuleHalfHeight = 88.f;
+	if (const UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	}
+
+	FVector FloorPoint = Point;
+	if (!bUseAsFloorPoint)
+	{
+		// Point에서 아래로 트레이스
+		const FVector TraceStart = Point;
+		const FVector TraceEnd = Point - FVector(0.f, 0.f, 200.f);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(LadderBottomExit), false, this);
+		if (CurrentLadder)
+		{
+			Params.AddIgnoredActor(CurrentLadder);
+		}
+		FHitResult Hit;
+		if (GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, Params))
+		{
+			FloorPoint = Hit.ImpactPoint;
+		}
+	}
+
+	// 사다리 하단 X,Y에 배치하여 트리거 안에 있도록 (재부착 가능)
+	FVector FinalLocation = FloorPoint + FVector(0.f, 0.f, CapsuleHalfHeight);
+	if (IsValid(CurrentLadder))
+	{
+		const FVector LadderBottomXY = CurrentLadder->GetLocationAtDistanceAlongSpline(0.f);
+		FinalLocation.X = LadderBottomXY.X;
+		FinalLocation.Y = LadderBottomXY.Y;
+	}
+	SetActorLocation(FinalLocation);
 }
 
 bool ABlasterCharacter::CanExitLadderAtTop() const
@@ -1215,6 +1370,11 @@ void ABlasterCharacter::ServerStopLadder_Implementation(bool bPlaceAtTop)
 	StopLadder(bPlaceAtTop);
 }
 
+void ABlasterCharacter::ServerUpdateLadderInput_Implementation(float AxisValue)
+{
+	LadderInputAxis = AxisValue;
+}
+
 void ABlasterCharacter::OnRep_LadderState()
 {
 	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
@@ -1224,10 +1384,12 @@ void ABlasterCharacter::OnRep_LadderState()
 			MoveComp->StopMovementImmediately();
 			MoveComp->SetMovementMode(MOVE_Flying);
 			MoveComp->MaxFlySpeed = LadderClimbSpeed;
+			MoveComp->GravityScale = 0.f;
 		}
 		else
 		{
 			MoveComp->SetMovementMode(MOVE_Walking);
+			MoveComp->GravityScale = 1.f;
 		}
 	}
 }
@@ -1247,7 +1409,30 @@ void ABlasterCharacter::OnLook(const FInputActionValue& Value)
 
 void ABlasterCharacter::OnJumpAction(const FInputActionValue& Value)
 {
-	Jump();
+	// 사다리 범위 내: Jump = 부착 / 떨어지기 / 위층 이동
+	if (bCanClimb && CurrentLadder)
+	{
+		if (!bIsOnLadder)
+		{
+			StartLadder(CurrentLadder);
+		}
+		else
+		{
+			// Jump로 탈출: 꼭대기+위층 공간 있으면 위층, 아니면 바닥/떨어지기 (StopLadder에서 바닥 배치 처리)
+			const float SplineLength = CurrentLadder->GetSplineLength();
+			const bool bNearTop = LadderCurrentDistance >= SplineLength - LadderTopExitThreshold;
+			if (bNearTop && CanExitLadderAtTop())
+			{
+				StopLadder(true);
+			}
+			else
+			{
+				StopLadder(false);
+			}
+		}
+		return;
+	}
+	//Jump();
 }
 
 void ABlasterCharacter::OnEquipAction(const FInputActionValue& Value)
@@ -1408,12 +1593,7 @@ void ABlasterCharacter::Jump()
 {
 	if (Combat && Combat->bHoldingTheFlag) return;
 	if (bDisableGameplay) return;
-	if (bIsOnLadder)
-	{
-		StopLadder(false);
-		Super::Jump();
-		return;
-	}
+	// 사다리 처리는 OnJumpAction에서 Jump 호출 전에 처리됨
 	if (bIsCrouched)
 	{
 		UnCrouch();
@@ -1430,10 +1610,10 @@ void ABlasterCharacter::Crouch(bool bClientSimulation)
 	if (bDisableGameplay) return;
 	if (bIsCrouched) return;
 
-	// 상태를 즉시 적용해 캡슐/이동을 맞춤
+	// 캡슐 즉시 적용, 캡슐/이동 맞춤
 	Super::Crouch(bClientSimulation);
 
-	// 몽타주 재생 (서버 → 멀티캐스트)
+	// 몽타주 재생 (서버 멀티캐스트)
 	PlayCrouchMontageLocal(true);
 	if (HasAuthority())
 	{
@@ -1445,10 +1625,10 @@ void ABlasterCharacter::UnCrouch(bool bClientSimulation)
 {
 	if (!bIsCrouched) return;
 
-	// 상태를 먼저 해제
+	// 캡슐 먼저 해제
 	Super::UnCrouch(bClientSimulation);
 
-	// 몽타주 재생 (서버 → 멀티캐스트)
+	// 몽타주 재생 (서버 멀티캐스트)
 	PlayCrouchMontageLocal(false);
 	if (HasAuthority())
 	{
@@ -1723,7 +1903,7 @@ void ABlasterCharacter::DropCarriedParcelIfAny()
 
 	if (AParcelActor* Carried = InteractionComponent->GetCarriedParcel())
 	{
-		// 드랍 후 서버에서 소켓 정리되도록 요청
+		// 드랍 시 서버에서 소켓 처리되도록 요청
 		Carried->RequestDrop(FVector::ZeroVector);
 	}
 }
@@ -1825,8 +2005,7 @@ void ABlasterCharacter::ToggleHeadMesh(bool bHideHeadMesh)
                 }
             };
 
-            // 본 메쉬는 계속 렌더/쉐도우, 머리만 가림
-            SkeletalMesh->SetCastHiddenShadow(true);
+	            // 메쉬는 계속 헤더/좌도 머리가 가림
             SkeletalMesh->SetOwnerNoSee(false);
 
             const TArray<FName> HeadBones = {
@@ -1865,7 +2044,7 @@ void ABlasterCharacter::UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy)
 
     if (bEnableShadowProxy)
     {
-        // Hide all bones, then unhide head-related bones so only 머리 부분이 그림자를 남김
+        // Hide all bones, then unhide head-related bones so only 머리 부분이 그림자만 보임
         const int32 BoneCount = HeadShadowProxy->GetNumBones();
         for (int32 Index = 0; Index < BoneCount; ++Index)
         {
@@ -1883,8 +2062,8 @@ void ABlasterCharacter::UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy)
             HeadShadowProxy->UnHideBoneByName(Bone);
         }
 
-        HeadShadowProxy->SetHiddenInGame(true);  // 본 렌더는 숨김
-        HeadShadowProxy->SetVisibility(true, true); // CastHiddenShadow 로 그림자만 유지
+        HeadShadowProxy->SetHiddenInGame(true);  // 숨겨져 있음
+        HeadShadowProxy->SetVisibility(true, true); // CastHiddenShadow 그림자만 보임
         HeadShadowProxy->SetCastHiddenShadow(true);
         HeadShadowProxy->SetCastShadow(true);
     }
@@ -1892,7 +2071,7 @@ void ABlasterCharacter::UpdateHeadShadowProxyVisibility(bool bEnableShadowProxy)
     {
         HeadShadowProxy->SetHiddenInGame(true);
         HeadShadowProxy->SetVisibility(true, true);
-        // 해제 시 본 상태 복원 (모두 언하이드)
+		// 해제 시 기본 상태 복원 (모두 언하이드)
         const int32 BoneCount = HeadShadowProxy->GetNumBones();
         for (int32 Index = 0; Index < BoneCount; ++Index)
         {
@@ -2181,7 +2360,7 @@ void ABlasterCharacter::UpdateSuspiciousBehavior(ESuspiciousBehavior NewBehavior
 		return;
 	}
 
-	// SuspicionManager에 이벤트 브로드캐스트 (같은 행동이어도 시간이 지나면 다시 감지되도록)
+	// SuspicionManager로 이벤트 브로드캐스트 (같은 동작 반복 시 시간 갱신되면 표시 감소되도록)
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameInstance* GameInstance = World->GetGameInstance())
@@ -2195,13 +2374,13 @@ void ABlasterCharacter::UpdateSuspiciousBehavior(ESuspiciousBehavior NewBehavior
 		}
 	}
 
-	// 상태는 항상 업데이트 (같은 행동이어도 시간 갱신)
+	// 상태/위젯 업데이트 (같은 동작 반복 시 시간 갱신)
 	SetSuspiciousBehavior(NewBehavior);
 }
 
 void ABlasterCharacter::OnRep_CurrentSuspiciousBehavior(ESuspiciousBehavior OldBehavior)
 {
-	// 클라이언트에서 의심 행동 상태 변경 알림
+	// 클라이언트에 의심 동작 상태 변화 표시
 	if (CurrentSuspiciousBehavior != ESuspiciousBehavior::None)
 	{
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[BlasterCharacter] Client: Suspicious behavior replicated: %s"), 
@@ -2226,7 +2405,7 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 
 	if (bBeingPunished && Punisher)
 	{
-		// 움직임 멈추기
+		// 이동 멈춤
 		GetCharacterMovement()->DisableMovement();
 		GetCharacterMovement()->StopMovementImmediately();
 		
@@ -2240,10 +2419,9 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 			Controller->SetIgnoreMoveInput(true);
 		}
 
-		// Mother AI를 향하도록 캐릭터 회전 (즉시)
+		// Mother AI를 향해 캐릭터 회전 (즉시)
 		FVector ToPunisher = (Punisher->GetActorLocation() - GetActorLocation()).GetSafeNormal();
-		ToPunisher.Z = 0.0f; // 수평 회전만
-		
+		ToPunisher.Z = 0.0f; // 수평 회전
 		if (!ToPunisher.IsNearlyZero())
 		{
 			FRotator TargetRotation = ToPunisher.Rotation();
@@ -2278,7 +2456,7 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 			return;
 		}
 
-		// 움직임 복구 - 명시적으로 활성화
+		// 이동 복구 - 명시적으로 재설정
 		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
 		{
 			MovementComp->SetMovementMode(MOVE_Walking);
@@ -2294,7 +2472,7 @@ void ABlasterCharacter::Multicast_SetBeingPunished_Implementation(bool bPunishin
 			Controller->ResetIgnoreLookInput();
 			Controller->ResetIgnoreMoveInput();
 
-			// 추가 보장: 입력 무시 플래그 강제 해제
+			// 추적 보장: 입력 무시 플래그 강제 해제
 			Controller->SetIgnoreLookInput(false);
 			Controller->SetIgnoreMoveInput(false);
 		}
@@ -2340,7 +2518,7 @@ void ABlasterCharacter::HandleOutOfLives()
 		Client_HandleOutOfLives();
 	}
 
-	// 사망 몽타주 종료 처리는 Notify에서 호출하도록 변경
+	// 사망 몽타주 종료 처리(Notify에서 호출되도록 변경)
 }
 
 void ABlasterCharacter::MoveToConveyorEntry()
@@ -2382,7 +2560,7 @@ void ABlasterCharacter::MoveToConveyorEntry()
 		}
 		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
 		{
-			// 사망 상태에서도 중력으로 떨어지도록 낙하 모드로 전환
+			// 사망 상태에서 중력으로 떨어지도록 하강 모드로 전환
 			MovementComp->SetMovementMode(MOVE_Falling);
 			MovementComp->Activate(true);
 			MovementComp->SetComponentTickEnabled(true);
@@ -2403,7 +2581,7 @@ void ABlasterCharacter::MoveToConveyorEntry()
 		SetActorLocation(EntryLocation);
 		if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
 		{
-			// 사망 상태에서도 중력으로 떨어지도록 낙하 모드로 전환
+			// 사망 상태에서 중력으로 떨어지도록 하강 모드로 전환
 			MovementComp->SetMovementMode(MOVE_Falling);
 			MovementComp->Activate(true);
 			MovementComp->SetComponentTickEnabled(true);
@@ -2433,16 +2611,16 @@ void ABlasterCharacter::Multicast_HandleOutOfLives_Implementation()
 		FollowCamera->SetRelativeRotation(FRotator(DeathThirdPersonRotationPitch, 0.f, 0.f));
 		FollowCamera->bUsePawnControlRotation = true;
 
-		// 1인칭 머리 숨김을 해제해 3인칭에서 머리가 보이도록
+		// 1인칭 머리 숨김 해제, 3인칭에서 머리가 보이도록
 		ToggleHeadMesh(false);
 	}
 
-	// 사망 포즈(선택)
+	// 사망 몽타주(재생)
 	if (DeathMontage && GetMesh() && GetMesh()->GetAnimInstance())
 	{
 		USkeletalMeshComponent* MeshComp = GetMesh();
 		UAnimInstance* AnimInstance = MeshComp->GetAnimInstance();
-		// 기존 몽타주가 재생 중이면 사망 몽타주가 막히는 경우가 있어 정리
+		// 기존 몽타주 재생 중이면 사망 몽타주 재생 막히는 경우가 있어 처리
 		AnimInstance->StopAllMontages(0.0f);
 		MeshComp->bPauseAnims = false;
 
@@ -2551,7 +2729,7 @@ void ABlasterCharacter::RotateCameraToPunisher(float DeltaTime)
 	// 현재 카메라 회전
 	FRotator CurrentRotation = Controller->GetControlRotation();
 
-	// 목표 회전 업데이트 (Punisher가 움직일 수 있으므로)
+	// 목표 회전 업데이트 (Punisher가 이동할 수 있으므로)
 	FVector CameraLocation = FollowCamera ? FollowCamera->GetComponentLocation() : GetActorLocation();
 	FVector ToPunisherFromCamera = (PunisherActor->GetActorLocation() - CameraLocation).GetSafeNormal();
 	TargetCameraRotation = ToPunisherFromCamera.Rotation();
@@ -2568,7 +2746,7 @@ void ABlasterCharacter::RotateCameraToPunisher(float DeltaTime)
 	if (YawDiff < 5.0f && PitchDiff < 5.0f && !bCameraRotationComplete)
 	{
 		bCameraRotationComplete = true;
-		Controller->SetControlRotation(TargetCameraRotation); // 정확한 위치로 설정
+		Controller->SetControlRotation(TargetCameraRotation); // 정확히 위치 설정
 		UE_LOG(LogTemp, Log, TEXT("[BlasterCharacter] Camera rotation to punisher completed"));
 	}
 }

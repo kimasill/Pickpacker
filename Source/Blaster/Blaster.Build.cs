@@ -10,10 +10,12 @@ public class Blaster : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PrivatePCHHeaderFile = "Blaster.h";
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemSteam", "PCG", "GameplayTags", "AIModule", "NavigationSystem", "DeveloperSettings", "LevelSequence", "MovieScene" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemUtils", "GameplayTags", "AIModule", "NavigationSystem", "DeveloperSettings", "LevelSequence", "MovieScene", "Sockets" });
+        DynamicallyLoadedModuleNames.Add("OnlineSubsystemSteam");
 
-		// Editor-only dependencies should only be added when building the editor
-		if (Target.bBuildEditor)
+
+        // Editor-only dependencies should only be added when building the editor
+        if (Target.bBuildEditor)
 		{
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{

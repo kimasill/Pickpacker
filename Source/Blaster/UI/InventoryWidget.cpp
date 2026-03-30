@@ -16,6 +16,8 @@
 #include "Engine/Texture2D.h"
 #include "UObject/UnrealType.h"
 #include "InputLibrary.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -35,32 +37,53 @@ void UInventoryWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    // Find and bind to PlayerInventoryComponent's OnInventoryUpdated event
-    if (APlayerController* PC = GetOwningPlayer())
+    TryBindToInventoryComponent();
+}
+
+void UInventoryWidget::TryBindToInventoryComponent()
+{
+    if (PlayerInventoryComponent)
     {
-        if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn()))
+        return;
+    }
+
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC)
+    {
+        return;
+    }
+
+    ABlasterCharacter* Character = Cast<ABlasterCharacter>(PC->GetPawn());
+    if (!Character)
+    {
+        // 패키징 빌드: Pawn이 아직 없을 수 있음. 짧은 지연 후 재시도
+        if (RetryBindCount < MaxRetryBindCount && GetWorld())
         {
-            PlayerInventoryComponent = Character->GetPlayerInventoryComponent();
-            if (PlayerInventoryComponent)
-            {
-                PlayerInventoryComponent->OnInventoryUpdated.AddDynamic(this, &UInventoryWidget::HandleInventoryUpdated);
-                
-                // Update with current inventory immediately
-                HandleInventoryUpdated(PlayerInventoryComponent->GetCollectedItems(), PlayerInventoryComponent->GetInventoryCount());
-            }
+            ++RetryBindCount;
+            GetWorld()->GetTimerManager().SetTimer(RetryBindTimerHandle, this, &UInventoryWidget::TryBindToInventoryComponent, 0.1f, false);
         }
+        return;
+    }
+
+    PlayerInventoryComponent = Character->GetPlayerInventoryComponent();
+    if (PlayerInventoryComponent)
+    {
+        PlayerInventoryComponent->OnInventoryUpdated.AddDynamic(this, &UInventoryWidget::HandleInventoryUpdated);
+        HandleInventoryUpdated(PlayerInventoryComponent->GetCollectedItems(), PlayerInventoryComponent->GetInventoryCount());
     }
 }
 
 void UInventoryWidget::NativeDestruct()
 {
-	// Unbind from PlayerInventoryComponent event
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RetryBindTimerHandle);
+	}
 	if (PlayerInventoryComponent)
 	{
 		PlayerInventoryComponent->OnInventoryUpdated.RemoveDynamic(this, &UInventoryWidget::HandleInventoryUpdated);
 		PlayerInventoryComponent = nullptr;
 	}
-
 	Super::NativeDestruct();
 }
 
@@ -76,11 +99,11 @@ void UInventoryWidget::UpdateInventory(const TArray<AParcelActor*>& Items)
 	InventoryVerticalBox->ClearChildren();
 	ItemSlots.Empty();
 
-	// Add items up to MaxDisplaySlots
+	// Add items up to MaxDisplaySlots (파괴된 파슬 제외)
 	int32 DisplayCount = FMath::Min(Items.Num(), MaxDisplaySlots);
 	for (int32 i = 0; i < DisplayCount; ++i)
 	{
-		if (Items[i])
+		if (Items[i] && IsValid(Items[i]))
 		{
 			AddItemToDisplay(Items[i], i);
 		}
@@ -96,7 +119,7 @@ void UInventoryWidget::UpdateInventory(const TArray<AParcelActor*>& Items)
 
 void UInventoryWidget::AddItemToDisplay(AParcelActor* Item, int32 SlotIndex)
 {
-	if (!Item || !InventoryVerticalBox)
+	if (!Item || !IsValid(Item) || !InventoryVerticalBox)
 	{
 		return;
 	}
@@ -112,7 +135,7 @@ void UInventoryWidget::AddItemToDisplay(AParcelActor* Item, int32 SlotIndex)
 
 void UInventoryWidget::RemoveItemFromDisplay(AParcelActor* Item)
 {
-	if (!Item)
+	if (!Item || !IsValid(Item))
 	{
 		return;
 	}
@@ -141,12 +164,20 @@ UInventoryItemSlotWidget* UInventoryWidget::GetSlotWidgetAt(int32 Index) const
 
 UInventoryItemSlotWidget* UInventoryWidget::CreateItemSlot(AParcelActor* Item, int32 SlotIndex)
 {
-	if (!Item || !ItemSlotWidgetClass)
+	if (!Item)
 	{
 		return nullptr;
 	}
+	if (!ItemSlotWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[InventoryWidget] ItemSlotWidgetClass is null. Set it in Blueprint (e.g. WBP_InventoryWidget)."));
+		return nullptr;
+	}
 
-	UInventoryItemSlotWidget* SlotWidget = CreateWidget<UInventoryItemSlotWidget>(GetWorld(), ItemSlotWidgetClass);
+	APlayerController* PC = GetOwningPlayer();
+	UInventoryItemSlotWidget* SlotWidget = PC
+		? CreateWidget<UInventoryItemSlotWidget>(PC, ItemSlotWidgetClass)
+		: CreateWidget<UInventoryItemSlotWidget>(GetWorld(), ItemSlotWidgetClass);
 	if (SlotWidget)
 	{
 		SlotWidget->SetParcelTagDisplayTable(ParcelTagDisplayTable);

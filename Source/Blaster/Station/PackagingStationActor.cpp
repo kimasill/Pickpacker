@@ -5,6 +5,8 @@
 #include "Blaster/Parcel/PackedParcelActor.h"
 #include "Blaster/Parcel/UnpackedParcelActor.h"
 #include "Blaster/DataAssets/DA_ParcelData.h"
+#include "Blaster/GameMode/PickpackerGameMode.h"
+#include "Blaster/GameState/PickpackerGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
@@ -315,7 +317,10 @@ void APackagingStationActor::ProcessPackaging()
 	for (int32 RecipeIndex = 0; RecipeIndex < ParcelDataAsset->PackageRecipes.Num(); ++RecipeIndex)
 	{
 		const FParcelPackageRecipe& Recipe = ParcelDataAsset->PackageRecipes[RecipeIndex];
-		if (Recipe.RequiredCount <= 0)
+		const int32 MinUnits = Recipe.MinRequiredCount;
+		const int32 MaxUnits = Recipe.MaxRequiredCount;
+		const int32 MinContentCount = FMath::Max(1, Recipe.MinContentCount);
+		if (MinUnits <= 0 || MaxUnits < MinUnits)
 		{
 			continue;
 		}
@@ -325,7 +330,8 @@ void APackagingStationActor::ProcessPackaging()
 		{
 			TArray<AParcelActor*>* CandidatesPtr = ByRowName.Find(RowTarget);
 			const int32 TotalUnits = CandidatesPtr ? GetCandidateUnits(*CandidatesPtr) : 0;
-			if (CandidatesPtr && TotalUnits >= Recipe.RequiredCount)
+			const int32 CandidateCount = CandidatesPtr ? CandidatesPtr->Num() : 0;
+			if (CandidatesPtr && TotalUnits >= MinUnits && CandidateCount >= MinContentCount)
 			{
 				MatchedRowsByRecipe.FindOrAdd(RecipeIndex).Add(RowTarget);
 				EligibleRowRecipes.Add(RecipeIndex);
@@ -347,7 +353,8 @@ void APackagingStationActor::ProcessPackaging()
 
 			TArray<AParcelActor*>* CandidatesPtr = ByTag.Find(TagTarget);
 			const int32 TotalUnits = CandidatesPtr ? GetCandidateUnits(*CandidatesPtr) : 0;
-			if (CandidatesPtr && TotalUnits >= Recipe.RequiredCount)
+			const int32 CandidateCount = CandidatesPtr ? CandidatesPtr->Num() : 0;
+			if (CandidatesPtr && TotalUnits >= MinUnits && CandidateCount >= MinContentCount)
 			{
 				MatchedTagsByRecipe.FindOrAdd(RecipeIndex).Add(TagTarget);
 				EligibleTagRecipes.Add(RecipeIndex);
@@ -395,17 +402,25 @@ void APackagingStationActor::ProcessPackaging()
 		return;
 	}
 
-	// 소비할 파슬 선택: 요구 단위에 정확히 일치하는 조합만 사용
-	TArray<AParcelActor*> Consume;
-	const int32 RequiredUnits = Recipe.RequiredCount;
-	TArray<int32> PrevIndex;
-	TArray<int32> PrevSum;
-	PrevIndex.Init(INDEX_NONE, RequiredUnits + 1);
-	PrevSum.Init(-1, RequiredUnits + 1);
-	PrevIndex[0] = -2;
-	PrevSum[0] = 0;
+	// 소비할 파슬 선택: Min~Max 단위 범위 내, 최소 MinContentCount개 이상 포함 (가능하면 최대 수량 사용)
+	const int32 MinUnits = Recipe.MinRequiredCount;
+	const int32 MaxUnits = Recipe.MaxRequiredCount;
+	const int32 MinContentCount = FMath::Max(1, Recipe.MinContentCount);
+	const int32 MaxCount = CandidatesPtr->Num();
 
-	for (int32 CandidateIndex = 0; CandidateIndex < CandidatesPtr->Num(); ++CandidateIndex)
+	TArray<AParcelActor*> Consume;
+	// 2D DP: (sum, count) -> backtrack info. count = 물건 개수(내용물 개수)
+	struct FPackState { int32 PrevSum = -1; int32 PrevCount = -1; int32 CandidateIndex = -1; };
+	TArray<TArray<FPackState>> Dp;
+	Dp.SetNum(MaxUnits + 1);
+	for (int32 s = 0; s <= MaxUnits; ++s)
+	{
+		Dp[s].SetNum(MaxCount + 1);
+	}
+	Dp[0][0].PrevSum = -2; // 시작 상태 표시
+	Dp[0][0].PrevCount = -2;
+
+	for (int32 CandidateIndex = 0; CandidateIndex < MaxCount; ++CandidateIndex)
 	{
 		AParcelActor* Candidate = (*CandidatesPtr)[CandidateIndex];
 		if (!Candidate)
@@ -414,45 +429,104 @@ void APackagingStationActor::ProcessPackaging()
 		}
 
 		const int32 CandidateUnits = FMath::Max(1, Candidate->GetPackagingSpaceUnits());
-		for (int32 Sum = RequiredUnits - CandidateUnits; Sum >= 0; --Sum)
+		for (int32 Sum = MaxUnits - CandidateUnits; Sum >= 0; --Sum)
 		{
-			if (PrevIndex[Sum] != INDEX_NONE && PrevIndex[Sum + CandidateUnits] == INDEX_NONE)
+			for (int32 Count = MaxCount - 1; Count >= 0; --Count)
 			{
-				PrevIndex[Sum + CandidateUnits] = CandidateIndex;
-				PrevSum[Sum + CandidateUnits] = Sum;
+				const bool bPrevValid = (Sum == 0 && Count == 0)
+					? (Dp[0][0].PrevSum == -2)
+					: (Dp[Sum][Count].PrevSum != -1);
+				if (!bPrevValid)
+				{
+					continue;
+				}
+				const int32 NewSum = Sum + CandidateUnits;
+				const int32 NewCount = Count + 1;
+				if (NewSum <= MaxUnits && NewCount <= MaxCount && Dp[NewSum][NewCount].PrevSum == -1)
+				{
+					Dp[NewSum][NewCount].PrevSum = Sum;
+					Dp[NewSum][NewCount].PrevCount = Count;
+					Dp[NewSum][NewCount].CandidateIndex = CandidateIndex;
+				}
 			}
 		}
 	}
 
-	if (PrevIndex[RequiredUnits] == INDEX_NONE)
+	// Min~Max 범위, MinContentCount개 이상인 조합 중 최대 수량 선택
+	int32 TargetSum = INDEX_NONE;
+	int32 TargetCount = INDEX_NONE;
+	for (int32 S = MaxUnits; S >= MinUnits; --S)
 	{
-		return; // 조건을 만족할 조합을 못 찾았으므로 포장 중단
+		for (int32 C = MaxCount; C >= MinContentCount; --C)
+		{
+			if (Dp[S][C].PrevSum != -1 || (S == 0 && C == 0 && Dp[0][0].PrevSum == -2))
+			{
+				TargetSum = S;
+				TargetCount = C;
+				break;
+			}
+		}
+		if (TargetSum != INDEX_NONE)
+		{
+			break;
+		}
 	}
 
-	for (int32 Sum = RequiredUnits; Sum > 0;)
+	if (TargetSum == INDEX_NONE || TargetCount == INDEX_NONE)
 	{
-		const int32 CandidateIndex = PrevIndex[Sum];
-		if (!CandidatesPtr->IsValidIndex(CandidateIndex))
+		return; // Min~Max 범위, MinContentCount 이상 조합을 못 찾았으므로 포장 중단
+	}
+
+	// 백트래킹으로 Consume 구성
+	int32 CurSum = TargetSum;
+	int32 CurCount = TargetCount;
+	while (CurSum > 0 || CurCount > 0)
+	{
+		FPackState& State = Dp[CurSum][CurCount];
+		if (State.PrevSum == -2)
 		{
 			break;
 		}
-
-		if (AParcelActor* Candidate = (*CandidatesPtr)[CandidateIndex])
+		if (State.CandidateIndex >= 0 && CandidatesPtr->IsValidIndex(State.CandidateIndex))
 		{
-			Consume.Add(Candidate);
+			if (AParcelActor* P = (*CandidatesPtr)[State.CandidateIndex])
+			{
+				Consume.Add(P);
+			}
 		}
-
-		const int32 NextSum = PrevSum[Sum];
-		if (NextSum < 0 || NextSum >= Sum)
+		const int32 NextSum = State.PrevSum;
+		const int32 NextCount = State.PrevCount;
+		if (NextSum < 0 && NextCount < 0)
 		{
 			break;
 		}
-		Sum = NextSum;
+		CurSum = NextSum;
+		CurCount = NextCount;
 	}
 
 	if (Consume.Num() == 0)
 	{
 		return;
+	}
+
+	// 크레딧 소모 확인 (부족 시 포장 중단)
+	const int32 RecipeCreditCost = Recipe.CreditCost;
+	if (RecipeCreditCost > 0)
+	{
+		if (APickpackerGameMode* GameMode = GetWorld() ? Cast<APickpackerGameMode>(GetWorld()->GetAuthGameMode()) : nullptr)
+		{
+			if (APickpackerGameState* GameState = GameMode->GetGameState<APickpackerGameState>())
+			{
+				if (GameState->GetTeamCredits() < RecipeCreditCost)
+				{
+					if (bEnableDebugLogging)
+					{
+						UE_LOG(LogTemp, Warning, TEXT("[PackagingStationActor] Insufficient credits for packaging (need %d)"), RecipeCreditCost);
+					}
+					return;
+				}
+			}
+		}
 	}
 
 	// 출력 위치
@@ -528,6 +602,15 @@ void APackagingStationActor::ProcessPackaging()
 			}
 		}
 		
+		// 포장 시 크레딧 소모
+		if (RecipeCreditCost > 0)
+		{
+			if (APickpackerGameMode* GameMode = GetWorld() ? Cast<APickpackerGameMode>(GetWorld()->GetAuthGameMode()) : nullptr)
+			{
+				GameMode->ApplyCreditDelta(-RecipeCreditCost, FString::Printf(TEXT("Packaging cost: %s"), *Recipe.RecipeName));
+			}
+		}
+
 		// PackedParcelActor는 이미 포장 상태로 생성되므로 SetPackaged 불필요
 		if (bEnableDebugLogging)
 		{

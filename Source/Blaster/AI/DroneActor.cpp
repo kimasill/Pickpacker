@@ -5,7 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Perception/AIPerceptionComponent.h"
+#include "Blaster/AI/UPPSightPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISense_Sight.h"
 #include "GameFramework/FloatingPawnMovement.h"
@@ -30,6 +30,10 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "AIController.h"
+#include "Blaster/AI/DroneAIController.h"
+#include "Blaster/AI/PPAIControllerBase.h"
+#include "Blaster/AI/PPPatrolRouteComponent.h"
+#include "Blaster/AI/PPBlackboardKeys.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 
@@ -57,19 +61,10 @@ ADroneActor::ADroneActor()
     DetectionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
     DetectionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 
-    // AI Perception sight
-    PerceptionComp = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("Perception"));
-    SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
-    SightConfig->SightRadius = DetectionRange;
-    SightConfig->LoseSightRadius = DetectionRange * 1.2f;
-    SightConfig->PeripheralVisionAngleDegrees = DetectionAngle;
-    SightConfig->SetMaxAge(2.0f);
-    SightConfig->DetectionByAffiliation.bDetectEnemies = true;
-    SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
-    SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
+    PerceptionComp = CreateDefaultSubobject<UPPSightPerceptionComponent>(TEXT("Perception"));
+    PerceptionComp->ApplySightParameters(DetectionRange, DetectionAngle);
 
-    PerceptionComp->ConfigureSense(*SightConfig);
-    PerceptionComp->SetDominantSense(UAISense_Sight::StaticClass());
+    PatrolRouteComponent = CreateDefaultSubobject<UPPPatrolRouteComponent>(TEXT("PatrolRoute"));
 
     // Create weapon mesh
     WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
@@ -104,8 +99,8 @@ void ADroneActor::BeginPlay()
         MovementComponent->SetUpdatedComponent(RootComponent);
         MovementComponent->MaxSpeed = PatrolSpeed;
 
-        // APawnÀÇ AddMovementInputÀÌ ÀÛµ¿ÇÏ·Á¸é MovementComponent°¡ ÇÊ¿äÇÔ
-        // UFloatingPawnMovement´Â ÀÌ¹Ì »ý¼ºµÇ¾úÀ¸¹Ç·Î, Á÷Á¢ »ç¿ë °¡´É
+        // APawn?? AddMovementInput?? ???????? MovementComponent?? ?????
+        // UFloatingPawnMovement?? ??? ????????????, ???? ??? ????
     }
 
     // Get game state
@@ -124,11 +119,16 @@ void ADroneActor::BeginPlay()
         PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &ADroneActor::OnTargetPerceptionUpdated);
     }
 
+    if (PatrolRouteComponent)
+    {
+        PatrolRouteComponent->OnPatrolRouteChanged.AddDynamic(this, &ADroneActor::HandlePatrolRouteChanged);
+    }
+
     if (HasAuthority())
     {
         InitializeAI();
         
-        // SuspicionManager??êµ¬ë…
+        // SuspicionManager????
         if (UWorld* World = GetWorld())
         {
             if (UGameInstance* GameInstance = World->GetGameInstance())
@@ -172,9 +172,8 @@ void ADroneActor::Tick(float DeltaTime)
     {
         if (UBlackboardComponent* BlackboardComp = DroneController->FindComponentByClass<UBlackboardComponent>())
         {
-            // ¹èÅÍ¸® ·¹º§
-            BlackboardComp->SetValueAsFloat("BatteryLevel", CurrentBatteryLevel);
-            BlackboardComp->SetValueAsBool("BatteryLow", IsBatteryLow());
+            BlackboardComp->SetValueAsFloat(PPBlackboardKeys::BatteryLevel, CurrentBatteryLevel);
+            BlackboardComp->SetValueAsBool(PPBlackboardKeys::BatteryLow, IsBatteryLow());
         }
     }
 
@@ -206,7 +205,9 @@ void ADroneActor::Tick(float DeltaTime)
 
     CheckVisiblePlayersSuspiciousBehavior(DeltaTime);
 
+#if !UE_BUILD_SHIPPING
     DrawPerceptionDebug();
+#endif
 }
 
 void ADroneActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -220,6 +221,11 @@ void ADroneActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
     DOREPLIFETIME(ADroneActor, bIsCharging);
 }
 
+void ADroneActor::HandlePatrolRouteChanged()
+{
+    UpdateBlackboard();
+}
+
 void ADroneActor::UpdateBlackboard()
 {
     if (!BehaviorTree)
@@ -230,44 +236,45 @@ void ADroneActor::UpdateBlackboard()
     {
         if (UBlackboardComponent* BlackboardComp = DroneController->FindComponentByClass<UBlackboardComponent>())
         {
-            // ¹èÅÍ¸® ·¹º§
-            BlackboardComp->SetValueAsFloat("BatteryLevel", CurrentBatteryLevel);
-            BlackboardComp->SetValueAsBool("BatteryLow", IsBatteryLow());
-            
-            // ÃæÀü Áß
-            BlackboardComp->SetValueAsBool("IsCharging", bIsCharging);
+            // ????? ????
+            BlackboardComp->SetValueAsFloat(PPBlackboardKeys::BatteryLevel, CurrentBatteryLevel);
+            BlackboardComp->SetValueAsBool(PPBlackboardKeys::BatteryLow, IsBatteryLow());
 
-            // ¹«±â »ç¿ë
-            BlackboardComp->SetValueAsBool("ShouldUseWeapon", bUseWeapon);
+            BlackboardComp->SetValueAsBool(PPBlackboardKeys::IsCharging, bIsCharging);
 
-            // °¨ÁöµÈ ÇÃ·¹ÀÌ¾î (Ã¹ ¹øÂ° ÇÃ·¹ÀÌ¾î, È£È¯¼º À¯Áö)
-            if (DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
+            BlackboardComp->SetValueAsBool(PPBlackboardKeys::ShouldUseWeapon, bUseWeapon);
+
+            if (CurrentState != EDroneState::Patrol && DetectedPlayers.Num() > 0 && DetectedPlayers[0].IsValid())
             {
-                BlackboardComp->SetValueAsObject("DetectedPlayer", DetectedPlayers[0].Get());
+                BlackboardComp->SetValueAsObject(PPBlackboardKeys::DetectedPlayer, DetectedPlayers[0].Get());
             }
             else
             {
-                BlackboardComp->ClearValue("DetectedPlayer");
+                BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
             }
 
-            // ÇöÀç ¼øÂû Æ÷ÀÎÆ®
-            if (PatrolPoints.IsValidIndex(CurrentPatrolIndex) && PatrolPoints[CurrentPatrolIndex])
+            if (PatrolRouteComponent)
             {
-                APatrolPointActor* CurrentPoint = PatrolPoints[CurrentPatrolIndex];
-                BlackboardComp->SetValueAsObject("CurrentPatrolPoint", CurrentPoint);
-                // À§Ä¡µµ Vector·Î ÀúÀå (Move To Task°¡ »ç¿ë)
-                BlackboardComp->SetValueAsVector("PatrolPointLocation", CurrentPoint->GetActorLocation());
+                if (APatrolPointActor* CurrentPoint = PatrolRouteComponent->GetCurrentPatrolPoint())
+                {
+                    BlackboardComp->SetValueAsObject(PPBlackboardKeys::CurrentPatrolPoint, CurrentPoint);
+                    BlackboardComp->SetValueAsVector(PPBlackboardKeys::PatrolPointLocation, CurrentPoint->GetActorLocation());
+                }
+                else
+                {
+                    BlackboardComp->ClearValue(PPBlackboardKeys::CurrentPatrolPoint);
+                    BlackboardComp->ClearValue(PPBlackboardKeys::PatrolPointLocation);
+                }
             }
             else
             {
-                BlackboardComp->ClearValue("CurrentPatrolPoint");
-                BlackboardComp->ClearValue("PatrolPointLocation");
+                BlackboardComp->ClearValue(PPBlackboardKeys::CurrentPatrolPoint);
+                BlackboardComp->ClearValue(PPBlackboardKeys::PatrolPointLocation);
             }
 
-            // ÃæÀüÀåÄ¡
             if (ChargingStation)
             {
-                BlackboardComp->SetValueAsObject("ChargingStation", ChargingStation);
+                BlackboardComp->SetValueAsObject(PPBlackboardKeys::ChargingStation, ChargingStation);
             }
         }
     }
@@ -279,7 +286,7 @@ void ADroneActor::InitializeAI()
 
     if (!AIController)
     {
-        AIController = GetWorld()->SpawnActor<AAIController>(AAIController::StaticClass());
+        AIController = GetWorld()->SpawnActor<ADroneAIController>(ADroneAIController::StaticClass());
         if (AIController)
         {
             AIController->Possess(this);
@@ -288,15 +295,24 @@ void ADroneActor::InitializeAI()
 
     if (AIController && BehaviorTree && BehaviorTree->BlackboardAsset)
     {
-        UBlackboardComponent* BlackboardComp = nullptr;
-		const bool bBBInit = AIController->UseBlackboard(BehaviorTree->BlackboardAsset, BlackboardComp);
-
-        const bool bBTStarted = AIController->RunBehaviorTree(BehaviorTree);
-
-        if(!bBBInit || !bBTStarted)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Failed to initialize Blackboard or Behavior Tree"));
-            return;
+		if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+		{
+			if (!PPController->RunBehaviorTreeWithBlackboard(BehaviorTree, nullptr))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Failed to initialize Blackboard or Behavior Tree"));
+				return;
+			}
+		}
+		else
+		{
+			UBlackboardComponent* BlackboardComp = nullptr;
+			const bool bBBInit = AIController->UseBlackboard(BehaviorTree->BlackboardAsset, BlackboardComp);
+			const bool bBTStarted = AIController->RunBehaviorTree(BehaviorTree);
+			if (!bBBInit || !bBTStarted)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[DroneActor] Failed to initialize Blackboard or Behavior Tree"));
+				return;
+			}
 		}
 
         UpdateBlackboard();
@@ -342,7 +358,10 @@ void ADroneActor::StartPatrol()
     }
 
     SetDroneState(EDroneState::Patrol);
-    CurrentPatrolIndex = 0;
+    if (PatrolRouteComponent)
+    {
+        PatrolRouteComponent->ResetToStart();
+    }
 }
 
 void ADroneActor::StopPatrol()
@@ -354,63 +373,33 @@ void ADroneActor::StopPatrol()
 
 APatrolPointActor* ADroneActor::GetCurrentPatrolPoint() const
 {
-    if (PatrolPoints.IsValidIndex(CurrentPatrolIndex))
-    {
-        return PatrolPoints[CurrentPatrolIndex];
-    }
-    return nullptr;
+    return PatrolRouteComponent ? PatrolRouteComponent->GetCurrentPatrolPoint() : nullptr;
 }
 
 APatrolPointActor* ADroneActor::GetNextPatrolPoint()
 {
-    if (PatrolPoints.Num() == 0)
-    {
-        return nullptr;
-    }
-
-    int32 NextIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
-
-    if (PatrolPoints.IsValidIndex(NextIndex))
-    {
-        return PatrolPoints[NextIndex];
-    }
-
-    return nullptr;
+    return PatrolRouteComponent ? PatrolRouteComponent->GetNextPatrolPoint() : nullptr;
 }
 
 void ADroneActor::MoveToNextPatrolPoint()
 {
-    if (PatrolPoints.Num() == 0)
+    if (!PatrolRouteComponent || PatrolRouteComponent->PatrolPoints.Num() == 0)
     {
         return;
     }
-    CurrentPatrolIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
-
-    UpdateBlackboard();
-
-    UE_LOG(LogTemp, Log, TEXT("[DroneActor] Moved to next patrol point. Index: %d"), CurrentPatrolIndex);
+    PatrolRouteComponent->MoveToNextPatrolPoint();
+    UE_LOG(LogTemp, Log, TEXT("[DroneActor] Moved to next patrol point. Index: %d"),
+        PatrolRouteComponent ? PatrolRouteComponent->CurrentPatrolIndex : -1);
 }
 
 bool ADroneActor::HasReachedPatrolPoint(float Tolerance) const
 {
-    APatrolPointActor* CurrentPoint = GetCurrentPatrolPoint();
-    if (!CurrentPoint)
-    {
-        return false;
-    }
-
-    float Distance = FVector::Dist(GetActorLocation(), CurrentPoint->GetActorLocation());
-    return Distance <= Tolerance;
+    return PatrolRouteComponent ? PatrolRouteComponent->HasReachedPatrolPoint(Tolerance) : false;
 }
 
 float ADroneActor::GetCurrentPatrolPointWaitTime() const
 {
-    APatrolPointActor* CurrentPoint = GetCurrentPatrolPoint();
-    if (CurrentPoint)
-    {
-        return CurrentPoint->WaitTime;
-    }
-    return 2.0f; // ±âº»°ª
+    return PatrolRouteComponent ? PatrolRouteComponent->GetCurrentPatrolPointWaitTime() : 2.0f;
 }
 #pragma endregion
 
@@ -515,10 +504,7 @@ void ADroneActor::AddDetectedPlayer(ACharacter* Character)
         CurrentDetectionTime = 0.0f;
     }
 
-    if (CurrentState == EDroneState::Patrol || CurrentState == EDroneState::Detecting)
-    {
-        SetDroneState(EDroneState::Detecting);
-    }
+    // íŒ¨íŠ¸ë¡¤ ì¤‘ ë‹¨ìˆœ ë°œê²¬ë§Œìœ¼ë¡œëŠ” Detecting ì „í™˜ ì•ˆ í•¨ (ì ‘ê·¼ X). ì˜ì‹¬ í–‰ë™ ê°ì§€ ì‹œ ProcessPlayerSuspiciousBehaviorì—ì„œ ì „í™˜
 
     UpdateBlackboard();
 }
@@ -530,7 +516,7 @@ bool ADroneActor::CanSeePlayer(ACharacter* Player) const
         return false;
     }
 
-    // Line trace to check line of sight (Åõ½Ã ºÒ°¡´É)
+    // Line trace to check line of sight (???? ?????)
     FVector StartLocation = GetActorLocation();
     FVector EndLocation = Player->GetActorLocation();
 
@@ -654,18 +640,19 @@ void ADroneActor::OnAttackCooldownFinished()
 
 void ADroneActor::DrawPerceptionDebug()
 {
-    // »ö»ó Á¤ÀÇ
+    // ???? ????
     const FColor SightColor = FColor::Green;
     const FColor LoseSightColor = FColor::Yellow;
     const FColor FOVEdgeColor = FColor::Cyan;
 
     const FVector Origin = GetActorLocation();
-    const float SightR = SightConfig ? SightConfig->SightRadius : 0.f;
-    const float LoseSightR = SightConfig ? SightConfig->LoseSightRadius : 0.f;
-    const float HalfAngleDeg = SightConfig ? SightConfig->PeripheralVisionAngleDegrees * 0.5f : 0.f;
+    UAISenseConfig_Sight* SightCfg = PerceptionComp ? PerceptionComp->GetSightConfig() : nullptr;
+    const float SightR = SightCfg ? SightCfg->SightRadius : 0.f;
+    const float LoseSightR = SightCfg ? SightCfg->LoseSightRadius : 0.f;
+    const float HalfAngleDeg = SightCfg ? SightCfg->PeripheralVisionAngleDegrees * 0.5f : 0.f;
     const float HalfAngleRad = FMath::DegreesToRadians(HalfAngleDeg);
 
-    // ±âº» ¹Ý°æ
+    // ?? ???
     if (SightR > 0.f)
     {
         DrawDebugSphere(GetWorld(), Origin, SightR, 24, SightColor, false, 0.f, 0, 1.f);
@@ -675,21 +662,21 @@ void ADroneActor::DrawPerceptionDebug()
         DrawDebugSphere(GetWorld(), Origin, LoseSightR, 24, LoseSightColor, false, 0.f, 0, 0.5f);
     }
 
-    // FOV ½Ã°¢È­: Forward ±âÁØÀ¸·Î ¾çÂÊ °æ°è º¤ÅÍ
+    // FOV ?ï¿½??: Forward ???????? ???? ??? ????
     const FVector Forward = GetActorForwardVector();
     const FVector Right = GetActorRightVector();
     const FVector Up = FVector::UpVector;
 
-    // ¿À¸¥ÂÊ °æ°è
+    // ?????? ???
     FVector EdgeRight = (Forward.RotateAngleAxis(HalfAngleDeg, Up)).GetSafeNormal();
-    // ¿ÞÂÊ °æ°è
+    // ???? ???
     FVector EdgeLeft = (Forward.RotateAngleAxis(-HalfAngleDeg, Up)).GetSafeNormal();
 
     DrawDebugLine(GetWorld(), Origin, Origin + EdgeRight * SightR, FOVEdgeColor, false, 0.f, 0, 1.f);
     DrawDebugLine(GetWorld(), Origin, Origin + EdgeLeft * SightR, FOVEdgeColor, false, 0.f, 0, 1.f);
     DrawDebugLine(GetWorld(), Origin, Origin + Forward * SightR, SightColor, false, 0.f, 0, 1.f);
 
-    // °¨ÁöµÈ ÇÃ·¹ÀÌ¾î Ç¥½Ã
+    // ?????? ?ï¿½???? ???
     for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
     {
         if (Detected.IsValid())
@@ -847,7 +834,7 @@ void ADroneActor::StartChasing(ACharacter* Target)
         return;
     }
 
-    // °¨Áö ¸ñ·Ï¿¡ Ãß°¡ (¾øÀ¸¸é)
+    // ???? ???? ??? (??????)
     bool bAlreadyDetected = false;
     for (const TWeakObjectPtr<ACharacter>& Detected : DetectedPlayers)
     {
@@ -878,7 +865,7 @@ void ADroneActor::OnSuspicionEventReceived(const FSuspicionEventData& EventData)
     ABlasterCharacter* BlasterCharacter = EventData.Player;
 
 
-    // °øÅë Ã³¸® ÇÔ¼ö È£Ãâ
+    // ???? ï¿½?? ??? ???
     ProcessPlayerSuspiciousBehavior(BlasterCharacter, EventData.Behavior);
 }
 
@@ -889,7 +876,7 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
         return;
     }
 
-    // Ã¼Å© °£°Ý È®ÀÎ
+    // ï¿½? ???? ???
     float CurrentTime = GetWorld()->GetTimeSeconds();
     if (CurrentTime - LastSuspiciousBehaviorCheckTime < SuspiciousBehaviorCheckInterval)
     {
@@ -897,14 +884,14 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
     }
     LastSuspiciousBehaviorCheckTime = CurrentTime;
 
-    // SuspicionManager¿¡¼­ ÇÃ·¹ÀÌ¾î »óÅÂ È®ÀÎ
+    // SuspicionManager???? ?ï¿½???? ???? ???
     if (UWorld* World = GetWorld())
     {
         if (UGameInstance* GameInstance = World->GetGameInstance())
         {
             if (USuspicionManagerSubsystem* SuspicionManager = GameInstance->GetSubsystem<USuspicionManagerSubsystem>())
             {
-                // ½Ã¾ß ¾ÈÀÇ ¸ðµç ÇÃ·¹ÀÌ¾î Ã¼Å©
+                // ?ï¿½? ???? ??? ?ï¿½???? ï¿½?
                 if (!PerceptionComp)
                 {
                     return;
@@ -927,12 +914,12 @@ void ADroneActor::CheckVisiblePlayersSuspiciousBehavior(float DeltaTime)
                         continue;
 					}
 
-                    // SuspicionManager¿¡¼­ ÇÃ·¹ÀÌ¾îÀÇ ÇöÀç ÀÇ½É Çàµ¿ »óÅÂ °¡Á®¿À±â
+                    // SuspicionManager???? ?ï¿½?????? ???? ??? ?? ???? ????????
                     ESuspiciousBehavior Behavior = SuspicionManager->GetPlayerSuspiciousBehavior(BlasterCharacter);
 
                     if (Behavior != ESuspiciousBehavior::None)
                     {
-                        // °øÅë Ã³¸® ÇÔ¼ö È£Ãâ
+                        // ???? ï¿½?? ??? ???
                         ProcessPlayerSuspiciousBehavior(BlasterCharacter, Behavior);
                     }
                 }
@@ -948,13 +935,17 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
         return;
     }
 
+    // ì˜ì‹¬ í–‰ë™ ê°ì§€ ì‹œ Detectingìœ¼ë¡œ ì „í™˜í•˜ì—¬ í”Œë ˆì´ì–´ ì ‘ê·¼ ì‹œìž‘
+    AddDetectedPlayer(BlasterCharacter);
+    SetDroneState(EDroneState::Detecting);
+
     if (!IsCharacterInSight(BlasterCharacter)) {
         UE_LOG(LogTemp, VeryVerbose, TEXT("[DroneActor] Suspicion processing ignored - Player: %s not in line of sight"),
             *BlasterCharacter->GetName());
 			return;
     }
 
-    // Áßº¹ Ã³¸® ¹æÁö: °°Àº ÇÃ·¹ÀÌ¾îÀÇ °°Àº Çàµ¿À» ÂªÀº ½Ã°£ ³»¿¡ ´Ù½Ã Ã³¸®ÇÏÁö ¾ÊÀ½
+    // ??? ï¿½?? ????: ???? ?ï¿½?????? ???? ???? ï¿½?? ?ï¿½? ???? ??? ï¿½?????? ????
     float CurrentTime = GetWorld()->GetTimeSeconds();
     float* LastProcessedTime = LastProcessedSuspicionTime.Find(BlasterCharacter);
     if (LastProcessedTime && (CurrentTime - *LastProcessedTime) < SuspicionProcessCooldown)
@@ -964,25 +955,26 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
         return;
     }
 
-    // ¸¶Áö¸· Ã³¸® ½Ã°£ ¾÷µ¥ÀÌÆ®
+    // ?????? ï¿½?? ?ï¿½? ???????
     LastProcessedSuspicionTime.Add(BlasterCharacter, CurrentTime);
 
-    // °³ÀÎº° ÀÇ½É ¼öÄ¡ Ãß°¡
+    // ????? ??? ??? ???
     ABlasterPlayerState* BlasterPlayerState = BlasterCharacter->GetPlayerState<ABlasterPlayerState>();
     if (BlasterPlayerState)
     {
         BlasterPlayerState->AddPersonalSuspicion(50.0f);
 
-        // °æ°í Ãâ·Â
+        // ??? ???
         FString BehaviorName = UEnum::GetValueAsString(Behavior);
         FString WarningMessage = FString::Format(
-            TEXT("°æ°í: {0}ÀÇ ÀÇ½É½º·¯¿î Çàµ¿ÀÌ °¨ÁöµÇ¾ú½À´Ï´Ù! ({1}, ÀÇ½É ¼öÄ¡ +50)"),
+            TEXT("???: {0}?? ???????? ???? ????????????! ({1}, ??? ??? +50)"),
             { BlasterCharacter->GetName(), BehaviorName }
         );
         UE_LOG(LogTemp, Warning, TEXT("[DroneActor] %s"), *WarningMessage);
 
 
-        // È­¸é µð¹ö±× ¸Þ½ÃÁö
+        // ??? ????? ?????
+#if !UE_BUILD_SHIPPING
         FString Msg = FString::Format(
             TEXT("Suspicion Event: Player {0}, Behavior {1}"),
             { BlasterCharacter->GetName(), UEnum::GetValueAsString(Behavior) }
@@ -996,8 +988,9 @@ void ADroneActor::ProcessPlayerSuspiciousBehavior(ABlasterCharacter* BlasterChar
                 Msg
             );
         }
+#endif
 
-        // ¸¶´õ AI¿¡°Ô °æ°í Àü´Þ
+        // ???? AI???? ??? ????
         if (GameState)
         {
             AMotherAIActor* MotherAI = nullptr;

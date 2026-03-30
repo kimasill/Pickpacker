@@ -72,6 +72,33 @@
 		{
 			"Name": "BlueprintFileUtils",
 			"Enabled": true
+		},
+		{
+			"Name": "XeSS",
+			"Enabled": true,
+			"MarketplaceURL": "https://www.fab.com/listings/8ab057da-982a-4e3b-8c56-ab56720d4641"
+		},
+		{
+			"Name": "FSRMovieRenderPipeline",
+			"Enabled": false,
+			"SupportedTargetPlatforms": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "FSR",
+			"Enabled": false,
+			"SupportedTargetPlatforms": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "SteamSockets",
+			"Enabled": true
+		},
+		{
+			"Name": "MovieRenderPipeline",
+			"Enabled": true
 		}
 	],
 	"AdditionalPluginDirectories": [

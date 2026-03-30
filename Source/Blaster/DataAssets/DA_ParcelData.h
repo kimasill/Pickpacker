@@ -36,7 +36,7 @@ struct BLASTER_API FParcelPackageContent
 };
 
 /**
- * 포장 레시피: 특정 태그를 가진 언팩 파슬을 RequiredCount 이상 모아 포장된 번들 생성
+ * 포장 레시피: 특정 태그를 가진 언팩 파슬을 Min~Max 수량 범위로 모아 포장된 번들 생성
  */
 USTRUCT(BlueprintType)
 struct BLASTER_API FParcelPackageRecipe
@@ -47,7 +47,7 @@ struct BLASTER_API FParcelPackageRecipe
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Package")
 	FString RecipeName = TEXT("Default Package Recipe");
 
-	/** 이 태그들 중 하나를 가진 언팩 파슬이 RequiredCount 만큼 모이면 포장됨 */
+	/** 이 태그들 중 하나를 가진 언팩 파슬이 Min~Max 수량 범위로 모이면 포장됨 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
 	TArray<FGameplayTag> TargetParcelTags;
 
@@ -55,9 +55,25 @@ struct BLASTER_API FParcelPackageRecipe
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (GetOptions = "GetParcelRowOptions"))
 	TArray<FName> TargetParcelRowNames;
 
-	/** 필요한 언팩 파슬 수량 */
+	/** 최소 수량 (unit 합산, 이 값 이상이어야 포장 가능) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
-	int32 RequiredCount = 1;
+	int32 MinRequiredCount = 1;
+
+	/** 최소 포함 개수 (내용물 종류 수 아님, 물건 개수. 최소 이 개수만큼의 물건이 있어야 포장 가능) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
+	int32 MinContentCount = 1;
+
+	/** 최대 수량 (unit 합산, 이 값 이하여야 해당 박스로 포장됨) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "1"))
+	int32 MaxRequiredCount = 1;
+
+	/** [레거시] 기존 에셋 호환용 - RequiredCount>0이면 Min/Max 마이그레이션에 사용됨 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package", meta = (ClampMin = "0"))
+	int32 RequiredCount = 0;
+
+	/** 포장 시 소모되는 크레딧 (0이면 미소모) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package|Economy", meta = (ClampMin = "0"))
+	int32 CreditCost = 0;
 
 	/** 포장 결과물로 사용할 메쉬(랜덤 선택) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
@@ -66,6 +82,10 @@ struct BLASTER_API FParcelPackageRecipe
 	/** 포장 상태에서 사용할 그립 타입 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package|Grip")
 	EGripType GripType = EGripType::None;
+
+	/** 인벤토리에 넣기 가능 여부 (true면 PackedParcelActor도 인벤토리 수집/보관 가능) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package|Inventory")
+	bool bCanBePutInInventory = false;
 
 	/** 포장 결과물로 사용할 클래스 (기본 ParcelActor) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Package")
@@ -167,6 +187,8 @@ class BLASTER_API UDA_ParcelData : public UDataAsset
 
 public:
 	UDA_ParcelData();
+
+	virtual void PostLoad() override;
 
 	/** All parcel configurations */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Parcels")

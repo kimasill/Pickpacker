@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Blaster/DataAssets/DA_EndingData.h"
 #include "Blaster/GameState/PickpackerGameState.h"
+#include "Blaster/GameMode/PickpackerGameMode.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -14,14 +15,32 @@
 #include "MovieScene.h"
 #include "TimerManager.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 
 namespace
 {
 	static void AppendDebugLog_EscapeProgress(const FString& JsonLine)
 	{
-		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+#if !UE_BUILD_SHIPPING
+		const FString LogDir = FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+#endif
+	}
+
+	static FString BuildTravelURL(UWorld* World, const FString& LevelPath)
+	{
+		if (LevelPath.IsEmpty())
+		{
+			return FString();
+		}
+
+		FString TravelURL = LevelPath;
+		if (World && World->GetNetMode() == NM_ListenServer && !TravelURL.Contains(TEXT("?listen")))
+		{
+			TravelURL += TEXT("?listen");
+		}
+		return TravelURL;
 	}
 }
 
@@ -189,6 +208,15 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 
 	CurrentEndingId = EndingData->EndingId;
 
+	// 탈출 시퀀스 시작 시 오더 웨이브 제거 (탈출 과정 방해 방지)
+	if (UWorld* World = GetWorld())
+	{
+		if (APickpackerGameMode* GameMode = World->GetAuthGameMode<APickpackerGameMode>())
+		{
+			GameMode->StopOrderWaves();
+		}
+	}
+
 	// 모든 플레이어 입력 차단 및 HUD 전환 트리거
 	BroadcastInputBlock(true);
 
@@ -198,7 +226,10 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 		// 레벨 전환 정보 저장
 		if (!EndingData->EndingLevel.IsNull())
 		{
-			PendingLevelPath = EndingData->EndingLevel.GetLongPackageName();
+			if (UWorld* World = GetWorld())
+			{
+				PendingLevelPath = BuildTravelURL(World, EndingData->EndingLevel.GetLongPackageName());
+			}
 		}
 		PendingEndingSequence = EndingData->EndingSequence;
 		
@@ -215,13 +246,21 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 		else
 		{
 			const FString LevelPath = EndingData->EndingLevel.GetLongPackageName();
-			if (LevelPath.IsEmpty())
+			const FString ServerTravelURL = BuildTravelURL(GetWorld(), LevelPath);
+			if (ServerTravelURL.IsEmpty())
 			{
 				Multicast_PlayEndingSequence(EndingData->EndingSequence);
 			}
 			else if (UWorld* World = GetWorld())
 			{
-				World->ServerTravel(LevelPath, true);
+				for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+				{
+					if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+					{
+						PC->Client_ShowEndingBlackScreen();
+					}
+				}
+				World->ServerTravel(ServerTravelURL, true);
 			}
 		}
 	}
@@ -270,6 +309,16 @@ void UEscapeProgressComponent::Multicast_PlayEndingSequence_Implementation(ULeve
 
 	if (ULevelSequencePlayer* Player = ULevelSequencePlayer::CreateLevelSequencePlayer(GetWorld(), Sequence, Settings, OutActor))
 	{
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+				{
+					PC->Client_HideForSequence();
+				}
+			}
+		}
 		Player->Play();
 	}
 }
@@ -292,8 +341,16 @@ void UEscapeProgressComponent::Multicast_PlayTransitionSequence_Implementation(U
 		{
 			CurrentSequencePlayer = Player;
 			Player->OnFinished.AddDynamic(this, &UEscapeProgressComponent::OnTransitionSequenceFinished);
+			// 각 클라이언트에 플레이어/HUD 숨김 지시 (Client RPC)
+			for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+				{
+					PC->Client_HideForSequence();
+				}
+			}
 		}
-		
+		OnSequenceStarted.Broadcast(Sequence);
 		Player->Play();
 	}
 }
@@ -308,10 +365,17 @@ void UEscapeProgressComponent::OnTransitionSequenceFinished()
 	// 전환 시퀀스 완료 후 레벨 전환 또는 엔딩 시퀀스 재생
 	if (!PendingLevelPath.IsEmpty())
 	{
-		// 레벨 전환
+		// 엔딩 레벨 전환 직전 검은 화면 표시 (클라이언트가 로드 중 화면 노출 방지)
 		if (UWorld* World = GetWorld())
 		{
-			World->ServerTravel(PendingLevelPath, true);
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+			{
+				if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
+				{
+					PC->Client_ShowEndingBlackScreen();
+				}
+			}
+			World->ServerTravel(PendingLevelPath);
 		}
 	}
 	else if (PendingEndingSequence)
@@ -330,7 +394,6 @@ void UEscapeProgressComponent::OnTransitionSequenceFinished()
 		CurrentSequencePlayer = nullptr;
 	}
 }
-
 float UEscapeProgressComponent::GetSequenceDuration(ULevelSequence* Sequence) const
 {
 	if (!Sequence || !Sequence->GetMovieScene())
@@ -401,6 +464,34 @@ void UEscapeProgressComponent::OnRep_CurrentEndingId()
 		BroadcastInputBlock(true);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

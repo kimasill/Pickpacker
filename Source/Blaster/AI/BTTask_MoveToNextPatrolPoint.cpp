@@ -3,7 +3,7 @@
 #include "BTTask_MoveToNextPatrolPoint.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/DroneActor.h"
+#include "Blaster/AI/PPPatrolRouteComponent.h"
 #include "Blaster/AI/PatrolPointActor.h"
 
 UBTTask_MoveToNextPatrolPoint::UBTTask_MoveToNextPatrolPoint()
@@ -25,9 +25,10 @@ EBTNodeResult::Type UBTTask_MoveToNextPatrolPoint::ExecuteTask(UBehaviorTreeComp
 		return EBTNodeResult::Failed;
 	}
 
-	ADroneActor* Drone = Cast<ADroneActor>(Pawn);
-	if (!Drone)
+	UPPPatrolRouteComponent* PatrolRoute = UPPPatrolRouteComponent::FindPatrolRoute(Pawn);
+	if (!PatrolRoute || PatrolRoute->PatrolPoints.Num() == 0)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[BTTask_MoveToNextPatrolPoint] No UPPPatrolRouteComponent or empty patrol route"));
 		return EBTNodeResult::Failed;
 	}
 
@@ -37,36 +38,18 @@ EBTNodeResult::Type UBTTask_MoveToNextPatrolPoint::ExecuteTask(UBehaviorTreeComp
 		return EBTNodeResult::Failed;
 	}
 
-	// Move to next patrol point
-	Drone->MoveToNextPatrolPoint();
+	PatrolRoute->MoveToNextPatrolPoint();
 
-	// Update blackboard with new patrol point
-	APatrolPointActor* NewPoint = Drone->GetCurrentPatrolPoint();
+	APatrolPointActor* NewPoint = PatrolRoute->GetCurrentPatrolPoint();
 	if (NewPoint)
 	{
 		BlackboardComp->SetValueAsObject("CurrentPatrolPoint", NewPoint);
 		BlackboardComp->SetValueAsVector("PatrolPointLocation", NewPoint->GetActorLocation());
-		
+
 		UE_LOG(LogTemp, Log, TEXT("[BTTask_MoveToNextPatrolPoint] Moved to next patrol point: %s"), *NewPoint->GetName());
 		return EBTNodeResult::Succeeded;
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BTTask_MoveToNextPatrolPoint] No patrol points available"));
-		return EBTNodeResult::Failed;
-	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[BTTask_MoveToNextPatrolPoint] No patrol points available"));
+	return EBTNodeResult::Failed;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

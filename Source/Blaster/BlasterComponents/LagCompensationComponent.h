@@ -12,13 +12,13 @@ struct FBoxInformation
 	GENERATED_BODY()
 
 	UPROPERTY()
-	FVector Location;
+	FVector Location = FVector::ZeroVector;
 
 	UPROPERTY()
-	FRotator Rotation;
+	FRotator Rotation = FRotator::ZeroRotator;
 
 	UPROPERTY()
-	FVector BoxExtent;
+	FVector BoxExtent = FVector::ZeroVector;
 };
 
 USTRUCT(BlueprintType)
@@ -27,13 +27,13 @@ struct FFramePackage
 	GENERATED_BODY()
 
 	UPROPERTY()
-	float Time;
+	float Time = 0.0f;
 
 	UPROPERTY()
 	TMap<FName, FBoxInformation> HitBoxInfo;
 
 	UPROPERTY()
-	ABlasterCharacter* Character; // The character this frame package belongs to
+	ABlasterCharacter* Character = nullptr; // The character this frame package belongs to
 };
 
 USTRUCT(BlueprintType)
@@ -42,10 +42,10 @@ struct FServerSideRewindResult
 	GENERATED_BODY()
 	
 	UPROPERTY()
-	bool bHitConfirmed;
+	bool bHitConfirmed = false;
 
 	UPROPERTY()
-	bool bHeadshot;
+	bool bHeadshot = false;
 };
 
 USTRUCT(BlueprintType)

@@ -4,6 +4,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Blaster/Components/InteractionComponent.h"
 #include "Blaster/Components/EscapeProgressComponent.h"
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Blaster/Parcel/ParcelActor.h"
@@ -41,7 +42,7 @@ bool AGateActor::CanInteract_Implementation(ACharacter* Interactor)
 	{
 		return true;
 	}
-
+	if (!bGateInteractable) return false;
 	return CheckGateConditions(Interactor);
 }
 
@@ -54,6 +55,7 @@ void AGateActor::OnInteract_Implementation(ACharacter* Interactor)
 
 	if (bIsUnlocked)
 	{
+		Multicast_OnGateIneracted(Interactor);
 		return;
 	}
 
@@ -61,13 +63,17 @@ void AGateActor::OnInteract_Implementation(ACharacter* Interactor)
 	{
 		return;
 	}
-
 	UnlockGate(Interactor);
 }
 
 FText AGateActor::GetInteractText_Implementation()
 {
-	return FText::FromString(bIsUnlocked ? TEXT("Unlocked") : TEXT("Use Item"));
+	if (bIsUnlocked)
+	{
+		return UnlockedInteractText.IsEmpty() ? FText::FromString(TEXT("Unlocked")) : UnlockedInteractText;
+	}
+
+	return LockedInteractText.IsEmpty() ? FText::FromString(TEXT("Use Item")) : LockedInteractText;
 }
 
 bool AGateActor::RequestShowInteractionUI_Implementation(ACharacter* Interactor)
@@ -201,12 +207,27 @@ bool AGateActor::PlayerSatisfiesConditions(ACharacter* User, const FGateConditio
 
 	// 인벤토리 요구 검사
 	UPlayerInventoryComponent* Inventory = FindInventory(User);
-	if (!Inventory)
+	TArray<AParcelActor*> Items;
+	if (Inventory)
+	{
+		Items = Inventory->GetCollectedItems();
+	}
+
+	if (const ABlasterCharacter* BlasterChar = Cast<ABlasterCharacter>(User))
+	{
+		if (const UInteractionComponent* InteractionComponent = BlasterChar->GetInteractionComponent())
+		{
+			if (AParcelActor* CarriedParcel = InteractionComponent->GetCarriedParcel())
+			{
+				Items.AddUnique(CarriedParcel);
+			}
+		}
+	}
+
+	if (Items.Num() == 0)
 	{
 		return false;
 	}
-
-	const TArray<AParcelActor*> Items = Inventory->GetCollectedItems();
 
 	// UseAction 검사 (OR)
 	if (Condition.RequiredUseActions.Num() > 0)
@@ -342,4 +363,10 @@ void AGateActor::Multicast_OnGateUnlocked_Implementation(ACharacter* InstigatorC
 {
     // BP에서 구현 가능: 이펙트/사운드/애니메이션 등
     BP_OnGateUnlocked(InstigatorCharacter);
+}
+
+void AGateActor::Multicast_OnGateIneracted_Implementation(ACharacter* InstigatorCharacter)
+{
+	// BP에서 구현 가능: 이펙트/사운드/애니메이션 등
+	BP_OnGateInteracted(InstigatorCharacter);
 }

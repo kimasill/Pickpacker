@@ -65,11 +65,15 @@ void APackedParcelActor::BeginPlay()
 			}
 		}
 
-		if (FoundRecipe && FoundRecipe->GripType != EGripType::None)
+		if (FoundRecipe)
 		{
-			FItemData UpdatedItemData = ItemData;
-			UpdatedItemData.GripType = FoundRecipe->GripType;
-			SetItemData(UpdatedItemData);
+			if (FoundRecipe->GripType != EGripType::None)
+			{
+				FItemData UpdatedItemData = ItemData;
+				UpdatedItemData.GripType = FoundRecipe->GripType;
+				SetItemData(UpdatedItemData);
+			}
+			bIsItem = FoundRecipe->bCanBePutInInventory;
 		}
 	}
 }
@@ -159,6 +163,9 @@ void APackedParcelActor::InitializeFromPackageRecipe()
 	// 포장 상태 강제 설정 (복제 기본값 상쇄)
 	SetPackaged(true);
 
+	// 인벤토리 보관 가능 여부 (레시피에서 설정, SetPackaged가 bIsItem을 덮어쓰므로 이후에 적용)
+	bIsItem = FoundRecipe->bCanBePutInInventory;
+
 	// 포장 메시 설정
 	if (FoundRecipe->PackagedMeshes.Num() > 0)
 	{
@@ -186,7 +193,9 @@ void APackedParcelActor::InitializeRandomContentsFromSpawnMarker(const FParcelPa
 		return;
 	}
 
-	if (PackageRequiredCount <= 0)
+	const int32 MinUnits = Recipe.MinRequiredCount;
+	const int32 MaxUnits = Recipe.MaxRequiredCount;
+	if (MinUnits <= 0 || MaxUnits < MinUnits)
 	{
 		return;
 	}
@@ -215,9 +224,12 @@ void APackedParcelActor::InitializeRandomContentsFromSpawnMarker(const FParcelPa
 		FGameplayTag ParcelTag;
 	};
 
+	// TargetParcelRowNames 또는 TargetParcelTags 중 하나라도 조건을 충족하는 Parcel만 후보
+	const bool bHasRowFilter = Recipe.TargetParcelRowNames.Num() > 0;
+	const bool bHasTagFilter = Recipe.TargetParcelTags.Num() > 0;
+
 	TArray<FWeightedRow> Candidates;
 	Candidates.Reserve(SelectedMarker->CandidateParcelRows.Num());
-	const bool bHasTagFilter = Recipe.TargetParcelTags.Num() > 0;
 	for (const FParcelSpawnCandidate& Candidate : SelectedMarker->CandidateParcelRows)
 	{
 		if (Candidate.ParcelRow == NAME_None)
@@ -235,9 +247,18 @@ void APackedParcelActor::InitializeRandomContentsFromSpawnMarker(const FParcelPa
 		{
 			continue;
 		}
-		if (bHasTagFilter && !Recipe.TargetParcelTags.Contains(Config.ParcelTag))
+
+		// Row 또는 Tag 조건 중 하나라도 충족해야 함
+		const bool bMatchesRow = bHasRowFilter && Recipe.TargetParcelRowNames.Contains(Candidate.ParcelRow);
+		const bool bMatchesTag = bHasTagFilter && Recipe.TargetParcelTags.Contains(Config.ParcelTag);
+
+		// 필터가 있으면 반드시 조건 충족 필요
+		if (bHasRowFilter || bHasTagFilter)
 		{
-			continue;
+			if (!bMatchesRow && !bMatchesTag)
+			{
+				continue;
+			}
 		}
 
 		FWeightedRow Entry;
@@ -302,7 +323,9 @@ void APackedParcelActor::InitializeRandomContentsFromSpawnMarker(const FParcelPa
 	}
 
 	TMap<FName, int32> ContentCounts;
-	int32 RemainingUnits = PackageRequiredCount;
+	// 최소~최대 수량 범위 내 랜덤 목표 수량
+	const int32 TargetUnits = FMath::RandRange(MinUnits, MaxUnits);
+	int32 RemainingUnits = TargetUnits;
 	int32 SafetyCounter = 200;
 	while (RemainingUnits > 0 && SafetyCounter-- > 0)
 	{

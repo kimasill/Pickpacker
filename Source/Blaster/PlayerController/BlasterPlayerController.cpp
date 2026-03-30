@@ -11,6 +11,7 @@
 #include "Blaster/Character/BlasterCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Blaster/GameMode/BlasterGameMode.h"
+#include "Blaster/GameMode/EndingGameMode.h"
 #include "Blaster/PlayerState/BlasterPlayerState.h"
 #include "Blaster/HUD/Announcement.h"
 #include "Kismet/GameplayStatics.h"
@@ -24,6 +25,9 @@
 #include "LevelSequence.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Character.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/NetDriver.h"
 #include "Engine/NetConnection.h"
@@ -31,6 +35,7 @@
 #include "TimerManager.h"
 #include "GameFramework/GameStateBase.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -38,8 +43,10 @@ namespace
 {
 	static void AppendDebugLog_PlayerController(const FString& JsonLine)
 	{
-		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
+#if !UE_BUILD_SHIPPING
+		const FString LogDir = FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log");
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+#endif
 	}
 
 	static bool bTravelDelegatesBound = false;
@@ -201,6 +208,13 @@ void ABlasterPlayerController::BeginPlay()
 
 	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
 	ServerCheckMatchState();
+
+	// 패키징 빌드 클라이언트: BeginPlay 시점에 IsLocalController 준비 안 됐을 수 있음 → 0.5초 후 블루프린트 HUD 재생성 시도
+	if (IsLocalController() && GetWorld())
+	{
+		FTimerHandle DeferredHUDTimer;
+		GetWorld()->GetTimerManager().SetTimer(DeferredHUDTimer, this, &ABlasterPlayerController::TriggerDeferredHUDCreation, 0.5f, false);
+	}
 }
 
 void ABlasterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -209,6 +223,14 @@ void ABlasterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 
 	DOREPLIFETIME(ABlasterPlayerController, MatchState);
 	DOREPLIFETIME(ABlasterPlayerController, bShowTeamScores);
+}
+
+void ABlasterPlayerController::TriggerDeferredHUDCreation()
+{
+	if (UFunction* Func = FindFunction(TEXT("BP_DeferredCreateHUD")))
+	{
+		ProcessEvent(Func, nullptr);
+	}
 }
 
 void ABlasterPlayerController::HideTeamScores()
@@ -324,16 +346,21 @@ void ABlasterPlayerController::CheckPing(float DeltaTime)
 void ABlasterPlayerController::ShowReturnToMainMenu()
 {
 	if (ReturnToMainMenuWidget == nullptr) return;
+	// GC로 수거된 위젯 재생성 (IsValid로 dangling pointer 방지)
+	if (!IsValid(ReturnToMainMenu))
+	{
+		ReturnToMainMenu = nullptr;
+	}
 	if (ReturnToMainMenu == nullptr)
 	{
 		ReturnToMainMenu = CreateWidget<UReturnToMainMenu>(this, ReturnToMainMenuWidget);
 	}
-	if (ReturnToMainMenu)
+	if (IsValid(ReturnToMainMenu))
 	{
 		bReturnToMainMenuOpen = !bReturnToMainMenuOpen;
 		if(bReturnToMainMenuOpen)
 		{
-			ReturnToMainMenu->MenuSetup();			
+			ReturnToMainMenu->MenuSetup();
 		}
 		else
 		{
@@ -1009,6 +1036,11 @@ void ABlasterPlayerController::PostSeamlessTravel()
 		(GetWorld() && GetWorld()->GetNetDriver() && GetWorld()->GetNetDriver()->ServerConnection) ? TEXT("true") : TEXT("false"),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
+	// 시맨틱 트래블 후 블루프린트 HUD 재생성 (패키징 빌드에서 BeginPlay 미재실행으로 HUD 미표시 방지)
+	if (IsLocalController())
+	{
+		OnPostSeamlessTravel_RecreateHUD();
+	}
 }
 
 void ABlasterPlayerController::OnRep_Pawn()
@@ -1217,6 +1249,12 @@ void ABlasterPlayerController::HandlePostLoadMap(UWorld* LoadedWorld)
 		return;
 	}
 
+	// 로비→게임 트래블 시 페이드 아웃된 상태에서 복귀 (검은 화면 방지)
+	if (PlayerCameraManager)
+	{
+		PlayerCameraManager->StartCameraFade(1.f, 0.f, 0.35f, FLinearColor::Black, false, false);
+	}
+
 	// #region agent log
 	AppendDebugLog_PlayerController(FString::Printf(
 		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H6\",\"location\":\"BlasterPlayerController.cpp:904\",\"message\":\"HandlePostLoadMap\",\"data\":{\"map\":\"%s\",\"pendingKey\":\"%s\",\"delay\":%.2f,\"netMode\":%d,\"hasServerConn\":%s},\"timestamp\":%lld}"),
@@ -1283,7 +1321,7 @@ void ABlasterPlayerController::UpdateLoadingScreenText()
 	}
 }
 
-void ABlasterPlayerController::ClientPlayEndingSequence_Implementation(const TSoftObjectPtr<ULevelSequence>& SequenceAsset)
+void ABlasterPlayerController::ClientPlayEndingSequence_Implementation(const TSoftObjectPtr<ULevelSequence>& SequenceAsset, bool bHidePlayerInSequence)
 {
     TSoftObjectPtr<ULevelSequence> SequencePtr = SequenceAsset;
     if (SequencePtr.IsNull())
@@ -1294,8 +1332,71 @@ void ABlasterPlayerController::ClientPlayEndingSequence_Implementation(const TSo
     ULevelSequence* Sequence = SequencePtr.LoadSynchronous();
     if (Sequence)
     {
-        BP_PlayEndingSequence(Sequence);
+        BP_PlayEndingSequence(Sequence, bHidePlayerInSequence);
     }
+}
+
+void ABlasterPlayerController::Client_HideForSequence_Implementation(bool bIncludeSelf)
+{
+	// bIncludeSelf: true = 자신 포함 모든 플레이어, false = 다른 플레이어만
+	APawn* const LocalPawn = GetPawn();
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ACharacter> It(World); It; ++It)
+		{
+			ACharacter* Char = *It;
+			if (!Char) continue;
+			if (!bIncludeSelf && Char == LocalPawn) continue;
+			Char->SetActorHiddenInGame(true);
+			// 그림자도 숨김 (SetCastHiddenShadow가 true일 때 숨겨도 그림자만 보이는 현상 방지)
+			if (USkeletalMeshComponent* Mesh = Char->GetMesh())
+			{
+				Mesh->SetCastHiddenShadow(false);
+			}
+		}
+	}
+	BP_HideForSequence();
+}
+
+void ABlasterPlayerController::ClientPlayCredits_Implementation()
+{
+	BP_PlayCredits();
+}
+
+void ABlasterPlayerController::ServerRequestTravelAfterCredits_Implementation()
+{
+	if (AEndingGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AEndingGameMode>() : nullptr)
+	{
+		GM->RequestTravelAfterCredits();
+	}
+}
+
+void ABlasterPlayerController::Server_NotifyEndingLevelReady_Implementation()
+{
+	if (AEndingGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AEndingGameMode>() : nullptr)
+	{
+		GM->OnPlayerEndingLevelReady(this);
+	}
+}
+
+void ABlasterPlayerController::Client_RequestEndingLevelReady_Implementation()
+{
+	// 레벨 로드 안정화를 위해 짧은 지연 후 서버에 준비 완료 알림
+	FTimerHandle Handle;
+	GetWorld()->GetTimerManager().SetTimer(Handle, [this]()
+	{
+		Server_NotifyEndingLevelReady();
+	}, 1.0f, false);
+}
+
+void ABlasterPlayerController::Client_ShowEndingBlackScreen_Implementation()
+{
+	BP_ShowEndingBlackScreen();
+}
+
+void ABlasterPlayerController::Client_HideEndingBlackScreen_Implementation()
+{
+	BP_HideEndingBlackScreen();
 }
 
 void ABlasterPlayerController::ClientSetInputBlocked_Implementation(bool bBlocked)

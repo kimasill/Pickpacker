@@ -207,6 +207,22 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Packaging")
 	int32 GetPackagingSpaceUnits() const;
 
+	/** 주문 수량 계산: 박스 내용물 unit 합산 (박스 1개=1이 아님) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
+	int32 GetContentUnitTotal() const;
+
+	/** RequiredParcelTag와 일치하는 콘텐츠의 unit 수 (주문 매칭용, 포장 시 contents 기준) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
+	int32 GetContentUnitsForTag(FGameplayTag RequiredTag) const;
+
+	/** RequiredParcelTag와 일치하는 콘텐츠의 가치 합산 (크레딧 비례 계산용) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
+	int32 GetContentValueForTag(FGameplayTag RequiredTag) const;
+
+	/** 주문 제출 시 크레딧: 박스 내용물 가치 합산 (BasePrice*Count) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
+	int32 GetContentValueTotal() const;
+
 	/**
 	 * Set item data
 	 */
@@ -260,9 +276,9 @@ protected:
 	void Server_RequestDrop(FVector Impulse);
 
 	/**
-	 * Multicast RPC for attach event
+	 * Multicast RPC for attach event (Reliable - 클라이언트에서 AttachActor 실행 필수, 패키징 빌드에서 Unreliable 시 누락되면 땅에 떨어짐)
 	 */
-	UFUNCTION(NetMulticast, Unreliable, Category = "Parcel")
+	UFUNCTION(NetMulticast, Reliable, Category = "Parcel")
 	void Multicast_ParcelAttached(ACharacter* Carrier, FName SocketId);
 
 	/**
@@ -374,6 +390,12 @@ protected:
 
 	UPROPERTY(Replicated)
 	int32 PackageRequiredCount = 0;
+
+	UPROPERTY(Replicated)
+	int32 PackageMinRequiredCount = 0;
+
+	UPROPERTY(Replicated)
+	int32 PackageMaxRequiredCount = 0;
 
 	UPROPERTY(Replicated)
 	TSoftObjectPtr<UStaticMesh> PackageMeshAsset;

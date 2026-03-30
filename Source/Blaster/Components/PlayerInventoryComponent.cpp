@@ -236,14 +236,15 @@ AParcelActor* UPlayerInventoryComponent::EquipItemFromInventory(int32 SlotIndex)
 	// Remove from inventory
 	if (CollectedItems.Remove(Item) > 0)
 	{
-		// Show the item in world (collision/physics handled by RequestAttach)
+		// Show the item in world - ë¬¼ë¦¬/ì¶©ëŒ ë¨¼ì € ë¹„í™œì„±í™” (íŒ¨í‚¤ì§• ë¹Œë“œì—ì„œ Attach ì „ ë•…ì— ë–¨ì–´ì§€ëŠ” í˜„ìƒ ë°©ì§€)
 		Item->SetActorHiddenInGame(false);
+		if (UStaticMeshComponent* MeshComp = Item->GetParcelMesh())
+		{
+			MeshComp->SetSimulatePhysics(false);
+			MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
 
-		// Spawn item at character location
-		FVector SpawnLocation = OwnerCharacter->GetActorLocation() + OwnerCharacter->GetActorForwardVector() * 100.0f;
-		Item->SetActorLocation(SpawnLocation);
-
-		// Attach to character (this will disable physics appropriately)
+		// Attach to character (RequestAttach ë‚´ë¶€ì—ì„œë„ SetMeshPhysics(false) ìˆ˜í–‰)
 		Item->RequestAttach(OwnerCharacter, FName("CarrySocket"));
 
 		OnItemRemoved.Broadcast(Item, CollectedItems.Num());
@@ -301,7 +302,7 @@ bool UPlayerInventoryComponent::PutCarriedParcelIntoInventory(int32 SlotIndex)
 		return false;
 	}
 
-	// 1) ´ë»ó ½½·Ô °áÁ¤
+	// 1) ??? ???? ????
 	int32 TargetSlot = SlotIndex;
 	if (TargetSlot < 0 || TargetSlot >= MaxInventorySize)
 	{
@@ -315,7 +316,7 @@ bool UPlayerInventoryComponent::PutCarriedParcelIntoInventory(int32 SlotIndex)
 		}
 	}
 
-	// 2) ½½·Ô °¡¿ë¼º °Ë»ç
+	// 2) ???? ???? ???
 	if (TargetSlot < 0 || TargetSlot >= MaxInventorySize)
 	{
 		if (bEnableDebugLogging)
@@ -333,19 +334,19 @@ bool UPlayerInventoryComponent::PutCarriedParcelIntoInventory(int32 SlotIndex)
 		return false;
 	}
 
-	// 3) ¹è¿­ Å©±â º¸Àå
+	// 3) ?? ??? ????
 	while (CollectedItems.Num() <= TargetSlot)
 	{
 		CollectedItems.Add(nullptr);
 	}
 
-	// 4) ¸ÕÀú 'µå¶ø'À¸·Î ºÎÂø ÇØÁ¦ (¹°¸®/ÀÓÆÞ½º´Â 0)
+	// 4) ???? '???'???? ???? ???? (????/??????? 0)
 	CarriedParcel->RequestDrop(FVector::ZeroVector);
 
-	// 5) ÀÎº¥Åä¸®¿¡ ¹èÄ¡
+	// 5) ??????? ???
 	CollectedItems[TargetSlot] = CarriedParcel;
 
-	// 6) °¡½Ã¼º/Ãæµ¹/¹°¸® ºñÈ°¼ºÈ­´Â 'µå¶ø' ÀÌÈÄ¿¡ Àû¿ë
+	// 6) ?????/??/???? ???????? '???' ????? ????
 	CarriedParcel->SetActorHiddenInGame(true);
 	if (UStaticMeshComponent* MeshComp = CarriedParcel->GetParcelMesh())
 	{
@@ -353,12 +354,12 @@ bool UPlayerInventoryComponent::PutCarriedParcelIntoInventory(int32 SlotIndex)
 		MeshComp->SetSimulatePhysics(false);
 	}
 
-	// 7) Ä³¸¯ÅÍÀÇ carried »óÅÂ Á¤¸®(¼­¹ö ±ÇÇÑ OK)
+	// 7) ??????? carried ???? ????(???? ???? OK)
 	InteractionComp->SetCarriedParcel(nullptr);
 
 	OnItemCollected.Broadcast(CarriedParcel, CollectedItems.Num());
 
-	// UI °»½Å
+	// UI ????
 	UpdateInventoryUI();
 
 	if (bEnableDebugLogging)
@@ -400,7 +401,7 @@ TArray<AParcelActor*> UPlayerInventoryComponent::GetUsableItems() const
 	TArray<AParcelActor*> Result;
 	for (AParcelActor* Item : CollectedItems)
 	{
-		if (Item && Item->IsUsable())
+		if (IsValid(Item) && Item->IsUsable())
 		{
 			Result.Add(Item);
 		}
@@ -449,8 +450,29 @@ void UPlayerInventoryComponent::OnRep_CollectedItems()
 
 void UPlayerInventoryComponent::UpdateInventoryUI()
 {
+	// ??: ??? ??? CollectedItems?? ??
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		for (int32 i = CollectedItems.Num() - 1; i >= 0; --i)
+		{
+			if (!IsValid(CollectedItems[i]))
+			{
+				CollectedItems.RemoveAt(i);
+			}
+		}
+	}
+
 	// Broadcast inventory update event for UI widgets to listen to
-	OnInventoryUpdated.Broadcast(CollectedItems, CollectedItems.Num());
+	TArray<AParcelActor*> ValidItems;
+	ValidItems.Reserve(CollectedItems.Num());
+	for (AParcelActor* Item : CollectedItems)
+	{
+		if (IsValid(Item))
+		{
+			ValidItems.Add(Item);
+		}
+	}
+	OnInventoryUpdated.Broadcast(ValidItems, ValidItems.Num());
 }
 
 bool UPlayerInventoryComponent::CollectItemAndAttach(AParcelActor* Item, bool bAttachToOwner)

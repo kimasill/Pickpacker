@@ -8,7 +8,7 @@
 UCreditUnlockComponent::UCreditUnlockComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	SetIsReplicatedByDefault(true);
+	SetIsReplicatedByDefault(true);	
 }
 
 void UCreditUnlockComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

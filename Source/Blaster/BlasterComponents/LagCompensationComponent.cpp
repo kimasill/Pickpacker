@@ -435,6 +435,7 @@ void ULagCompensationComponent::EnableCharacterMeshCollision(ABlasterCharacter* 
 }
 void ULagCompensationComponent::ShowFramePackage(FFramePackage& Package, FColor Color)
 {
+#if !UE_BUILD_SHIPPING
 	for(auto& BoxInfo: Package.HitBoxInfo)
 	{
 		DrawDebugBox(
@@ -447,6 +448,7 @@ void ULagCompensationComponent::ShowFramePackage(FFramePackage& Package, FColor 
 			4.f
 		);
 	}
+#endif
 }
 
 FFramePackage ULagCompensationComponent::GetFrameToCheck(ABlasterCharacter* HitCharacter, float HitTime)

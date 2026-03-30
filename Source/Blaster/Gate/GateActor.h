@@ -34,6 +34,10 @@ public:
 	void Multicast_OnGateUnlocked(ACharacter* InstigatorCharacter);
 	virtual void Multicast_OnGateUnlocked_Implementation(ACharacter* InstigatorCharacter);
 
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_OnGateIneracted(ACharacter* Interactor);
+	virtual void Multicast_OnGateIneracted_Implementation(ACharacter* Interactor);
+
 	/** 아이템을 사용하여 게이트 해제 시도 (서버) */
 	UFUNCTION(BlueprintCallable, Category = "Gate")
 	bool TryUseItemWithGate(AParcelActor* Item, ACharacter* User);
@@ -83,9 +87,19 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gate")
 	bool bRequireAllPlayersAuthorized = false;
 
+	/** 상호작용 텍스트(잠김/해제) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gate|UI")
+	FText LockedInteractText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gate|UI")
+	FText UnlockedInteractText;
+
 	/** 현재 해제 상태 */
 	UPROPERTY(ReplicatedUsing = OnRep_IsUnlocked, BlueprintReadOnly, Category = "Gate")
 	bool bIsUnlocked = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gate")
+	bool bGateInteractable = true;
 
 	/** 로컬 월드 플래그 상태 (간단한 태그 기반) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gate")
@@ -93,4 +107,7 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Gate")
 	void BP_OnGateUnlocked(ACharacter* InstigatorCharacter);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Gate")
+	void BP_OnGateInteracted(ACharacter* Interactor);
 };

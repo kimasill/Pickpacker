@@ -60,7 +60,7 @@ class MULTIPLAYERSESSIONS_API UMenu : public UUserWidget
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable, Category = "Menu")
-	void MenuSetup(int32 NumberOfPublicConnections = 4, FString TypeOfMatch = FString(TEXT("Industral")), FString LobbyPath = FString(TEXT("/Game/ThirdPerson/Maps/Lobby?listen")));
+	void MenuSetup(int32 NumberOfPublicConnections = 4, FString TypeOfMatch = FString(TEXT("Industral")), FString LobbyPath = FString(TEXT("/Game/Maps/Lobby?listen")));
 
 protected:
 	virtual bool Initialize() override;
@@ -153,6 +153,8 @@ private:
 
 	// Cache of search results to join by index
 	TArray<FOnlineSessionSearchResult> LastSessionSearchResults;
+	/** 세션에 저장된 HostAddress (IP:port) - 참가 시 GetAddressInfo 실패 회피 */
+	FString CachedHostAddressForJoin;
 	UPROPERTY(BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TArray<FSessionInfo> LastSessionInfos;
 

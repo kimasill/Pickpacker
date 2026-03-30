@@ -7,6 +7,7 @@
 #include "Blaster/GameState/PickpackerGameState.h"
 #include "Perception/AIPerceptionTypes.h"
 #include "PickpackerTypes/PickpackerTypes.h" // for ESuspiciousBehavior
+#include "Blaster/AI/PPPatrolRouteComponent.h"
 #include "DroneActor.generated.h"
 
 class UBehaviorTree;
@@ -14,8 +15,7 @@ class UBehaviorTreeComponent;
 class UBlackboardComponent;
 class USphereComponent;
 class USkeletalMeshComponent;
-class UAIPerceptionComponent;
-class UAISenseConfig_Sight;
+class UPPSightPerceptionComponent;
 class ABlasterCharacter; // forward declaration for function signatures
 
 /**
@@ -151,13 +151,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	class UFloatingPawnMovement* MovementComponent;
 
-	/** Patrol points (PatrolPointActor instances) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Patrol")
-	TArray<class APatrolPointActor*> PatrolPoints;
-
-	/** Current patrol point index */
-	UPROPERTY(BlueprintReadOnly, Category = "AI|Patrol")
-	int32 CurrentPatrolIndex = 0;
+	/** 웨이포인트 순찰 경로 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPPPatrolRouteComponent* PatrolRouteComponent;
 
 	/** Patrol speed */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI|Patrol")
@@ -273,6 +269,9 @@ public:
 	FOnStateChanged OnStateChanged;
 
 protected:
+	UFUNCTION()
+	void HandlePatrolRouteChanged();
+
 	UFUNCTION(BlueprintCallable, Category = "Drone|AI")
 	void UpdateBlackboard();
 
@@ -461,10 +460,7 @@ private:
 	USphereComponent* DetectionSphere;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	UAIPerceptionComponent* PerceptionComp;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	UAISenseConfig_Sight* SightConfig;
+	UPPSightPerceptionComponent* PerceptionComp;
 
 	/** Replication callback */
 	UFUNCTION()

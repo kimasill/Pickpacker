@@ -340,23 +340,23 @@ struct BLASTER_API FParcelOrderWave
 {
 	GENERATED_BODY()
 
-	/** Number of orders to spawn for this wave (<=0 means all templates) */
+	/** 각 repeat마다 한 번에 생성할 오더 개수 (1=1개씩, 2=2개씩 생성, 0=템플릿 전체) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0"))
 	int32 OrdersPerWave = 1;
 
-	/** Number of times to repeat this wave */
+	/** 이 웨이브를 반복할 횟수 (repeat마다 OrdersPerWave개씩 생성) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "1"))
 	int32 RepeatCount = 1;
 
-	/** Delay between repeats of the same wave (seconds) */
+	/** 각 repeat 사이 딜레이 (초). repeat 직후 이 시간 뒤에 다음 오더 배치 생성 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0.0"))
 	float RepeatDelay = 0.0f;
 
-	/** Delay before moving to the next wave (seconds) */
+	/** 다음 웨이브로 넘어가기 전 딜레이 (초) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders", meta = (ClampMin = "0.0"))
 	float NextWaveDelay = 10.0f;
 
-	/** Orders contained in this wave */
+	/** 이 웨이브에서 사용할 오더 템플릿 목록 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Orders")
 	TArray<FParcelOrderDefinition> Orders;
 };
@@ -370,7 +370,7 @@ struct BLASTER_API FActiveOrderState
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
-	FGuid OrderId;
+	FGuid OrderId = FGuid();
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
 	FName OrderName = NAME_None;
@@ -413,12 +413,6 @@ struct BLASTER_API FActiveOrderState
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Orders")
 	float ResolutionTime = -1.0f;
-
-	FActiveOrderState()
-	{
-		OrderId = FGuid::NewGuid();
-		RequiredQuantity = 1;
-	}
 };
 
 /**
@@ -430,7 +424,7 @@ struct BLASTER_API FCreditTransaction
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
-	FGuid TransactionId;
+	FGuid TransactionId = FGuid();
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
 	int32 Delta = 0;
@@ -442,16 +436,7 @@ struct BLASTER_API FCreditTransaction
 	float Timestamp = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Pickpacker|Credits")
-	FText Reason;
-
-	FCreditTransaction()
-	{
-		TransactionId = FGuid::NewGuid();
-		Delta = 0;
-		BalanceAfter = 0;
-		Timestamp = 0.0f;
-		Reason = FText::GetEmpty();
-	}
+	FText Reason = FText::GetEmpty();
 };
 
 /**

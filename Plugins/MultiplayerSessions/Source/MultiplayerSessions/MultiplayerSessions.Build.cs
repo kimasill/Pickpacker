@@ -46,7 +46,12 @@ public class MultiplayerSessions : ModuleRules
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
-		
+
+		// 패키징/쿡 중 ServerTravel/OpenLevel 호출 시 "pending net game" 에러 방지
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("UnrealEd");
+		}
 		
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]

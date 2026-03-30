@@ -8,7 +8,10 @@
 #include "OnlineSubsystemNames.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/Base64.h"
 #include "HAL/FileManager.h"
+
+namespace { static FString GetDebugLogPath() { return FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log"); } }
 
 UMultiplayerSessionsSubsystem::UMultiplayerSessionsSubsystem():
 	CreateSessionCompleteDelegate(FOnCreateSessionCompleteDelegate::CreateUObject(this, &ThisClass::OnCreateSessionComplete)),
@@ -71,7 +74,7 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
     {
         bIsNull = OSS->GetSubsystemName() == NULL_SUBSYSTEM;
     }
-	LastSessionSettings->bIsLANMatch = bIsNull; // NULL 서브시스템은 LAN으로 강제
+	LastSessionSettings->bIsLANMatch = IOnlineSubsystem::Get()->GetSubsystemName() == "NULL" ? true : false;
 	LastSessionSettings->NumPublicConnections = NumPublicConnections;
 	LastSessionSettings->bAllowJoinInProgress = true;
 
@@ -87,6 +90,10 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 	LastSessionSettings->Set(FName("MatchType"), MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	if (!DesiredSessionTitle.IsEmpty())
 	{
+		// Steam OSS에서 한글 등 멀티바이트 문자가 깨지는 문제 회피: Base64로 저장
+		const FString SessionTitleB64 = FBase64::Encode(DesiredSessionTitle, EBase64Mode::Standard);
+		LastSessionSettings->Set(FName("SessionTitleB64"), SessionTitleB64, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+		// 하위 호환: ASCII 전용일 때 사용할 수 있도록 원본도 저장 (한글은 B64에서 복원)
 		LastSessionSettings->Set(FName("SessionTitle"), DesiredSessionTitle, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	}
 	if (!SelectedMap.IsEmpty())
@@ -98,7 +105,8 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 		LastSessionSettings->Set(FName("GameMode"), GameMode, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	}
 	LastSessionSettings->Set(FName("SessionVisibility"), static_cast<int32>(Visibility), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-	LastSessionSettings->BuildUniqueId = GetBuildUniqueId();
+	// bForceCrossBuildCompatible: Development/Shipping 빌드 간 세션 검색 호환 (BuildUniqueId를 0으로 고정)
+	LastSessionSettings->BuildUniqueId = bForceCrossBuildCompatible ? 0 : GetBuildUniqueId();
 
 	const ULocalPlayer* LocalPlayer = GetWorld()->GetFirstLocalPlayerFromController();
 	if (!SessionInterface->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, *LastSessionSettings))
@@ -119,7 +127,7 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 			LastSessionSettings->bUsesPresence ? TEXT("true") : TEXT("false"),
 			LastSessionSettings->bUseLobbiesIfAvailable ? TEXT("true") : TEXT("false"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -140,7 +148,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:FindSessions\",\"message\":\"FindSessions start\",\"data\":{\"max\":%d,\"subsystem\":\"%s\",\"hasLP\":%s},\"timestamp\":%lld}\n"),
 			MaxSearchResults, *SubsystemName, bHasLP ? TEXT("true") : TEXT("false"), Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 
@@ -149,9 +157,22 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
     LastSessionSearch = MakeShareable(new FOnlineSessionSearch());
     LastSessionSearch->MaxSearchResults = MaxSearchResults;	
     const bool bIsNull = GetOnlineSubsystem() && GetOnlineSubsystem()->GetSubsystemName() == NULL_SUBSYSTEM;
-    LastSessionSearch->bIsLanQuery = bIsNull;
-	// Presence 검색 (온라인)
+    LastSessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName() == "NULL" ? true : false;
+	// bForceCrossBuildCompatible: CreateSession의 BuildUniqueId=0과 쌍으로, 검색 시 0을 요구
+	// (Steam OSS는 검색 필터에 로컬 BuildUniqueId를 쓰므로, Create도 0이어야 매칭됨)
+	// Presence 검색 (온라인) - SEARCH_PRESENCE deprecated(UE5.5+), SEARCH_LOBBIES 우선 사용
+#if defined(SEARCH_LOBBIES)
+	LastSessionSearch->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
+#else
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4996)
+#endif
 	LastSessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+#endif
     if (!bIsNull)
     {
 #if defined(_MSC_VER)
@@ -186,7 +207,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:FindSessions\",\"message\":\"FindSessions failed to start\",\"data\":{\"lanQuery\":%s},\"timestamp\":%lld}\n"),
 				LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 				Ms);
-			FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 		}
 		// #endregion
 	}
@@ -198,22 +219,31 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 			LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 			bIsNull ? TEXT("false") : TEXT("true"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
 void UMultiplayerSessionsSubsystem::JoinSession(const FOnlineSessionSearchResult& SessionResult)
 {
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession subsystem: sessionId=\"%s\""), *SessionResult.GetSessionIdStr());
+	// #endregion
 	if(!SessionInterface.IsValid()) {
+		UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession: SessionInterface invalid, broadcast UnknownError"));
 		MultiplayerOnJoinSessionComplete.Broadcast(EOnJoinSessionCompleteResult::UnknownError);
 		return;
 	}
 
 	JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate);
 	const ULocalPlayer* LocalPlayer = GetWorld()->GetFirstLocalPlayerFromController();
-	if (!SessionInterface->JoinSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionResult))
+	const bool bJoinStarted = SessionInterface->JoinSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionResult);
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession API started: %s"), bJoinStarted ? TEXT("true") : TEXT("false"));
+	// #endregion
+	if (!bJoinStarted)
 	{
 		SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
+		UE_LOG(LogTemp, Warning, TEXT("[Join] JoinSession API failed immediately, broadcast UnknownError"));
 		MultiplayerOnJoinSessionComplete.Broadcast(EOnJoinSessionCompleteResult::UnknownError);
 	}
 }
@@ -242,7 +272,7 @@ void UMultiplayerSessionsSubsystem::DestroySession()
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:DestroySession\",\"message\":\"DestroySession called\",\"data\":{\"recreateFlag\":%s},\"timestamp\":%lld}\n"),
 			bCreateSessionOnDestroy ? TEXT("true") : TEXT("false"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -275,7 +305,7 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 				bwasSuccessful ? TEXT("true") : TEXT("false"),
 				LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 				Ms);
-			FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 		}
 		// #endregion
 		return;
@@ -314,13 +344,21 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 			LastSessionSearch->SearchResults.Num(),
 			*ResultsJson,
 			Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
 
 void UMultiplayerSessionsSubsystem::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
 {
+	// #region agent log - Blaster/Saved/Logs/Blaster.log
+	UE_LOG(LogTemp, Warning, TEXT("[Join] OnJoinSessionComplete: Result=%d (%s)"), static_cast<int32>(Result),
+		Result == EOnJoinSessionCompleteResult::Success ? TEXT("Success") :
+		Result == EOnJoinSessionCompleteResult::SessionIsFull ? TEXT("SessionIsFull") :
+		Result == EOnJoinSessionCompleteResult::SessionDoesNotExist ? TEXT("SessionDoesNotExist") :
+		Result == EOnJoinSessionCompleteResult::CouldNotRetrieveAddress ? TEXT("CouldNotRetrieveAddress") :
+		Result == EOnJoinSessionCompleteResult::AlreadyInSession ? TEXT("AlreadyInSession") : TEXT("UnknownError"));
+	// #endregion
 	if(SessionInterface)
 	{
 		SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
@@ -355,7 +393,7 @@ void UMultiplayerSessionsSubsystem::OnDestroySessionComplete(FName SessionName, 
 			bCreateSessionOnDestroy ? TEXT("true") : TEXT("false"),
 			static_cast<int32>(LastSessionVisibility),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -376,7 +414,7 @@ void UMultiplayerSessionsSubsystem::UpdateSessionVisibility(ESessionVisibility N
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H3\",\"location\":\"MultiplayerSessionsSubsystem.cpp:UpdateSessionVisibility\",\"message\":\"Visibility update requested\",\"data\":{\"newVisibility\":%d},\"timestamp\":%lld}\n"),
 			static_cast<int32>(NewVisibility), Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -398,9 +436,27 @@ void UMultiplayerSessionsSubsystem::UpdateSessionSettings(int32 NumPublicConnect
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H4\",\"location\":\"MultiplayerSessionsSubsystem.cpp:UpdateSessionSettings\",\"message\":\"Session settings update requested\",\"data\":{\"num\":%d,\"matchType\":\"%s\",\"title\":\"%s\",\"visibility\":%d,\"map\":\"%s\",\"mode\":\"%s\"},\"timestamp\":%lld}\n"),
 			NumPublicConnections, *MatchType, *SessionTitle, static_cast<int32>(Visibility), *SelectedMap, *GameMode, Ms);
-		FFileHelper::SaveStringToFile(Line, TEXT("s:\\\\Project\\\\Unreal5\\\\Blaster\\\\.cursor\\\\debug.log"), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
+}
+
+void UMultiplayerSessionsSubsystem::UpdateSessionHostAddress(const FString& HostAddressPort)
+{
+	if (!IsValidSessionInterface() || HostAddressPort.IsEmpty())
+	{
+		return;
+	}
+	FNamedOnlineSession* Session = SessionInterface->GetNamedSession(NAME_GameSession);
+	if (!Session)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Host] UpdateSessionHostAddress: no active session"));
+		return;
+	}
+	FOnlineSessionSettings& Settings = Session->SessionSettings;
+	Settings.Set(FName(TEXT("HostAddress")), HostAddressPort, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	const bool bOk = SessionInterface->UpdateSession(NAME_GameSession, Settings);
+	UE_LOG(LogTemp, Log, TEXT("[Host] UpdateSessionHostAddress: %s addr=\"%s\""), bOk ? TEXT("ok") : TEXT("fail"), *HostAddressPort);
 }
 
 bool UMultiplayerSessionsSubsystem::IsValidSessionInterface()
@@ -415,9 +471,35 @@ bool UMultiplayerSessionsSubsystem::IsValidSessionInterface()
 	return SessionInterface.IsValid();
 }
 
+bool UMultiplayerSessionsSubsystem::HasActiveSession() const
+{
+	IOnlineSessionPtr Interface = SessionInterface;
+	if (!Interface.IsValid() && GetOnlineSubsystem())
+	{
+		Interface = GetOnlineSubsystem()->GetSessionInterface();
+	}
+	return Interface.IsValid() && Interface->GetNamedSession(NAME_GameSession) != nullptr;
+}
+
 FString UMultiplayerSessionsSubsystem::ExtractSessionTitle(const FOnlineSessionSearchResult& SessionResult)
 {
+	return ExtractSessionTitleFromSettings(SessionResult.Session.SessionSettings);
+}
+
+FString UMultiplayerSessionsSubsystem::ExtractSessionTitleFromSettings(const FOnlineSessionSettings& SessionSettings)
+{
+	// Base64 인코딩된 제목 우선 사용 (한글 깨짐 방지)
+	FString SessionTitleB64;
+	if (SessionSettings.Get(FName("SessionTitleB64"), SessionTitleB64) && !SessionTitleB64.IsEmpty())
+	{
+		FString Decoded;
+		if (FBase64::Decode(SessionTitleB64, Decoded, EBase64Mode::Standard))
+		{
+			return Decoded;
+		}
+	}
+	// 하위 호환: SessionTitle 폴백
 	FString SessionTitle;
-	SessionResult.Session.SessionSettings.Get(FName("SessionTitle"), SessionTitle);
+	SessionSettings.Get(FName("SessionTitle"), SessionTitle);
 	return SessionTitle;
 }

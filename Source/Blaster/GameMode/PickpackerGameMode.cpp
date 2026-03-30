@@ -5,6 +5,7 @@
 #include "Blaster/Components/EscapeProgressComponent.h"
 #include "Blaster/Escape/EscapeZoneActor.h"
 #include "Engine/World.h"
+#include "Engine/LevelStreaming.h"
 #include "Blaster/DataAssets/DA_LevelVariant.h"
 #include "Blaster/DataAssets/DA_OrderWaveData.h"
 #include "Blaster/Parcel/ParcelActor.h"
@@ -12,18 +13,23 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Character.h"
 #include "Blaster/Character/BlasterCharacter.h"
+#include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Blaster/Environment/ConveyorBeltActor.h"
 #include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "EngineUtils.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/NetDriver.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 
 namespace
 {
 	static void AppendDebugLog_PickpackerGameMode(const FString& JsonLine)
 	{
-		const FString LogDir = TEXT("s:/Project/Unreal5/Blaster/.cursor/debug.log");
-		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+		const FString LogDir = FPaths::Combine(FPaths::ProjectDir(), TEXT(".cursor"), TEXT("debug.log"));
+		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 }
 
@@ -31,18 +37,52 @@ APickpackerGameMode::APickpackerGameMode()
 {
 	GameStateClass = APickpackerGameState::StaticClass();
 	CurrentMissionConfig = FSeedSet();
+	// controlroom 스트리밍 레벨 기본 등록 (BP에서 덮어쓰기 가능)
+	StreamingLevelNamesToLoadAtStart.Add(FName(TEXT("controlroom")));
 }
 
 void APickpackerGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 스트리밍 레벨(controlroom 등) 즉시 로드 - 패키징 빌드에서 텔레포트/액터 참조 실패 방지
+	if (HasAuthority() && StreamingLevelNamesToLoadAtStart.Num() > 0)
+	{
+		UWorld* World = GetWorld();
+		if (World)
+		{
+			for (ULevelStreaming* StreamingLevel : World->GetStreamingLevels())
+			{
+				if (!StreamingLevel) continue;
+				FString LevelName = StreamingLevel->GetWorldAssetPackageFName().ToString();
+				FString LevelShortName = FPaths::GetBaseFilename(LevelName);
+				for (const FName& ToLoad : StreamingLevelNamesToLoadAtStart)
+				{
+					if (LevelShortName.Equals(ToLoad.ToString(), ESearchCase::IgnoreCase) ||
+						LevelName.Contains(ToLoad.ToString(), ESearchCase::IgnoreCase))
+					{
+						StreamingLevel->SetShouldBeLoaded(true);
+						StreamingLevel->SetShouldBeVisible(true);
+						UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Streaming level load requested: %s"), *LevelShortName);
+						break;
+					}
+				}
+			}
+			// 패키징 빌드: InspectionActorLocations 등이 ControlRoom 내 액터 참조 시, 로드 완료까지 블록
+			UGameplayStatics::FlushLevelStreaming(World);
+		}
+	}
+
 	PickpackerGameState = Cast<APickpackerGameState>(GameState);
 
-	// Subscribe to suspicion changes
 	if (PickpackerGameState)
 	{
 		PickpackerGameState->OnSuspicionChanged.AddDynamic(this, &APickpackerGameMode::OnSuspicionChanged);
+		// 매치 시작 전에도 초기 크레딧 설정 (UI가 처음부터 StartingTeamCredits 표시)
+		if (HasAuthority())
+		{
+			PickpackerGameState->SetTeamCredits(StartingTeamCredits);
+		}
 	}
 }
 
@@ -369,22 +409,6 @@ void APickpackerGameMode::PostSeamlessTravel()
 		return;
 	}
 
-	FString HostAddress;
-	if (UNetDriver* NetDriver = World->GetNetDriver())
-	{
-		HostAddress = NetDriver->LowLevelGetNetworkNumber();
-	}
-	if (HostAddress.StartsWith(TEXT("0.0.0.0")))
-	{
-		HostAddress = HostAddress.Replace(TEXT("0.0.0.0"), TEXT("127.0.0.1"));
-	}
-	// #region agent log
-	AppendDebugLog_PickpackerGameMode(FString::Printf(
-		TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H29\",\"location\":\"PickpackerGameMode.cpp:290\",\"message\":\"PostSeamlessTravel host\",\"data\":{\"host\":\"%s\"},\"timestamp\":%lld}"),
-		*HostAddress,
-		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
-	// #endregion
-
 	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 	{
 		if (ABlasterPlayerController* PC = Cast<ABlasterPlayerController>(It->Get()))
@@ -397,16 +421,7 @@ void APickpackerGameMode::PostSeamlessTravel()
 				PC->GetWorld() ? *PC->GetWorld()->GetMapName() : TEXT("none"),
 				FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 			// #endregion
-			if (PC->GetNetConnection())
-			{
-				PC->ClientEnsureLobbyTravel(HostAddress, LobbyTravelPath);
-			}
-			// #region agent log
-			AppendDebugLog_PickpackerGameMode(FString::Printf(
-				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H13\",\"location\":\"PickpackerGameMode.cpp:285\",\"message\":\"PostSeamlessTravel NotifyLevelLoaded\",\"data\":{\"pc\":\"%s\"},\"timestamp\":%lld}"),
-				*GetNameSafe(PC),
-				FDateTime::UtcNow().ToUnixTimestamp() * 1000));
-			// #endregion
+			// ClientEnsureLobbyTravel 제거: 로비->게임 레벨 도착 시 클라이언트를 다시 로비로 보내던 버그 수정
 			PC->ClientNotifyLevelLoaded();
 		}
 	}
@@ -507,6 +522,27 @@ void APickpackerGameMode::EndWarehouseSimulation()
 	}
 }
 
+void APickpackerGameMode::StopOrderWaves()
+{
+	if (!HasAuthority()) return;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(OrderSystemTimerHandle);
+		World->GetTimerManager().ClearTimer(NextWaveTimerHandle);
+	}
+
+	ActiveOrders.Empty();
+	CurrentOrderWaveIndex = INDEX_NONE;
+	CurrentWaveRepeatIndex = 0;
+	PendingWaveIndex = INDEX_NONE;
+	PendingWaveRepeatIndex = 0;
+
+	SyncOrdersToGameState();
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order waves stopped for escape sequence"));
+}
+
 void APickpackerGameMode::RegisterClientPCGReady(APlayerState* PlayerState)
 {
 	const TCHAR* NameOrNone = TEXT("None");
@@ -525,6 +561,27 @@ void APickpackerGameMode::ReportParcelSubmitted(AParcelActor* Parcel)
 		return;
 	}
 
+	// 파슬 파괴 전 정리: 인벤토리 제거 + 컨베이어에서 해제 (ESC 메뉴 등에서 dangling pointer 참조로 크래시 방지)
+	if (UWorld* World = GetWorld())
+	{
+		// 1. 모든 플레이어 인벤토리에서 제거
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (ABlasterCharacter* Character = Cast<ABlasterCharacter>(It->Get()->GetPawn()))
+			{
+				if (UPlayerInventoryComponent* Inv = Character->GetPlayerInventoryComponent())
+				{
+					Inv->RemoveItem(Parcel);
+				}
+			}
+		}
+		// 2. 컨베이어에서 submission으로 바로 제출되는 경우: 컨베이어 목록에서 해제
+		for (TActorIterator<AConveyorBeltActor> ConvIt(World); ConvIt; ++ConvIt)
+		{
+			ConvIt->ReleaseParcelIfConveyed(Parcel);
+		}
+	}
+
 	const bool bAccepted = TryFulfillOrders(Parcel);
 	if (!bAccepted)
 	{
@@ -536,6 +593,9 @@ void APickpackerGameMode::ReportParcelSubmitted(AParcelActor* Parcel)
 		ApplyOrderPenalty(DummyPenalty);
 		ApplyCreditDelta(-1, TEXT("Incorrect parcel submission"));
 	}
+
+	// Blueprint에서 사운드/이펙트 등 처리 (파슬 파괴 전)
+	OnParcelSubmitted.Broadcast(Parcel, bAccepted);
 
 	if (Parcel->IsPendingKillPending() == false)
 	{
@@ -690,7 +750,24 @@ void APickpackerGameMode::BeginOrderWave(int32 WaveIndex, int32 RepeatIndex)
 		BP_OnOrderWaveStarted(WaveIndex + 1);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order wave %d started (%d orders)"), WaveIndex, OrdersToSpawn);
+	// 주문 생성 시점 기준으로 다음 웨이브 스케줄 (주문 종료와 무관)
+	const int32 NextRepeatIndex = RepeatIndex + 1;
+	const float DelaySeconds = FMath::Max(0.0f,
+		(NextRepeatIndex < FMath::Max(1, Wave->RepeatCount))
+			? Wave->RepeatDelay
+			: Wave->NextWaveDelay);
+	const int32 NextWaveIdx = (NextRepeatIndex < FMath::Max(1, Wave->RepeatCount))
+		? WaveIndex
+		: WaveIndex + 1;
+	const int32 NextRepIdx = (NextRepeatIndex < FMath::Max(1, Wave->RepeatCount))
+		? NextRepeatIndex
+		: 0;
+	if (OrderWaveData->GetWave(NextWaveIdx))
+	{
+		ScheduleNextOrderWave(NextWaveIdx, NextRepIdx, DelaySeconds);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Order wave %d started (%d orders), next wave in %.1fs"), WaveIndex, OrdersToSpawn, DelaySeconds);
 }
 
 void APickpackerGameMode::ScheduleNextOrderWave(int32 WaveIndex, int32 RepeatIndex, float DelaySeconds)
@@ -711,10 +788,7 @@ void APickpackerGameMode::ScheduleNextOrderWave(int32 WaveIndex, int32 RepeatInd
 	if (UWorld* World = GetWorld())
 	{
 		FTimerManager& TimerManager = World->GetTimerManager();
-		if (TimerManager.IsTimerActive(NextWaveTimerHandle))
-		{
-			return;
-		}
+		TimerManager.ClearTimer(NextWaveTimerHandle);
 
 		if (DelaySeconds <= 0.f)
 		{
@@ -745,7 +819,8 @@ void APickpackerGameMode::HandleNextOrderWaveTimer()
 		World->GetTimerManager().ClearTimer(NextWaveTimerHandle);
 	}
 
-	if (CanSpawnNewOrders() && PendingWaveIndex != INDEX_NONE)
+	// 스케줄된 웨이브 실행 (repeat은 의도적으로 예약된 것이므로 CanSpawnNewOrders 무시)
+	if (PendingWaveIndex != INDEX_NONE)
 	{
 		BeginOrderWave(PendingWaveIndex, PendingWaveRepeatIndex);
 	}
@@ -778,34 +853,7 @@ void APickpackerGameMode::TickOrderSystem()
 	}
 
 	CleanupResolvedOrders();
-
-	if (AreAllOrdersResolved() && CurrentOrderWaveIndex != INDEX_NONE && CanSpawnNewOrders())
-	{
-		if (UWorld* World = GetWorld())
-		{
-			FTimerManager& TimerManager = World->GetTimerManager();
-			if (!TimerManager.IsTimerActive(NextWaveTimerHandle))
-			{
-				const FParcelOrderWave* CurrentWave = OrderWaveData ? OrderWaveData->GetWave(CurrentOrderWaveIndex) : nullptr;
-				if (CurrentWave)
-				{
-					const int32 NextRepeatIndex = CurrentWaveRepeatIndex + 1;
-					if (NextRepeatIndex < FMath::Max(1, CurrentWave->RepeatCount))
-					{
-						ScheduleNextOrderWave(CurrentOrderWaveIndex, NextRepeatIndex, FMath::Max(0.0f, CurrentWave->RepeatDelay));
-					}
-					else
-					{
-						const int32 NextWaveIndex = CurrentOrderWaveIndex + 1;
-						if (OrderWaveData && OrderWaveData->GetWave(NextWaveIndex))
-						{
-							ScheduleNextOrderWave(NextWaveIndex, 0, FMath::Max(0.0f, CurrentWave->NextWaveDelay));
-						}
-					}
-				}
-			}
-		}
-	}
+	// 다음 웨이브 스케줄링은 BeginOrderWave에서 주문 생성 시점 기준으로 처리됨 (주문 종료와 무관)
 }
 
 void APickpackerGameMode::CleanupResolvedOrders()
@@ -865,9 +913,18 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 		return false;
 	}
 
-	FGameplayTagContainer ParcelTags = Parcel->GetParcelTags();
 	const bool bParcelPackaged = Parcel->IsPackaged();
-	const FGameplayTag ParcelItemId = Parcel->GetItemData().ItemId;
+	const int32 ContentUnits = Parcel->GetContentUnitTotal();
+	const int32 ContentValue = Parcel->GetContentValueTotal();
+
+	if (ContentUnits <= 0)
+	{
+		return false;
+	}
+
+	// 태그별 이미 적용한 unit 수 (동일 태그를 요구하는 여러 주문에 분배 시 중복 적용 방지)
+	TMap<FGameplayTag, int32> ConsumedUnitsByTag;
+	bool bAppliedToAnyOrder = false;
 
 	for (FActiveOrderState& Order : ActiveOrders)
 	{
@@ -881,17 +938,51 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 			continue;
 		}
 
-		if (Order.RequiredParcelTag.IsValid() && !ParcelTags.HasTag(Order.RequiredParcelTag))
-		{				
+		// RequiredParcelTag와 일치하는 콘텐츠 unit만 사용 (포장 시 contents 기준)
+		const FGameplayTag TagToMatch = Order.RequiredParcelTag;
+		const int32 TotalMatchingUnits = TagToMatch.IsValid()
+			? Parcel->GetContentUnitsForTag(TagToMatch)
+			: Parcel->GetContentUnitTotal();
+		const int32 AlreadyConsumed = TagToMatch.IsValid() ? ConsumedUnitsByTag.FindOrAdd(TagToMatch, 0) : 0;
+		const int32 AvailableUnits = FMath::Max(0, TotalMatchingUnits - AlreadyConsumed);
+
+		if (AvailableUnits <= 0)
+		{
 			continue;
 		}
 
-		Order.SubmittedQuantity = FMath::Clamp(Order.SubmittedQuantity + 1, 0, Order.RequiredQuantity);
-
-		const int32 ParcelValue = Parcel->GetParcelPrice();
-		if (ParcelValue != 0)
+		const int32 RemainingNeed = Order.RequiredQuantity - Order.SubmittedQuantity;
+		const int32 UnitsToApply = FMath::Min(RemainingNeed, AvailableUnits);
+		if (UnitsToApply <= 0)
 		{
-			ApplyCreditDelta(ParcelValue, FString::Printf(TEXT("Parcel (%s) submitted"), *Order.OrderName.ToString()));
+			continue;
+		}
+
+		Order.SubmittedQuantity += UnitsToApply;
+		if (TagToMatch.IsValid())
+		{
+			ConsumedUnitsByTag.FindOrAdd(TagToMatch, 0) += UnitsToApply;
+		}
+		bAppliedToAnyOrder = true;
+
+		// 크레딧: 매칭된 콘텐츠 가치에 비례
+		int32 CreditsToGive = 0;
+		if (TagToMatch.IsValid())
+		{
+			const int32 MatchingValue = Parcel->GetContentValueForTag(TagToMatch);
+			const int32 MatchingUnits = Parcel->GetContentUnitsForTag(TagToMatch);
+			if (MatchingUnits > 0 && MatchingValue != 0)
+			{
+				CreditsToGive = (MatchingValue * UnitsToApply) / MatchingUnits;
+			}
+		}
+		else if (ContentValue != 0 && ContentUnits > 0)
+		{
+			CreditsToGive = (ContentValue * UnitsToApply) / ContentUnits;
+		}
+		if (CreditsToGive != 0)
+		{
+			ApplyCreditDelta(CreditsToGive, FString::Printf(TEXT("Parcel (%s) submitted"), *Order.OrderName.ToString()));
 		}
 
 		if (Order.SubmittedQuantity >= Order.RequiredQuantity)
@@ -900,13 +991,16 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 			Order.ResolutionTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 			HandleOrderSuccess(Order);
 		}
+	}
 
+	if (bAppliedToAnyOrder)
+	{
 		SyncOrdersToGameState();
 		return true;
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] No matching order for parcel '%s' (Packaged=%s, ItemId=%s, Tags=%s)"),
-		*Parcel->GetName(), bParcelPackaged ? TEXT("true") : TEXT("false"), *ParcelItemId.ToString(), *ParcelTags.ToStringSimple());
+	UE_LOG(LogTemp, Verbose, TEXT("[PickpackerGameMode::TryFulfillOrders] No matching order for parcel '%s' (Packaged=%s)"),
+		*Parcel->GetName(), bParcelPackaged ? TEXT("true") : TEXT("false"));
 	return false;
 }
 
@@ -919,9 +1013,15 @@ void APickpackerGameMode::HandleOrderFailure(FActiveOrderState& Order, const FSt
 	UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameMode] Order failed (%s) - %s"), *Reason, *Order.OrderName.ToString());
 	ApplyOrderPenalty(Order);
 
+	// 요구수량 미달분 × CreditPenalty 만큼 차감
 	if (Order.CreditPenalty > 0)
 	{
-		ApplyCreditDelta(-Order.CreditPenalty, FString::Printf(TEXT("%s failed"), *Order.OrderName.ToString()));
+		const int32 Shortfall = FMath::Max(0, Order.RequiredQuantity - Order.SubmittedQuantity);
+		const int32 PenaltyAmount = Shortfall * Order.CreditPenalty;
+		if (PenaltyAmount > 0)
+		{
+			ApplyCreditDelta(-PenaltyAmount, FString::Printf(TEXT("%s failed"), *Order.OrderName.ToString()));
+		}
 	}
 }
 

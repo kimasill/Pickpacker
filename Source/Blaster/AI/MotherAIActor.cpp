@@ -22,15 +22,15 @@
 #include "AIController.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
-#include "Perception/AIPerceptionComponent.h"
-#include "Perception/AISenseConfig_Sight.h"
-#include "Perception/AISense_Sight.h"
+#include "Blaster/AI/UPPSightPerceptionComponent.h"
+#include "Blaster/AI/MotherGameplayComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Blaster/PickpackerTypes/PickpackerTypes.h"
 #include "Blaster/Interfaces/InteractableInterface.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 AMotherAIActor::AMotherAIActor()
 {
@@ -55,19 +55,10 @@ AMotherAIActor::AMotherAIActor()
 	StatusWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	StatusWidget->SetDrawAtDesiredSize(true);
 
-	// AI Perception sight
-	PerceptionComp = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("Perception"));
-	SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
-	SightConfig->SightRadius = DetectionRange;
-	SightConfig->LoseSightRadius = DetectionRange * 1.2f;
-	SightConfig->PeripheralVisionAngleDegrees = DetectionAngle;
-	SightConfig->SetMaxAge(2.0f);
-	SightConfig->DetectionByAffiliation.bDetectEnemies = true;
-	SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
-	SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
+	PerceptionComp = CreateDefaultSubobject<UPPSightPerceptionComponent>(TEXT("Perception"));
+	PerceptionComp->ApplySightParameters(DetectionRange, DetectionAngle);
 
-	PerceptionComp->ConfigureSense(*SightConfig);
-	PerceptionComp->SetDominantSense(UAISense_Sight::StaticClass());
+	MotherGameplay = CreateDefaultSubobject<UMotherGameplayComponent>(TEXT("MotherGameplay"));
 
 	// Initialize values
 	CurrentState = EMotherAIState::Normal;
@@ -84,6 +75,9 @@ AMotherAIActor::AMotherAIActor()
 	}
 	PunishmentMontage = nullptr;
 	InspectionMontage = nullptr;
+	// BP 참조가 패키징/SeamlessTravel에서 null일 때 폴백용 태그 (BP에서 덮어쓰기 가능)
+	InspectionActorTag = FName("MotherInspectionPoint");
+	ControlTowerTag = FName("MotherControlTower");
 }
 
 void AMotherAIActor::BeginPlay()
@@ -155,8 +149,39 @@ void AMotherAIActor::BeginPlay()
 			SetActorLocation(TowerLocation);
 		}
 
-		// 첫 번째 점검 스케줄링
+		// Blackboard 초기 TargetLocation 설정 (패키징 빌드에서 BT가 시작할 데이터 확보)
+		EnsureBlackboardInitialized();
+
+		// 첫 번째 점검 스케줄링 (GameState 미준비 시 재시도)
 		ScheduleNextInspection();
+		if (!GetWorld()->GetGameState<APickpackerGameState>())
+		{
+			GetWorld()->GetTimerManager().SetTimer(
+				ScheduleRetryTimerHandle,
+				this,
+				&AMotherAIActor::ScheduleNextInspection,
+				1.0f,
+				false
+			);
+		}
+
+		// 패키징 빌드에서 BT/BB 초기화 지연 시 대비: 0.5초 후 재확인
+		GetWorld()->GetTimerManager().SetTimer(
+			BTInitRetryTimerHandle,
+			this,
+			&AMotherAIActor::EnsureBehaviorTreeInitialized,
+			0.5f,
+			false
+		);
+
+		// BP 참조가 null이면 태그로 갱신 시도 (SeamlessTravel/패키징에서 참조 유실 대비, 스트리밍 완료 후)
+		GetWorld()->GetTimerManager().SetTimer(
+			RefreshReferencesTimerHandle,
+			this,
+			&AMotherAIActor::RefreshReferencesFromTags,
+			2.0f,
+			false
+		);
 	}
 
 	// Initial state update
@@ -282,26 +307,7 @@ void AMotherAIActor::EndRestPeriod()
 
 ADroneActor* AMotherAIActor::SpawnDrone(const FVector& Location)
 {
-	if (!DroneClass || ActiveDrones.Num() >= MaxDrones)
-	{
-		return nullptr;
-	}
-
-	if (!HasAuthority())
-	{
-		return nullptr;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	ADroneActor* NewDrone = GetWorld()->SpawnActor<ADroneActor>(DroneClass, Location, FRotator::ZeroRotator, SpawnParams);
-	if (NewDrone)
-	{
-		ActiveDrones.Add(NewDrone);
-	}
-
-	return NewDrone;
+	return MotherGameplay ? MotherGameplay->SpawnDroneAt(Location) : nullptr;
 }
 
 void AMotherAIActor::SendWarning(const FString& Message)
@@ -314,23 +320,9 @@ void AMotherAIActor::SendWarning(const FString& Message)
 
 void AMotherAIActor::PunishPlayers(float SuspicionPoints)
 {
-	if (GameState)
+	if (MotherGameplay)
 	{
-		GameState->AddTeamSuspicion(SuspicionPoints);
-	}
-
-	// Spawn additional drones if needed
-	if (ActiveDrones.Num() < MaxDrones && DroneSpawnLocations.Num() > 0)
-	{
-		int32 DronesToSpawn = FMath::Min(MaxDrones - ActiveDrones.Num(), 2);
-		for (int32 i = 0; i < DronesToSpawn; ++i)
-		{
-			if (DroneSpawnLocations.Num() > 0)
-			{
-				int32 RandomIndex = FMath::RandRange(0, DroneSpawnLocations.Num() - 1);
-				SpawnDrone(DroneSpawnLocations[RandomIndex]);
-			}
-		}
+		MotherGameplay->PunishPlayers(SuspicionPoints);
 	}
 }
 
@@ -359,36 +351,9 @@ void AMotherAIActor::UpdateAIState()
 
 void AMotherAIActor::ManageDrones()
 {
-	if (CurrentState == EMotherAIState::RestPeriod)
+	if (MotherGameplay)
 	{
-		return;
-	}
-
-	float Suspicion = GetSuspicionLevel();
-
-	// Calculate desired number of drones based on suspicion
-	int32 DesiredDrones = FMath::Clamp(
-		FMath::RoundToInt(Suspicion * MaxDrones),
-		1,
-		MaxDrones
-	);
-
-	// Remove excess drones
-	while (ActiveDrones.Num() > DesiredDrones)
-	{
-		ADroneActor* Drone = ActiveDrones.Last();
-		if (Drone)
-		{
-			Drone->Destroy();
-		}
-		ActiveDrones.RemoveAt(ActiveDrones.Num() - 1);
-	}
-
-	// Spawn additional drones if needed
-	while (ActiveDrones.Num() < DesiredDrones && DroneSpawnLocations.Num() > 0)
-	{
-		int32 RandomIndex = FMath::RandRange(0, DroneSpawnLocations.Num() - 1);
-		SpawnDrone(DroneSpawnLocations[RandomIndex]);
+		MotherGameplay->ManageDrones();
 	}
 }
 
@@ -628,6 +593,9 @@ void AMotherAIActor::OnPunishmentHit()
 
 	UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] OnPunishmentHit: Applying punishment to %s"), *BlasterCharacter->GetName());
 
+	// 처벌 노티파이 시 피격 플레이어 화면 흔들림
+	BlasterCharacter->Client_PlayPunishmentCameraShake();
+
 	// 목숨 감소
 	BlasterPlayerState->LoseLife();
 
@@ -838,21 +806,63 @@ void AMotherAIActor::TriggerInspection()
 		return;
 	}
 
-	// 현재 점검할 시설 선택 (마더에 저장된 인덱스 사용)
-	if (CurrentInspectionIndex >= InspectionActorLocations.Num())
+	// null 항목 스킵하여 유효한 점검 액터 찾기 (패키징 빌드에서 참조 유실 시 대비)
+	int32 Attempts = 0;
+	const int32 MaxAttempts = InspectionActorLocations.Num();
+	while (Attempts < MaxAttempts)
 	{
-		CurrentInspectionIndex = 0;
+		if (CurrentInspectionIndex >= InspectionActorLocations.Num())
+		{
+			CurrentInspectionIndex = 0;
+		}
+
+		AActor* Candidate = InspectionActorLocations[CurrentInspectionIndex];
+		if (IsValid(Candidate))
+		{
+			CurrentInspectionActor = Candidate;
+			CurrentInspectionLocation = CurrentInspectionActor->GetActorLocation();
+			break;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] InspectionActorLocations[%d] is null, skipping"), CurrentInspectionIndex);
+		CurrentInspectionIndex++;
+		Attempts++;
 	}
-	
-	if (InspectionActorLocations[CurrentInspectionIndex])
+
+	// BP 참조가 null이면 태그 기반 폴백 시도 (패키징 빌드에서 스트리밍 레벨 참조 유실 대비)
+	if (!IsValid(CurrentInspectionActor) && InspectionActorTag.IsNone() == false)
 	{
-		CurrentInspectionActor = InspectionActorLocations[CurrentInspectionIndex];
-		CurrentInspectionLocation = CurrentInspectionActor->GetActorLocation();
+		TArray<AActor*> TaggedActors;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), InspectionActorTag, TaggedActors);
+		if (TaggedActors.Num() > 0)
+		{
+			// 런타임에 찾은 액터로 InspectionActorLocations 갱신 (다음 점검부터 사용)
+			InspectionActorLocations.Reset();
+			for (AActor* A : TaggedActors)
+			{
+				if (IsValid(A)) InspectionActorLocations.Add(A);
+			}
+			CurrentInspectionIndex = 0;
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Populated InspectionActorLocations from tag '%s': %d actors"), *InspectionActorTag.ToString(), InspectionActorLocations.Num());
+		}
 	}
-	else
+
+	if (!IsValid(CurrentInspectionActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] InspectionActorLocations[%d] is null"), CurrentInspectionIndex);
-		return;
+		// 폴백으로 채운 배열에서 유효 액터 선택
+		for (AActor* A : InspectionActorLocations) { if (IsValid(A)) { CurrentInspectionActor = A; CurrentInspectionLocation = A->GetActorLocation(); break; } }
+		if (!IsValid(CurrentInspectionActor))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] No valid InspectionActorLocations - rescheduling in 30s. BP_Mother에서 Inspection Actor Locations 설정 또는 InspectionActorTag로 폴백하세요."));
+			GetWorld()->GetTimerManager().SetTimer(
+				InspectionTimerHandle,
+				this,
+				&AMotherAIActor::TriggerInspection,
+				30.0f,
+				false
+			);
+			return;
+		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Triggering inspection at facility %d"), CurrentInspectionIndex);
@@ -1134,53 +1144,9 @@ bool AMotherAIActor::HasReachedLocation(const FVector& TargetLocation, float Tol
 
 void AMotherAIActor::ScheduleNextInspection()
 {
-	if (!HasAuthority() || InspectionTimes.Num() == 0)
+	if (MotherGameplay)
 	{
-		return;
-	}
-
-	// 게임 시간 시스템에서 현재 게임 시간 가져오기
-	APickpackerGameState* PickpackerGameState = GetWorld()->GetGameState<APickpackerGameState>();
-	if (!PickpackerGameState)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[MotherAIActor] PickpackerGameState not found, cannot schedule inspection"));
-		return;
-	}
-
-	float CurrentGameHour = PickpackerGameState->GetCurrentGameHour();
-	
-	// 다음 점검 시간 찾기
-	float NextInspectionHour = MAX_FLT;
-	for (float InspectionTime : InspectionTimes)
-	{
-		float TimeUntilInspection = InspectionTime - CurrentGameHour;
-		if (TimeUntilInspection < 0.0f)
-		{
-			TimeUntilInspection += 24.0f; // 다음 날
-		}
-		
-		if (TimeUntilInspection < NextInspectionHour)
-		{
-			NextInspectionHour = TimeUntilInspection;
-		}
-	}
-
-	if (NextInspectionHour < MAX_FLT)
-	{
-		// 게임 시간을 실제 시간(초)으로 변환
-		float RealTimeUntilInspection = PickpackerGameState->ConvertGameHoursToRealSeconds(NextInspectionHour);
-		
-		// 타이머로 Blackboard 업데이트 함수 호출 (StartInspection 직접 호출하지 않음)
-		GetWorld()->GetTimerManager().SetTimer(
-			InspectionTimerHandle,
-			this,
-			&AMotherAIActor::TriggerInspection,
-			RealTimeUntilInspection,
-			false
-		);
-
-		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] Scheduled next inspection in %.2f game hours (%.2f real seconds)"), 
-			NextInspectionHour, RealTimeUntilInspection);
+		MotherGameplay->ScheduleNextInspection();
 	}
 }
 
@@ -1290,11 +1256,52 @@ void AMotherAIActor::TryOpenDoorAhead()
 
 FVector AMotherAIActor::GetControlTowerLocation() const
 {
-	if (ControlTowerActor)
+	if (ControlTowerActor && IsValid(ControlTowerActor))
 	{
 		return ControlTowerActor->GetActorLocation();
 	}
 	return GetActorLocation(); // Fallback to current location
+}
+
+void AMotherAIActor::RefreshReferencesFromTags()
+{
+	if (!HasAuthority() || !GetWorld()) return;
+
+	bool bUpdated = false;
+
+	// ControlTowerActor 폴백
+	if ((!ControlTowerActor || !IsValid(ControlTowerActor)) && ControlTowerTag.IsNone() == false)
+	{
+		TArray<AActor*> Tagged;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), ControlTowerTag, Tagged);
+		for (AActor* A : Tagged)
+		{
+			if (IsValid(A)) { ControlTowerActor = A; bUpdated = true; UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] ControlTowerActor populated from tag '%s'"), *ControlTowerTag.ToString()); break; }
+		}
+	}
+
+	// InspectionActorLocations 폴백
+	bool bAllNull = true;
+	for (AActor* A : InspectionActorLocations) { if (IsValid(A)) { bAllNull = false; break; } }
+	if (bAllNull && InspectionActorTag.IsNone() == false)
+	{
+		TArray<AActor*> Tagged;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), InspectionActorTag, Tagged);
+		InspectionActorLocations.Reset();
+		for (AActor* A : Tagged) { if (IsValid(A)) InspectionActorLocations.Add(A); }
+		if (InspectionActorLocations.Num() > 0)
+		{
+			bUpdated = true;
+			CurrentInspectionIndex = 0;
+			UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] InspectionActorLocations populated from tag '%s': %d actors"), *InspectionActorTag.ToString(), InspectionActorLocations.Num());
+		}
+	}
+
+	if (bUpdated)
+	{
+		EnsureBlackboardInitialized();
+		if (InspectionActorLocations.Num() > 0) ScheduleNextInspection();
+	}
 }
 
 TArray<FVector> AMotherAIActor::GetInspectionLocations() const
@@ -1308,6 +1315,36 @@ TArray<FVector> AMotherAIActor::GetInspectionLocations() const
 		}
 	}
 	return Locations;
+}
+
+void AMotherAIActor::EnsureBlackboardInitialized()
+{
+	if (!HasAuthority()) return;
+
+	AMotherAIController* MotherController = Cast<AMotherAIController>(GetController());
+	if (MotherController && MotherController->GetBlackboardComponent())
+	{
+		UBlackboardComponent* Blackboard = MotherController->GetBlackboardComponent();
+		FVector TowerLocation = GetControlTowerLocation();
+		Blackboard->SetValueAsVector(FName("TargetLocation"), TowerLocation);
+		Blackboard->SetValueAsBool(FName("ShouldInspect"), false);
+		UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] EnsureBlackboardInitialized: TargetLocation=%s"), *TowerLocation.ToString());
+	}
+}
+
+void AMotherAIActor::EnsureBehaviorTreeInitialized()
+{
+	if (!HasAuthority()) return;
+
+	AMotherAIController* MotherController = Cast<AMotherAIController>(GetController());
+	if (!MotherController) return;
+
+	// Blackboard 갱신 (항상)
+	EnsureBlackboardInitialized();
+
+	// BT 재초기화 시도 (패키징 빌드에서 OnPossess 지연 시 대비)
+	MotherController->InitializeBehaviorTree();
+	UE_LOG(LogTemp, Log, TEXT("[MotherAIActor] EnsureBehaviorTreeInitialized: BT init retry"));
 }
 
 void AMotherAIActor::OnRestPeriodIntervalTimerFinished()

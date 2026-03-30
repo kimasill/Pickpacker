@@ -296,6 +296,22 @@ FVector AConveyorBeltActor::GetConveyorEntryLocation() const
 	return GetActorLocation() + EntryOffset;
 }
 
+void AConveyorBeltActor::ReleaseParcelIfConveyed(AParcelActor* Parcel)
+{
+	if (!Parcel || !HasAuthority())
+	{
+		return;
+	}
+	for (int32 i = ConveyedPrimitives.Num() - 1; i >= 0; --i)
+	{
+		if (ConveyedPrimitives[i].Primitive.IsValid() && ConveyedPrimitives[i].Primitive->GetOwner() == Parcel)
+		{
+			ReleasePrimitive(ConveyedPrimitives[i].Primitive.Get(), false);
+			break;
+		}
+	}
+}
+
 bool AConveyorBeltActor::CanConveyActor(AActor* Actor) const
 {
 	if (!Actor)

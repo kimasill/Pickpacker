@@ -200,3 +200,12 @@ Plugins/**/Content/**
 
 # Exclude cinematic sequences and takes
 Content/Sequences/**
+
+# Exclude large plugins as requested
+Plugins/DLSS/
+Plugins/StreamlineNGXCommon/
+Plugins/XeSS_5.6/
+
+# Other files
+steam_appid.txt
+

@@ -16,6 +16,7 @@
 #include "Blaster/UI/InteractionPromptWidget.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/BoxComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -278,34 +279,104 @@ void UInteractionComponent::UpdateTarget()
         
     // Optional shelf trace (only while carrying a parcel) - allow seeing shelf even if parcel blocks interaction channel
 
-    // Perform primary multi trace (interaction channel)
+    // Perform primary single trace (interaction channel)
     TArray<FHitResult> InteractionHits;
     bool bInteractionTrace = false;
 
-    // 우선 라인 트레이스
-    bInteractionTrace = GetWorld() && GetWorld()->LineTraceMultiByChannel(InteractionHits, Start, End, InteractionChannel, InteractionParams);
-
-    // 라인 트레이스에 없으면/보완용으로 좁은 캡슐 스윕 추가
-    if (GetWorld())
+    FHitResult InteractionHit;
+    bInteractionTrace = GetWorld() && GetWorld()->LineTraceSingleByChannel(InteractionHit, Start, End, InteractionChannel, InteractionParams);
+    if (bInteractionTrace)
     {
-        TArray<FHitResult> SweepHits;
+        InteractionHits.Add(InteractionHit);
+    }
+
+    // 라인 트레이스에 없으면/보완용으로 좁은 캡슐 스윕 추가 (싱글)
+    if (!bInteractionTrace && GetWorld())
+    {
+        FHitResult SweepHit;
         const FCollisionShape Capsule = FCollisionShape::MakeCapsule(TargetingRadius, TargetingRadius);
-        if (GetWorld()->SweepMultiByChannel(SweepHits, Start, End, FQuat::Identity, InteractionChannel, Capsule, InteractionParams))
+        if (GetWorld()->SweepSingleByChannel(SweepHit, Start, End, FQuat::Identity, InteractionChannel, Capsule, InteractionParams))
         {
-            InteractionHits.Append(SweepHits);
+            InteractionHits.Add(SweepHit);
+            bInteractionTrace = true;
         }
     }
-    FHitResult ShelfHit;
-    bool bShelfHitValid = false;
-    if (IsValid(CarriedParcel))
+    TArray<FHitResult> ShelfHits;
+    AShelfActor* BestShelfFromTrace = nullptr;
+    if (IsValid(CarriedParcel) && GetWorld())
     {
-        FCollisionQueryParams ShelfParams = InteractionParams; // reuse ignores
-        // We allow shelf trace to pass through items; do NOT ignore static world so shelf collision works
-        bShelfHitValid = GetWorld() && GetWorld()->LineTraceSingleByChannel(ShelfHit, Start, End, ShelfTraceChannel, ShelfParams)
-                         && ShelfHit.GetActor() && ShelfHit.GetActor()->IsA(AShelfActor::StaticClass());
+        FCollisionQueryParams ShelfParams = InteractionParams;
+        if (GetWorld()->LineTraceMultiByChannel(ShelfHits, Start, End, ShelfTraceChannel, ShelfParams))
+        {
+            // Map: AShelfActor* -> closest hit distance (smallest wins)
+            TMap<AShelfActor*, float> ShelfToDistance;
+            for (const FHitResult& H : ShelfHits)
+            {
+                AShelfActor* Shelf = Cast<AShelfActor>(H.GetActor());
+                if (!Shelf) continue;
+
+                const float Dist = FVector::Dist(Start, H.ImpactPoint);
+                float* Existing = ShelfToDistance.Find(Shelf);
+                if (!Existing || Dist < *Existing)
+                {
+                    ShelfToDistance.Add(Shelf, Dist);
+                }
+            }
+
+            if (ShelfToDistance.Num() > 0)
+            {
+                // Reference height: carried parcel (prefer shelves lower than item)
+                float ParcelRefZ = CarriedParcel->GetActorLocation().Z;
+
+                // Get placement surface top Z for each shelf
+                auto GetShelfSurfaceZ = [](AShelfActor* Shelf) -> float
+                {
+                    if (!Shelf || !Shelf->PlacementSurface) return Shelf ? Shelf->GetActorLocation().Z : 0.f;
+                    const UBoxComponent* Box = Shelf->PlacementSurface;
+                    FVector TopWorld = Box->GetComponentTransform().TransformPosition(FVector(0, 0, Box->GetScaledBoxExtent().Z));
+                    return TopWorld.Z;
+                };
+
+                // Sort: 1) prefer shelf surface Z < parcel Z (lower shelves first), 2) then by distance (closest)
+                TArray<TPair<AShelfActor*, float>> Sorted;
+                for (const auto& Elem : ShelfToDistance)
+                {
+                    Sorted.Add(TPair<AShelfActor*, float>(Elem.Key, Elem.Value));
+                }
+                Sorted.Sort([ParcelRefZ, GetShelfSurfaceZ](const TPair<AShelfActor*, float>& A, const TPair<AShelfActor*, float>& B)
+                {
+                    const float AZ = GetShelfSurfaceZ(A.Key);
+                    const float BZ = GetShelfSurfaceZ(B.Key);
+                    const bool AIsLower = AZ < ParcelRefZ;
+                    const bool BIsLower = BZ < ParcelRefZ;
+                    if (AIsLower != BIsLower) return AIsLower; // lower shelf wins
+                    return A.Value < B.Value; // same tier: closer wins
+                });
+
+                AShelfActor* ClosestShelf = Sorted[0].Key;
+                const float ClosestDist = Sorted[0].Value;
+
+                // Hysteresis: when stacked shelves are close, keep current target to prevent flickering
+                const float ShelfHysteresisDist = 35.0f;
+                AShelfActor* CurrentShelf = Cast<AShelfActor>(CurrentTarget.Get());
+                if (CurrentShelf && ShelfToDistance.Contains(CurrentShelf))
+                {
+                    const float CurrentDist = ShelfToDistance[CurrentShelf];
+                    if (ClosestShelf != CurrentShelf && FMath::Abs(ClosestDist - CurrentDist) < ShelfHysteresisDist)
+                    {
+                        BestShelfFromTrace = CurrentShelf; // keep current to avoid jitter
+                    }
+                }
+
+                if (!BestShelfFromTrace)
+                {
+                    BestShelfFromTrace = ClosestShelf;
+                }
+            }
+        }
     }
 
-    // Debug draw (short lived)
+#if !UE_BUILD_SHIPPING
     if (bDrawDebugTrace)
     {
         const FColor LineColor = bInteractionTrace ? FColor::Green : FColor::Red;
@@ -314,18 +385,22 @@ void UInteractionComponent::UpdateTarget()
         {
             DrawDebugSphere(GetWorld(), H.ImpactPoint, 6.f, 12, FColor::Yellow, false, 0.05f);
         }
-        if (bShelfHitValid)
+        if (BestShelfFromTrace)
         {
-            DrawDebugSphere(GetWorld(), ShelfHit.ImpactPoint, 10.f, 16, FColor::Cyan, false, 0.1f);
+            DrawDebugSphere(GetWorld(), BestShelfFromTrace->GetActorLocation(), 10.f, 16, FColor::Cyan, false, 0.1f);
         }
     }
+#endif
 
     // Select best interactable from primary hits (가장 시선 중심에 가까운 것 우선)
     AActor* NewTarget = nullptr;
-    float BestAngleScore = TNumericLimits<float>::Max(); // 작은 값이 더 중심
+    AActor* PrimaryTaggedTarget = nullptr;
+    float BestScore = TNumericLimits<float>::Max();
+    float BestPrimaryScore = TNumericLimits<float>::Max();
 
     if (InteractionHits.Num() > 0)
     {
+        const float MaxDistance = FMath::Max(InteractionDistance, 1.0f);
         for (const FHitResult& Hit : InteractionHits)
         {
             AActor* HitActor = Hit.GetActor();
@@ -337,27 +412,88 @@ void UInteractionComponent::UpdateTarget()
                 continue;
             }
 
-            if (!UDynamicGameplayStatics::GetActorOrComponentWithInterface(HitActor, UInteractableInterface::StaticClass()))
+            TArray<UObject*> InteractableObjects;
+            UDynamicGameplayStatics::GetActorAndChildObjectsWithInterface(HitActor, UInteractableInterface::StaticClass(), InteractableObjects);
+            if (InteractableObjects.Num() == 0)
             {
                 continue;
             }
 
-            const FVector ToHit = (Hit.ImpactPoint - Start).GetSafeNormal();
-            const float AngleCos = FVector::DotProduct(Direction.GetSafeNormal(), ToHit);
-            const float AngleScore = 1.0f - AngleCos; // 0이면 정확히 정중앙
-
-            if (AngleScore < BestAngleScore)
+            float BestObjectScore = TNumericLimits<float>::Max();
+            AActor* BestObjectActor = nullptr;
+            for (UObject* InteractableObj : InteractableObjects)
             {
-                BestAngleScore = AngleScore;
-                NewTarget  = HitActor;
+                if (!InteractableObj)
+                {
+                    continue;
+                }               
+
+                FVector TargetLocation = HitActor->GetActorLocation();
+                AActor* CandidateActor = HitActor;
+                if (USceneComponent* InteractableComponent = Cast<USceneComponent>(InteractableObj))
+                {
+                    TargetLocation = InteractableComponent->GetComponentLocation();
+                }
+                else if (AActor* InteractableActor = Cast<AActor>(InteractableObj))
+                {
+                    if(!CanInteractWith(InteractableActor))
+                    {
+                        continue;
+                    }
+                    TargetLocation = InteractableActor->GetActorLocation();
+                    CandidateActor = InteractableActor;
+                }
+
+                const FVector ToTarget = TargetLocation - Start;
+                const float Distance = FMath::Max(ToTarget.Size(), 1.0f);
+                const FVector ToDir = ToTarget / Distance;
+
+                const float AngleCos = FVector::DotProduct(Direction.GetSafeNormal(), ToDir);
+                const float AngleScore = 1.0f - AngleCos; // 0이면 정확히 정중앙
+                const float DistanceScore = Distance / MaxDistance;
+                const float FinalScore = (AngleScore * 0.7f) + (DistanceScore * 0.3f);
+
+                if (FinalScore < BestObjectScore)
+                {
+                    BestObjectScore = FinalScore;
+                    BestObjectActor = CandidateActor;
+                }
+            }
+
+            if (BestObjectScore == TNumericLimits<float>::Max() || !BestObjectActor)
+            {
+                continue;
+            }
+
+            const bool bIsPrimary = BestObjectActor->ActorHasTag(FName("Primary"));
+
+            if (bIsPrimary)
+            {
+                if (BestObjectScore < BestPrimaryScore)
+                {
+                    BestPrimaryScore = BestObjectScore;
+                    PrimaryTaggedTarget = BestObjectActor;
+                }
+            }
+            else if (BestObjectScore < BestScore)
+            {
+                BestScore = BestObjectScore;
+                NewTarget = BestObjectActor;
             }
         }
     }
 
-    // If carrying a parcel and shelf trace succeeded, override target with shelf (always prioritize shelf when holding)
-    if (bShelfHitValid)
+    if (PrimaryTaggedTarget)
     {
-        NewTarget = ShelfHit.GetActor();
+        NewTarget = PrimaryTaggedTarget;
+    }
+
+    // When carrying a parcel, shelf trace (ECC_GameTraceChannel4) can detect shelves
+    // that the interaction channel (ECC_GameTraceChannel3) may miss.
+    // Multi-trace + hysteresis prevents flickering when shelves are stacked.
+    if (!NewTarget && BestShelfFromTrace)
+    {
+        NewTarget = BestShelfFromTrace;
     }
 
     PreviousTarget = CurrentTarget;
@@ -476,17 +612,17 @@ void UInteractionComponent::Interact()
 {
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return;
 
-	// 웅크린 상태에서는 새로 줍기 금지 (기존 소지품 드랍은 허용)
-	if (!IsValid(CarriedParcel) && OwnerCharacter->bIsCrouched)
-	{
-		if (AActor* TargetActor = CurrentTarget.Get())
-		{
-			if (TargetActor->IsA(AParcelActor::StaticClass()))
-			{
-				return;
-			}
-		}
-	}
+    // 웅크린 상태에서는 새로 줍기 금지 (기존 소지품 드랍은 허용)
+    if (!IsValid(CarriedParcel) && OwnerCharacter->bIsCrouched)
+    {
+        if (AActor* TargetActor = CurrentTarget.Get())
+        {
+            if (TargetActor->IsA(AParcelActor::StaticClass()))
+            {
+                return;
+            }
+        }
+    }
 
     // If carrying a parcel, try placing onto current shelf target using preview transform when available.
     if (IsValid(CarriedParcel))
@@ -527,8 +663,27 @@ void UInteractionComponent::Interact()
                     return;
                 }
             }
+
+            if (CanInteract())
+            {
+                AActor* TargetActor = CurrentTarget.Get();
+                UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(TargetActor, UInteractableInterface::StaticClass());
+                if (InteractableObj)
+                {
+                    if (OwnerCharacter->HasAuthority())
+                    {
+                        PerformInteract(InteractableObj, OwnerCharacter);
+                        OnInteractSuccess.Broadcast(TargetActor);
+                    }
+                    else
+                    {
+                        Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity);
+                    }
+                    return;
+                }
+            }
         }
-        // If not targeting shelf, drop parcel with impulse
+        // If not targeting shelf or interactable, drop parcel with impulse
         Parcel->RequestDrop(OwnerCharacter->GetActorForwardVector() * DropImpulse);
         if (OwnerCharacter->HasAuthority()) SetCarriedParcel(nullptr);
         return;
@@ -562,11 +717,8 @@ void UInteractionComponent::Interact()
         }
         else
         {
-            // Client: request unlock on server
-            if (CreditUnlockComp->RequestUnlock(OwnerCharacter))
-            {
-                Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity);
-            }
+            // Client: RequestUnlock uses GetAuthGameMode (server-only). Send to server; server handles unlock.
+            Server_Interact(TargetActor, INDEX_NONE, FTransform::Identity);
         }
         return;
     }
@@ -631,6 +783,18 @@ void UInteractionComponent::Server_Interact_Implementation(AActor* Target, int32
         }
     }
     UObject* InteractableObj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(Target, UInteractableInterface::StaticClass()); if (!InteractableObj) return;
+
+    // Credit unlock: RequestUnlock must run on server (GetAuthGameMode). Client sends RPC; we handle here.
+    if (UCreditUnlockComponent* CreditUnlockComp = Target->FindComponentByClass<UCreditUnlockComponent>())
+    {
+        if (!CreditUnlockComp->IsUnlocked())
+        {
+            if (!CreditUnlockComp->RequestUnlock(OwnerCharacter))
+            {
+                return; // Not enough credits
+            }
+        }
+    }
     PerformInteract(InteractableObj, OwnerCharacter);
 }
 
@@ -640,6 +804,14 @@ bool UInteractionComponent::CanInteract() const
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return false;
     UObject* Obj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(CurrentTarget.Get(), UInteractableInterface::StaticClass()); if (!Obj) return false;
     return IInteractableInterface::Execute_CanInteract(Obj, OwnerCharacter);
+}
+
+bool UInteractionComponent::CanInteractWith(AActor* Target) const
+{
+	if (!Target) return false;
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); if (!OwnerCharacter) return false;
+	UObject* Obj = UDynamicGameplayStatics::GetActorOrComponentWithInterface(Target, UInteractableInterface::StaticClass()); if (!Obj) return false;
+	return IInteractableInterface::Execute_CanInteract(Obj, OwnerCharacter);
 }
 
 UObject* UInteractionComponent::GetCurrentInteractableObject() const

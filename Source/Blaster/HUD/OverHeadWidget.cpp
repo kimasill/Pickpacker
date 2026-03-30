@@ -3,6 +3,7 @@
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
 #include "Slate/SlateBrushAsset.h"
+#include "Components/WidgetComponent.h"
 
 void UOverHeadWidget::SetDisplayText(FString TextToDisplay)
 {
@@ -44,12 +45,41 @@ void UOverHeadWidget::ShowPlayerNetRole(APawn* InPawn)
 
 void UOverHeadWidget::SetPlayerName(const FString& PlayerName)
 {
+	const bool bHideForLocal = [this]()
+	{
+		if (const UWidgetComponent* WidgetComp = Cast<UWidgetComponent>(GetOuter()))
+		{
+			if (const APawn* OwnerPawn = Cast<APawn>(WidgetComp->GetOwner()))
+			{
+				return OwnerPawn->IsLocallyControlled();
+			}
+		}
+		return false;
+	}();
+
+	if (bHideForLocal)
+	{
+		if (PlayerNameText)
+		{
+			PlayerNameText->SetVisibility(ESlateVisibility::Collapsed);
+			PlayerNameText->SetText(FText());
+		}
+		if (DisplayText)
+		{
+			DisplayText->SetVisibility(ESlateVisibility::Collapsed);
+			DisplayText->SetText(FText());
+		}
+		return;
+	}
+
 	if (PlayerNameText)
 	{
+		PlayerNameText->SetVisibility(ESlateVisibility::Visible);
 		PlayerNameText->SetText(FText::FromString(PlayerName));
 	}
 	else if (DisplayText)
 	{
+		DisplayText->SetVisibility(ESlateVisibility::Visible);
 		// PlayerNameText가 없으면 DisplayText에 표시
 		DisplayText->SetText(FText::FromString(PlayerName));
 	}

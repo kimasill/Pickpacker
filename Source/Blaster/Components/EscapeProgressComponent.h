@@ -11,6 +11,8 @@ class ULevelSequence;
 class ULevelSequencePlayer;
 class ABlasterPlayerController;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSequenceStarted, ULevelSequence*, Sequence);
+
 USTRUCT(BlueprintType)
 struct FEscapeRouteProgress
 {
@@ -71,6 +73,9 @@ public:
 	/** 현재 시작된 엔딩 ID */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
 	FName GetCurrentEndingId() const { return CurrentEndingId; }
+	
+	UPROPERTY(BlueprintAssignable, Category = "EscapeProgress")
+	FOnSequenceStarted OnSequenceStarted;
 
 protected:
 	UFUNCTION()
@@ -92,7 +97,6 @@ protected:
 	/** 전환 시퀀스 완료 후 레벨 전환 실행 */
 	UFUNCTION()
 	void OnTransitionSequenceFinished();
-
 protected:
 	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Data")
 	TArray<TObjectPtr<UDA_EndingData>> EndingDataAssets;

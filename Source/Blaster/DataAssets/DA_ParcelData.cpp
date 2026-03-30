@@ -3,6 +3,25 @@
 #include "DA_ParcelData.h"
 #include "GameplayTagsManager.h"
 
+void UDA_ParcelData::PostLoad()
+{
+	Super::PostLoad();
+	// 레거시 RequiredCount -> MinRequiredCount, MaxRequiredCount 마이그레이션
+	for (FParcelPackageRecipe& Recipe : PackageRecipes)
+	{
+		if (Recipe.RequiredCount > 0 && Recipe.MinRequiredCount == 1 && Recipe.MaxRequiredCount == 1)
+		{
+			Recipe.MinRequiredCount = Recipe.RequiredCount;
+			Recipe.MaxRequiredCount = Recipe.RequiredCount;
+		}
+		// Min/Max 유효성 (Min > Max일 경우 교정)
+		if (Recipe.MinRequiredCount > Recipe.MaxRequiredCount)
+		{
+			Recipe.MaxRequiredCount = Recipe.MinRequiredCount;
+		}
+	}
+}
+
 UDA_ParcelData::UDA_ParcelData()
 {
 	// Initialize with default parcel configs
