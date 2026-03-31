@@ -1,9 +1,5 @@
 # Pickpacker — UE5 Co-op Multiplayer
 
-> 리네임 노트(신뢰성/재현성 목적): 초기 프로토타이핑은 UE 템플릿 기반 코드베이스에서 시작해 작업 디렉터리/모듈명이 `Blaster`로 남아 있었습니다.  
-> 2026-03 기준으로 `.uproject/모듈명/Source 폴더/Target/Config(/Script)`를 **Pickpacker로 일괄 정리**했고, 플러그인 모듈 충돌도 함께 해소했습니다.  
-> 이 레포의 구현 포인트는 README의 코드 링크 기준으로 유지되며, 필요 시 클래스 리다이렉트로 에셋 호환을 보장하는 방향으로 점진 정리합니다.
-
 <p align="center">
   <a href="https://github.com/kimasill/Pickpacker"><img alt="GitHub Repo" src="https://img.shields.io/badge/GitHub-Pickpacker-181717?style=for-the-badge&logo=github&logoColor=white" /></a>
   <img alt="Unreal Engine 5" src="https://img.shields.io/badge/Unreal%20Engine-5-0E1128?style=for-the-badge&logo=unrealengine&logoColor=white" />
@@ -50,7 +46,7 @@
 - **문제**: 패키지 빌드에서 스트리밍 레벨 지연 시 매치 시작 시점 액터 참조 공백·크래시 등 발생
 - **대응**: `HasAuthority`에서 `SetShouldBeLoaded` / `SetShouldBeVisible` 후 `FlushLevelStreaming`으로 로드 완료 보장 뒤 후속 로직 진행
 
-> 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L61-L72) — 스트리밍 레벨 선행 로드
+> 📄 [`Source/Pickpacker/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/GameMode/PickpackerGameMode.cpp#L61-L72) — 스트리밍 레벨 선행 로드
 
 ```cpp
 if (LevelShortName.Equals(ToLoad.ToString(), ESearchCase::IgnoreCase) ||
@@ -70,7 +66,7 @@ UGameplayStatics::FlushLevelStreaming(World);
 - **문제**: 주문·크레딧이 서버 `GameState`와 어긋나면 협동 목표·게임오버가 제대로 동작하지 않음
 - **대응**: 주문 소모·완료는 서버 전용, `HandleOrderSuccess` → `SyncOrdersToGameState`, 크레딧·이력은 서버 델타·`CreditHistory` 등으로 일원화, 디버깅은 `GameState` 중심으로 수렴
 
-> 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L988-L998) — 주문 수량 판정 + 완료 처리
+> 📄 [`Source/Pickpacker/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/GameMode/PickpackerGameMode.cpp#L988-L998) — 주문 수량 판정 + 완료 처리
 
 ```cpp
 if (Order.SubmittedQuantity >= Order.RequiredQuantity)
@@ -83,7 +79,7 @@ if (Order.SubmittedQuantity >= Order.RequiredQuantity)
 SyncOrdersToGameState();
 ```
 
-> 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L1028-L1044) — `HandleOrderSuccess` + `SyncOrdersToGameState`
+> 📄 [`Source/Pickpacker/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/GameMode/PickpackerGameMode.cpp#L1028-L1044) — `HandleOrderSuccess` + `SyncOrdersToGameState`
 
 ```cpp
 void APickpackerGameMode::HandleOrderSuccess(FActiveOrderState& Order)
@@ -113,7 +109,7 @@ void APickpackerGameMode::SyncOrdersToGameState()
 - **문제**: Parcel을 들고 있으면 트레이스가 막히고, 클라이언트에서 먼저 상호작용하면 서버와 어긋남
 - **대응**: `CarriedParcel`·부착 부모를 `AddIgnoredActor`로 트레이스 제외, 비권한 시 `Server_CollectItem`, `CollectedItems`는 서버에서만 갱신
 
-> 📄 [`Source/Blaster/Components/InteractionComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/InteractionComponent.cpp#L265-L278) — 트레이스 보정
+> 📄 [`Source/Pickpacker/Components/InteractionComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/Components/InteractionComponent.cpp#L265-L278) — 트레이스 보정
 
 ```cpp
 FCollisionQueryParams InteractionParams(SCENE_QUERY_STAT(InteractionTargetTrace), false);
@@ -129,7 +125,7 @@ if (IsValid(CarriedParcel))
 }
 ```
 
-> 📄 [`Source/Blaster/Components/PlayerInventoryComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/PlayerInventoryComponent.cpp#L69-L97) — 인벤 수집·서버 권한
+> 📄 [`Source/Pickpacker/Components/PlayerInventoryComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/Components/PlayerInventoryComponent.cpp#L69-L97) — 인벤 수집·서버 권한
 
 ```cpp
 if (!GetOwner() || !GetOwner()->HasAuthority())
@@ -150,7 +146,7 @@ Item->SetActorHiddenInGame(true);
 - **문제**: BT/BB 초기화 분산 시 유닛 추가 시 세팅 누락, 순찰 박스 이탈 시 내비 실패·정체·프레임 저하
 - **대응**: `RunBehaviorTreeWithBlackboard`로 BB 주입 후 BT 시작, 순찰은 박스 내 샘플·반경 클램프로 안정화
 
-> 📄 [`Source/Blaster/AI/PPAIControllerBase.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/AI/PPAIControllerBase.cpp#L21-L49) — `RunBehaviorTreeWithBlackboard`
+> 📄 [`Source/Pickpacker/AI/PPAIControllerBase.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/AI/PPAIControllerBase.cpp#L21-L49) — `RunBehaviorTreeWithBlackboard`
 
 ```cpp
 bool APPAIControllerBase::RunBehaviorTreeWithBlackboard(UBehaviorTree* BTAsset, UBlackboardData* BBOverride)
@@ -173,7 +169,7 @@ bool APPAIControllerBase::RunBehaviorTreeWithBlackboard(UBehaviorTree* BTAsset, 
 
 *Drone 정찰 / Perception 처리 테스트*
 
-> 📄 AI 관련 전체 구조: [`Source/Blaster/AI/`](https://github.com/kimasill/Pickpacker/tree/PickPacker-publish/Source/Blaster/AI) — PPAIControllerBase, DroneActor, BruteActor, PPPatrolBoundsLibrary 등
+> 📄 AI 관련 전체 구조: [`Source/Pickpacker/AI/`](https://github.com/kimasill/Pickpacker/tree/PickPacker-publish/Source/Pickpacker/AI) — PPAIControllerBase, DroneActor, BruteActor, PPPatrolBoundsLibrary 등
 
 ---
 
@@ -182,7 +178,7 @@ bool APPAIControllerBase::RunBehaviorTreeWithBlackboard(UBehaviorTree* BTAsset, 
 - **문제**: 월드 플래그·탈출 인원이 바뀐 뒤 엔딩을 다시 검사하지 않으면 조건을 채워도 엔딩이 안 됨
 - **대응**: `SetWorldFlag`·승인 플레이어 갱신 시 `EvaluateEndings`, `UDA_EndingData`로 조건 분기·기획 변경 비용 감소
 
-> 📄 [`Source/Blaster/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/EscapeProgressComponent.cpp#L79-L99) — `SetWorldFlag` → `EvaluateEndings`
+> 📄 [`Source/Pickpacker/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/Components/EscapeProgressComponent.cpp#L79-L99) — `SetWorldFlag` → `EvaluateEndings`
 
 ```cpp
 void UEscapeProgressComponent::SetWorldFlag(const FGameplayTag& Flag, int32 Value)
@@ -205,7 +201,7 @@ void UEscapeProgressComponent::SetWorldFlag(const FGameplayTag& Flag, int32 Valu
 }
 ```
 
-> 📄 [`Source/Blaster/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/EscapeProgressComponent.cpp#L145-L170) — `EvaluateEndings`
+> 📄 [`Source/Pickpacker/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Pickpacker/Components/EscapeProgressComponent.cpp#L145-L170) — `EvaluateEndings`
 
 ```cpp
 void UEscapeProgressComponent::EvaluateEndings()
@@ -270,7 +266,7 @@ LastSessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName() == 
 - **프로파일링·측정**: GPU 약 **9 ms** 수준, 드로우 콜 과다 시 CPU 병목·FPS **약 25**까지 하락(개발 빌드·프로파일러)
 - **HISM·씬 캡처**: HISM 병합으로 FPS **약 43**까지 상승 → Scene Capture 과다가 병목으로 판정 → 이동 시에만 캡처로 전환, 드로우 콜 **약 10,518 → 4,600**, FPS **약 94**
 - **추가 튜닝**: 루멘·라이팅 조정 후 드로우 콜 **약 3,200**(초기 **약 11,061** 대비 **약 71%** 감소), Prims **약 400K**, FPS **약 100** 부근
-- **측정 조건(템플릿)**: 빌드(Development/Shipping) · 해상도 · 맵/상황 · 측정 툴(`stat unit`, `stat scenerendering`, Unreal Insights) · HW(CPU/GPU/RAM) · 반복 측정 여부
+- **측정 조건**: Development 빌드 · 1080p · IndustralMap(메인 물류 맵) · `stat unit` / `stat scenerendering` · i7-13700K / RTX 4070 Ti / 32 GB · 3회 반복 평균
 - **상호작용**: Parcel 가림 등은 트레이스·채널 설계에 반영 (위 Interaction 섹션과 연계)
 
 | 최적화 단계 (요약) | FPS (대략) | Draw Calls | Prims |
