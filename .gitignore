@@ -209,3 +209,9 @@ Plugins/XeSS_5.6/
 # Other files
 steam_appid.txt
 
+# IDE / Editor settings
+.cursor/
+
+# Stray asset export (should not be in VCS)
+DA_ParcelData.T3D
+
