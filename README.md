@@ -13,6 +13,12 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=jSH2DfqKqWA" title="Pickpacker 시연 영상" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.youtube.com/vi/jSH2DfqKqWA/maxresdefault.jpg" alt="Pickpacker 시연 영상 (YouTube)" width="720" />
+  </a>
+</p>
+
 링크 · [프로젝트 페이지](https://kimasill.github.io/projects/pickpacker.html) · [진행·구조 (pickpacker-process)](https://kimasill.github.io/projects/pickpacker-process.html) · [웹 포트폴리오](https://kimasill.github.io/)
 
 > UE5 기반 협동 멀티플레이 **Pickpacker** 소스 레포지토리입니다. 서버 권한·복제를 축으로 한 핵심 구현과 코드 위치를 아래에 개조식으로 정리합니다.
@@ -56,7 +62,7 @@ UGameplayStatics::FlushLevelStreaming(World);
 
 ### 2. GameMode & GameState – 주문·크레딧 서버 권한
 
-- **문제**: 주문·크레딧이 서버 `GameState`와 어긋나면 협동 목표·게임오버 판정 흔들림
+- **문제**: 주문·크레딧이 서버 `GameState`와 어긋나면 협동 목표·게임오버가 제대로 동작하지 않음
 - **대응**: 주문 소모·완료는 서버 전용, `HandleOrderSuccess` → `SyncOrdersToGameState`, 크레딧·이력은 서버 델타·`CreditHistory` 등으로 일원화, 디버깅은 `GameState` 중심으로 수렴
 
 > 📄 [`Source/Blaster/GameMode/PickpackerGameMode.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/GameMode/PickpackerGameMode.cpp#L988-L998) — 주문 수량 판정 + 완료 처리
@@ -99,7 +105,7 @@ void APickpackerGameMode::SyncOrdersToGameState()
 
 <img src="https://kimasill.github.io/images/Pickpacker/상호작용.png" alt="Pickpacker 상호작용" width="640" />
 
-- **문제**: Parcel 가림·클라 선행 상호작용 시 서버와 불일치, 유실·중복 체감
+- **문제**: Parcel을 들고 있으면 트레이스가 막히고, 클라이언트에서 먼저 상호작용하면 서버와 어긋남
 - **대응**: `CarriedParcel`·부착 부모를 `AddIgnoredActor`로 트레이스 제외, 비권한 시 `Server_CollectItem`, `CollectedItems`는 서버에서만 갱신
 
 > 📄 [`Source/Blaster/Components/InteractionComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/InteractionComponent.cpp#L265-L278) — 트레이스 보정
@@ -168,7 +174,7 @@ bool APPAIControllerBase::RunBehaviorTreeWithBlackboard(UBehaviorTree* BTAsset, 
 
 ### 5. Escape & Ending – 플래그 변동 시 엔딩 재평가
 
-- **문제**: 월드 플래그·탈출 인원 변화 후 엔딩 미재평가 시 조건 충족에도 분기 누락·세션 정체
+- **문제**: 월드 플래그·탈출 인원이 바뀐 뒤 엔딩을 다시 검사하지 않으면 조건을 채워도 엔딩이 안 됨
 - **대응**: `SetWorldFlag`·승인 플레이어 갱신 시 `EvaluateEndings`, `UDA_EndingData`로 조건 분기·기획 변경 비용 감소
 
 > 📄 [`Source/Blaster/Components/EscapeProgressComponent.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Source/Blaster/Components/EscapeProgressComponent.cpp#L79-L99) — `SetWorldFlag` → `EvaluateEndings`
@@ -219,7 +225,7 @@ void UEscapeProgressComponent::EvaluateEndings()
 
 ### 6. Multiplayer Sessions – LAN·온라인 세션 분기 한곳에
 
-- **문제**: LAN/온라인 세션 설정·검색 쿼리 분기 분산 시 방 검색 실패 등 멀티 미동작
+- **문제**: LAN/온라인 세션 설정·검색 쿼리 분기가 흩어져 있으면 방 검색이 안 되는 등 멀티가 동작하지 않음
 - **대응**: `bIsLANMatch`·`bIsLanQuery`로 NULL 서브시스템 구분, `SEARCH_LOBBIES` / `SEARCH_PRESENCE` 전처리 분기를 세션 서브시스템에 집중
 
 > 📄 [`Plugins/MultiplayerSessions/.../MultiplayerSessionsSubsystem.cpp`](https://github.com/kimasill/Pickpacker/blob/PickPacker-publish/Plugins/MultiplayerSessions/Source/MultiplayerSessions/Private/MultiplayerSessionsSubsystem.cpp#L77) — 세션 생성 LAN 분기
