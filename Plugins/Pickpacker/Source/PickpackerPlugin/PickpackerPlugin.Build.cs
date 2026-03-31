@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class Pickpacker : ModuleRules
+public class PickpackerPlugin : ModuleRules
 {
-	public Pickpacker(ReadOnlyTargetRules Target) : base(Target)
+	public PickpackerPlugin(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		

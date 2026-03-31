@@ -4,7 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 
-class FPickpackerModule : public IModuleInterface
+class FPickpackerPluginModule : public IModuleInterface
 {
 public:
 

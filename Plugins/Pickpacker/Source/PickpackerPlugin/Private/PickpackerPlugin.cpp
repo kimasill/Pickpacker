@@ -1,15 +1,15 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "Pickpacker.h"
+#include "PickpackerPlugin.h"
 
-#define LOCTEXT_NAMESPACE "FPickpackerModule"
+#define LOCTEXT_NAMESPACE "FPickpackerPluginModule"
 
-void FPickpackerModule::StartupModule()
+void FPickpackerPluginModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
 }
 
-void FPickpackerModule::ShutdownModule()
+void FPickpackerPluginModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
@@ -17,4 +17,4 @@ void FPickpackerModule::ShutdownModule()
 
 #undef LOCTEXT_NAMESPACE
 	
-IMPLEMENT_MODULE(FPickpackerModule, Pickpacker)
+IMPLEMENT_MODULE(FPickpackerPluginModule, PickpackerPlugin)

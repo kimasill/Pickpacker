@@ -16,7 +16,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "Pickpacker",
+			"Name": "PickpackerPlugin",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

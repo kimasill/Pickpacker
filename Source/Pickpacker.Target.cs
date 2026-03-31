@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class BlasterTarget : TargetRules
+public class PickpackerTarget : TargetRules
 {
-	public BlasterTarget(TargetInfo Target) : base(Target)
+	public PickpackerTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
-		ExtraModuleNames.Add("Blaster");
+		ExtraModuleNames.Add("Pickpacker");
 	}
 }

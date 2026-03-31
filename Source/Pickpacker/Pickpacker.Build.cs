@@ -3,12 +3,12 @@
 using UnrealBuildTool;
 using System.IO;
 
-public class Blaster : ModuleRules
+public class Pickpacker : ModuleRules
 {
-	public Blaster(ReadOnlyTargetRules Target) : base(Target)
+	public Pickpacker(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PrivatePCHHeaderFile = "Blaster.h";
+		PrivatePCHHeaderFile = "Pickpacker.h";
 	
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemUtils", "GameplayTags", "AIModule", "NavigationSystem", "DeveloperSettings", "LevelSequence", "MovieScene", "Sockets" });
         DynamicallyLoadedModuleNames.Add("OnlineSubsystemSteam");

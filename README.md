@@ -1,5 +1,9 @@
 # Pickpacker — UE5 Co-op Multiplayer
 
+> 리네임 노트(신뢰성/재현성 목적): 초기 프로토타이핑은 UE 템플릿 기반 코드베이스에서 시작해 작업 디렉터리/모듈명이 `Blaster`로 남아 있었습니다.  
+> 2026-03 기준으로 `.uproject/모듈명/Source 폴더/Target/Config(/Script)`를 **Pickpacker로 일괄 정리**했고, 플러그인 모듈 충돌도 함께 해소했습니다.  
+> 이 레포의 구현 포인트는 README의 코드 링크 기준으로 유지되며, 필요 시 클래스 리다이렉트로 에셋 호환을 보장하는 방향으로 점진 정리합니다.
+
 <p align="center">
   <a href="https://github.com/kimasill/Pickpacker"><img alt="GitHub Repo" src="https://img.shields.io/badge/GitHub-Pickpacker-181717?style=for-the-badge&logo=github&logoColor=white" /></a>
   <img alt="Unreal Engine 5" src="https://img.shields.io/badge/Unreal%20Engine-5-0E1128?style=for-the-badge&logo=unrealengine&logoColor=white" />
@@ -24,6 +28,13 @@
 | 장르 | 지하·열차 배경 협동 멀티플레이(물류·주문·탈출) |
 | 엔진·스택 | Unreal Engine 5 · C++ · Online Subsystem |
 | 기간·규모 | 1인 · 개발 중 · PC / Steam 목표 |
+
+<p align="center">
+<img src="https://kimasill.github.io/images/Pickpacker/%EB%A7%88%EB%8D%94_2.png" alt="Pickpacker 마더" width="320" />
+<img src="https://kimasill.github.io/images/Pickpacker/%EC%84%A4%EB%B9%84%EC%8B%A4.png" alt="Pickpacker 설비실" width="320" />
+<img src="https://kimasill.github.io/images/Pickpacker/%EC%83%81%ED%98%B8%EC%9E%91%EC%9A%A9.png" alt="Pickpacker 상호작용" width="320" />
+<img src="https://kimasill.github.io/images/Pickpacker/%EC%A0%9C%EC%B6%9C%EB%B2%A8%ED%8A%B8.png" alt="Pickpacker 제출 벨트" width="320" /></p>
+
 
 ### Role
 
@@ -259,6 +270,7 @@ LastSessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName() == 
 - **프로파일링·측정**: GPU 약 **9 ms** 수준, 드로우 콜 과다 시 CPU 병목·FPS **약 25**까지 하락(개발 빌드·프로파일러)
 - **HISM·씬 캡처**: HISM 병합으로 FPS **약 43**까지 상승 → Scene Capture 과다가 병목으로 판정 → 이동 시에만 캡처로 전환, 드로우 콜 **약 10,518 → 4,600**, FPS **약 94**
 - **추가 튜닝**: 루멘·라이팅 조정 후 드로우 콜 **약 3,200**(초기 **약 11,061** 대비 **약 71%** 감소), Prims **약 400K**, FPS **약 100** 부근
+- **측정 조건(템플릿)**: 빌드(Development/Shipping) · 해상도 · 맵/상황 · 측정 툴(`stat unit`, `stat scenerendering`, Unreal Insights) · HW(CPU/GPU/RAM) · 반복 측정 여부
 - **상호작용**: Parcel 가림 등은 트레이스·채널 설계에 반영 (위 Interaction 섹션과 연계)
 
 | 최적화 단계 (요약) | FPS (대략) | Draw Calls | Prims |
