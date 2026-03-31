@@ -13,13 +13,7 @@
   </a>
 </p>
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=jSH2DfqKqWA" title="Pickpacker 시연 영상" target="_blank" rel="noopener noreferrer">
-    <img src="https://img.youtube.com/vi/jSH2DfqKqWA/maxresdefault.jpg" alt="Pickpacker 시연 영상 (YouTube)" width="720" />
-  </a>
-</p>
-
-링크 · [프로젝트 페이지](https://kimasill.github.io/projects/pickpacker.html) · [진행·구조 (pickpacker-process)](https://kimasill.github.io/projects/pickpacker-process.html) · [웹 포트폴리오](https://kimasill.github.io/)
+링크 · [Trailer (YouTube)](https://www.youtube.com/watch?v=jSH2DfqKqWA) · [프로젝트 페이지](https://kimasill.github.io/projects/pickpacker.html) · [진행·구조 (pickpacker-process)](https://kimasill.github.io/projects/pickpacker-process.html) · [웹 포트폴리오](https://kimasill.github.io/)
 
 > UE5 기반 협동 멀티플레이 **Pickpacker** 소스 레포지토리입니다. 서버 권한·복제를 축으로 한 핵심 구현과 코드 위치를 아래에 개조식으로 정리합니다.
 
