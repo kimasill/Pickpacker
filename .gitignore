@@ -111,6 +111,9 @@ Build/*/**
 
 # Optional large content you may want to exclude (adjust as needed)
 Content/__ExternalActors__/**
+# But allow ExternalActors for Maps to be tracked
+!Content/__ExternalActors__/Maps/
+!Content/__ExternalActors__/Maps/**
 Content/__ExternalObjects__/**
 Content/Developers/*
 Content/Collections/*
@@ -151,6 +154,10 @@ Plugins/**
 
 # Exclude all UE Content (publish branch: no assets)
 Content/**
+# Re-include specific content directories
+!Content/__ExternalActors__/
+!Content/__ExternalActors__/Maps/
+!Content/__ExternalActors__/Maps/**
 
 # Exclude heavy plugin content (kept external)
 # PCG Dungeon generator plugin content is large; keep plugin source but exclude assets.
@@ -186,9 +193,11 @@ Source/**/*~
 *.ogg
 *.uasset
 *.umap
-# But allow project maps to be tracked
+# But allow project maps and their assets to be tracked
 !Content/Maps/*.umap
 !Content/Maps/**/*.umap
+!Content/Maps/**/*.uasset
+!Content/__ExternalActors__/Maps/**/*.uasset
 
 # Additional heavy content exclusions to reduce LFS footprint
 # Textures and large reference content can be re-sourced or packed separately
