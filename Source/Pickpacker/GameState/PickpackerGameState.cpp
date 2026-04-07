@@ -37,6 +37,8 @@ void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(APickpackerGameState, CurrentOrderWaveNumber);
 	DOREPLIFETIME(APickpackerGameState, TeamCredits);
 	DOREPLIFETIME(APickpackerGameState, OrderTimesPayloads);
+	DOREPLIFETIME(APickpackerGameState, CoreLoopPhase);
+	DOREPLIFETIME(APickpackerGameState, CompletedTrips);
 }
 
 void APickpackerGameState::BeginPlay()
@@ -328,6 +330,41 @@ void APickpackerGameState::SetDayLengthInSeconds(float Seconds)
 void APickpackerGameState::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
+
+void APickpackerGameState::SetCoreLoopPhase(ECoreLoopPhase NewPhase)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (CoreLoopPhase == NewPhase)
+	{
+		return;
+	}
+
+	const ECoreLoopPhase OldPhase = CoreLoopPhase;
+	CoreLoopPhase = NewPhase;
+
+	OnCoreLoopPhaseChanged.Broadcast(OldPhase, NewPhase);
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] CoreLoopPhase: %d -> %d"),
+		static_cast<int32>(OldPhase), static_cast<int32>(NewPhase));
+}
+
+void APickpackerGameState::SetCompletedTrips(int32 NewTrips)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	CompletedTrips = FMath::Max(0, NewTrips);
+}
+
+void APickpackerGameState::OnRep_CoreLoopPhase(ECoreLoopPhase OldPhase)
+{
+	OnCoreLoopPhaseChanged.Broadcast(OldPhase, CoreLoopPhase);
 }
 
 void APickpackerGameState::EnsureOrderTimesUpdateTimer()

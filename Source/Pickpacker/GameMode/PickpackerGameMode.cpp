@@ -4,6 +4,7 @@
 #include "GameState/PickpackerGameState.h"
 #include "Components/EscapeProgressComponent.h"
 #include "Escape/EscapeZoneActor.h"
+#include "Subsystem/CoreLoopSubsystem.h"
 #include "Engine/World.h"
 #include "Engine/LevelStreaming.h"
 #include "DataAssets/DA_LevelVariant.h"
@@ -147,6 +148,15 @@ void APickpackerGameMode::StartGameplay()
 			PickpackerGameState->SetTeamCredits(StartingTeamCredits);
 		}
 
+		// Start core loop subsystem
+		if (UWorld* World = GetWorld())
+		{
+			if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+			{
+				CoreLoop->StartRun(StartingTeamCredits);
+			}
+		}
+
 		GetWorld()->GetTimerManager().SetTimer(
 			GameEndCheckTimer,
 			this,
@@ -209,6 +219,12 @@ void APickpackerGameMode::OnGameOver(const FString& Reason)
 		GetWorld()->GetTimerManager().ClearTimer(GameEndCheckTimer);
 		GetWorld()->GetTimerManager().ClearTimer(OrderSystemTimerHandle);
 		GetWorld()->GetTimerManager().ClearTimer(NextWaveTimerHandle);
+
+		// End core loop run
+		if (UCoreLoopSubsystem* CoreLoop = GetWorld()->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->EndRun(Reason);
+		}
 	}
 
 	// End simulation

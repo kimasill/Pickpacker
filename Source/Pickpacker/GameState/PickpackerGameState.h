@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameState.h"
 #include "PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/CoreLoopTypes.h"
 #include "DataAssets/DA_LevelVariant.h"
 #include "Components/EscapeProgressComponent.h"
 #include "PickpackerGameState.generated.h"
@@ -180,6 +181,24 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Time")
 	float GetDayLengthInSeconds() const { return DayLengthInSeconds; }
 
+	// --- Core Loop Phase (replicated) ---
+
+	/** Set core loop phase (server only, called by CoreLoopSubsystem) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|CoreLoop")
+	void SetCoreLoopPhase(ECoreLoopPhase NewPhase);
+
+	/** Get current core loop phase */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|CoreLoop")
+	ECoreLoopPhase GetCoreLoopPhase() const { return CoreLoopPhase; }
+
+	/** Set completed trips count (server only) */
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|CoreLoop")
+	void SetCompletedTrips(int32 NewTrips);
+
+	/** Get completed trip count */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|CoreLoop")
+	int32 GetCompletedTrips() const { return CompletedTrips; }
+
 public:
 	// Alias to allow templated type with comma in delegate macro
 	typedef TMap<FGuid, float> FOrderTimesMap;
@@ -214,6 +233,11 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Credits")
 	FOnCreditsChanged OnCreditsChanged;
 
+	/** Broadcast when core loop phase changes */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCoreLoopPhaseChanged, ECoreLoopPhase, OldPhase, ECoreLoopPhase, NewPhase);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|CoreLoop")
+	FOnCoreLoopPhaseChanged OnCoreLoopPhaseChanged;
+
 protected:
 	/** Called when level variant is replicated to clients */
 	UFUNCTION()
@@ -244,6 +268,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_OrderTimesPayloads();
+
+	UFUNCTION()
+	void OnRep_CoreLoopPhase(ECoreLoopPhase OldPhase);
 
 private:
 	/** Replicated level variant data */
@@ -315,6 +342,14 @@ private:
 	/** 하루 길이 (실제 시간 초 단위, 기본값: 1440초 = 24분) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Time", meta = (AllowPrivateAccess = "true"))
 	float DayLengthInSeconds = 1440.0f; // 24분 = 하루
+
+	/** Replicated core loop phase */
+	UPROPERTY(ReplicatedUsing = OnRep_CoreLoopPhase)
+	ECoreLoopPhase CoreLoopPhase = ECoreLoopPhase::None;
+
+	/** Replicated completed trip count */
+	UPROPERTY(Replicated)
+	int32 CompletedTrips = 0;
 
 	/** Cached last replicated credits for delta calculations */
 	UPROPERTY()

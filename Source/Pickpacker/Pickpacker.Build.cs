@@ -37,7 +37,9 @@ public class Pickpacker : ModuleRules
 			Path.Combine(ModuleDirectory, "Components"),
 			Path.Combine(ModuleDirectory, "PickpackerTypes"),
 			Path.Combine(ModuleDirectory, "Interaction"),
-			Path.Combine(ModuleDirectory, "Interfaces")
+			Path.Combine(ModuleDirectory, "Interfaces"),
+			Path.Combine(ModuleDirectory, "NPC"),
+			Path.Combine(ModuleDirectory, "DataAssets")
 		});
 	}
 }
