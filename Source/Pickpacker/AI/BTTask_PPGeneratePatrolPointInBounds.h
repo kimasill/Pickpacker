@@ -10,7 +10,7 @@
  * Blackboard의 Volume/Inspection 액터 바운드 내 랜덤 패트롤 포인트 생성 (Mother 전용 캐스팅 없음).
  */
 UCLASS()
-class BLASTER_API UBTTask_PPGeneratePatrolPointInBounds : public UBTTaskNode
+class PICKPACKER_API UBTTask_PPGeneratePatrolPointInBounds : public UBTTaskNode
 {
 	GENERATED_BODY()
 

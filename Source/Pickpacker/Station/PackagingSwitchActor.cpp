@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "PackagingSwitchActor.h"
-#include "Blaster/Station/PackagingStationActor.h"
+#include "Station/PackagingStationActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Components/InteractionComponent.h"
+#include "Character/BlasterCharacter.h"
+#include "Components/InteractionComponent.h"
 #include "Net/UnrealNetwork.h"
 
 APackagingSwitchActor::APackagingSwitchActor()

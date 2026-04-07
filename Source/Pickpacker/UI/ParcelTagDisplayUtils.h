@@ -7,7 +7,7 @@
 
 class UDataTable;
 
-class BLASTER_API FParcelTagDisplayUtils
+class PICKPACKER_API FParcelTagDisplayUtils
 {
 public:
 	static FString GetTagLastPart(const FGameplayTag& Tag);

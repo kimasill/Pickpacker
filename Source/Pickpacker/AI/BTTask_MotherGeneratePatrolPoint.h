@@ -10,7 +10,7 @@
  * Mother 점검용 — Inspection 액터는 Mother 또는 Blackboard에서 가져온 뒤 PPPatrolBoundsLibrary로 샘플링.
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherGeneratePatrolPoint : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherGeneratePatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
 

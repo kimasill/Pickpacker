@@ -2,9 +2,9 @@
 #include "BlasterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "Blaster/Weapon/Weapon.h"
-#include "Blaster/BlasterTypes/CombatState.h"
-#include "Blaster/Components/CarryIKComponent.h"
+#include "Weapon/Weapon.h"
+#include "BlasterTypes/CombatState.h"
+#include "Components/CarryIKComponent.h"
 
 void UBlasterAnimInstance::NativeInitializeAnimation()
 {

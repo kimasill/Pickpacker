@@ -6,9 +6,9 @@
 #include "Components/Image.h"
 #include "Components/Border.h"
 #include "Engine/Texture2D.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
-#include "Blaster/UI/ParcelTagDisplayUtils.h"
+#include "UI/ParcelTagDisplayUtils.h"
 
 UParcelHUDWidget::UParcelHUDWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

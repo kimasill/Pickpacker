@@ -13,7 +13,7 @@ class AMenuPlayerController;
  * - 플레이어 입력을 차단하고 UI 전용 입력 모드 적용
  */
 UCLASS()
-class BLASTER_API AMenuGameMode : public AGameModeBase
+class PICKPACKER_API AMenuGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 

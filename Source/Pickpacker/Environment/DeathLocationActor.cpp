@@ -1,6 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Blaster/Environment/DeathLocationActor.h"
+#include "Environment/DeathLocationActor.h"
 
 #include "Components/SceneComponent.h"
 

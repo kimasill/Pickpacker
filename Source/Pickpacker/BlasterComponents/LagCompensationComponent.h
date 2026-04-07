@@ -73,7 +73,7 @@ struct FShotgunServerSideRewindResult
 };
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class BLASTER_API ULagCompensationComponent : public UActorComponent
+class PICKPACKER_API ULagCompensationComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

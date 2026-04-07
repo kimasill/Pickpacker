@@ -13,7 +13,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AProjectileRocket : public AProjectile
+class PICKPACKER_API AProjectileRocket : public AProjectile
 {
 	GENERATED_BODY()
 	

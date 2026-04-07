@@ -4,14 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Pickup.h"
-#include "Blaster/Weapon/WeaponTypes.h"
+#include "Weapon/WeaponTypes.h"
 #include "AmmoPickup.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API AAmmoPickup : public APickup
+class PICKPACKER_API AAmmoPickup : public APickup
 {
 	GENERATED_BODY()
 protected:

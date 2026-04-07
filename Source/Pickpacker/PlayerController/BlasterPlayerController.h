@@ -16,7 +16,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHighPingDelegate, bool, bHighPing);
  * 
  */
 UCLASS()
-class BLASTER_API ABlasterPlayerController : public APlayerController
+class PICKPACKER_API ABlasterPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 public:

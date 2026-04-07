@@ -5,7 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 
 AFlag::AFlag()
 {

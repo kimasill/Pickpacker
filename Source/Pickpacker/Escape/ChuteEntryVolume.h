@@ -8,7 +8,7 @@
 class UBoxComponent;
 
 UCLASS()
-class BLASTER_API AChuteEntryVolume : public AActor
+class PICKPACKER_API AChuteEntryVolume : public AActor
 {
 	GENERATED_BODY()
 	

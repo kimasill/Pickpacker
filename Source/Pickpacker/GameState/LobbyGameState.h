@@ -45,7 +45,7 @@ struct FLobbySettings
 
 
 UCLASS()
-class BLASTER_API ALobbyGameState : public AGameState
+class PICKPACKER_API ALobbyGameState : public AGameState
 {
 	GENERATED_BODY()
 

@@ -3,7 +3,7 @@
 #include "BTTask_WaitAtPatrolPoint.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/PPPatrolRouteComponent.h"
+#include "AI/PPPatrolRouteComponent.h"
 
 UBTTask_WaitAtPatrolPoint::UBTTask_WaitAtPatrolPoint()
 {

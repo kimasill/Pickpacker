@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
+#include "Parcel/ParcelActor.h"
+#include "DataAssets/DA_ItemData.h"
 #include "SecretLocationActor.generated.h"
 
 class UBoxComponent;
@@ -16,7 +16,7 @@ class UWidgetComponent;
  * Secret Location Actor - Hidden location where players can hide and find items
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ASecretLocationActor : public AActor
+class PICKPACKER_API ASecretLocationActor : public AActor
 {
 	GENERATED_BODY()
 

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blaster/AI/PPAIControllerBase.h"
+#include "AI/PPAIControllerBase.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "MotherAIController.generated.h"
@@ -14,7 +14,7 @@ class AMotherAIActor;
  * Mother AI Controller - Controls Mother AI behavior using Behavior Tree
  */
 UCLASS()
-class BLASTER_API AMotherAIController : public APPAIControllerBase
+class PICKPACKER_API AMotherAIController : public APPAIControllerBase
 {
 	GENERATED_BODY()
 

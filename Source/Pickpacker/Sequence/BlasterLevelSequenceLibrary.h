@@ -12,7 +12,7 @@ class ULevelSequencePlayer;
 class ALevelSequenceActor;
 
 UCLASS()
-class BLASTER_API UBlasterLevelSequenceLibrary : public UBlueprintFunctionLibrary
+class PICKPACKER_API UBlasterLevelSequenceLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

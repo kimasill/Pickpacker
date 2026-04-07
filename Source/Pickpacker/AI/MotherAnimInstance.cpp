@@ -1,7 +1,9 @@
 
+
 #include "MotherAnimInstance.h"
-#include "Blaster/AI/MotherAIActor.h"
+#include "AI/MotherAIActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
 void UMotherAnimInstance::NativeInitializeAnimation()

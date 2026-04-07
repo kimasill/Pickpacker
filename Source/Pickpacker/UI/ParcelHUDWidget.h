@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "PickpackerTypes/PickpackerTypes.h"
 #include "GameplayTagContainer.h"
 #include "Components/ProgressBar.h"
@@ -12,11 +12,11 @@
 #include "Components/Image.h"
 #include "Components/Border.h"
 #include "Engine/DataTable.h"
-#include "Blaster/UI/ParcelTagDisplayData.h"
+#include "UI/ParcelTagDisplayData.h"
 #include "ParcelHUDWidget.generated.h"
 
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelHUDStyle
+struct PICKPACKER_API FParcelHUDStyle
 {
 	GENERATED_BODY()
 
@@ -54,7 +54,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnParcelContentListUpdated, bool, b
  * Parcel HUD Widget - Displays parcel state information
  */
 UCLASS()
-class BLASTER_API UParcelHUDWidget : public UUserWidget
+class PICKPACKER_API UParcelHUDWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

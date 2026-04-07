@@ -10,7 +10,7 @@
  * Pickpacker Player State - Handles player-specific PCG ready state
  */
 UCLASS()
-class BLASTER_API APickpackerPlayerState : public APlayerState
+class PICKPACKER_API APickpackerPlayerState : public APlayerState
 {
 	GENERATED_BODY()
 

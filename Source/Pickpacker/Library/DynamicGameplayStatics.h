@@ -12,7 +12,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API UDynamicGameplayStatics : public UBlueprintFunctionLibrary
+class PICKPACKER_API UDynamicGameplayStatics : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

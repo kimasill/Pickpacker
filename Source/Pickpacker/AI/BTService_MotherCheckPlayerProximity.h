@@ -11,7 +11,7 @@
  * Updates Chasing blackboard variable
  */
 UCLASS()
-class BLASTER_API UBTService_MotherCheckPlayerProximity : public UBTService
+class PICKPACKER_API UBTService_MotherCheckPlayerProximity : public UBTService
 {
 	GENERATED_BODY()
 

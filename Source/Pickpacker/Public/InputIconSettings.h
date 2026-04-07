@@ -9,7 +9,7 @@
  * Editor-configurable settings for input icon data
  */
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Input Icon Settings"))
-class BLASTER_API UInputIconSettings : public UDeveloperSettings
+class PICKPACKER_API UInputIconSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 

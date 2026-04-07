@@ -1,8 +1,8 @@
-#include "Blaster/Components/CreditUnlockComponent.h"
+#include "Components/CreditUnlockComponent.h"
 
 #include "Net/UnrealNetwork.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "GameMode/PickpackerGameMode.h"
+#include "GameState/PickpackerGameState.h"
 #include "Engine/World.h"
 
 UCreditUnlockComponent::UCreditUnlockComponent()

@@ -6,16 +6,16 @@
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
-#include "Blaster/Components/InteractionComponent.h"
-#include "Blaster/Station/PackagingStationActor.h"
-#include "Blaster/Interfaces/InteractableInterface.h"
+#include "Components/InteractionComponent.h"
+#include "Station/PackagingStationActor.h"
+#include "Interfaces/InteractableInterface.h"
 #include "PackagingSwitchActor.generated.h"
 
 /**
  * 포장 조작 패널:PackagingStationActor
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API APackagingSwitchActor : public AActor, public IInteractableInterface
+class PICKPACKER_API APackagingSwitchActor : public AActor, public IInteractableInterface
 {
 	GENERATED_BODY()
 

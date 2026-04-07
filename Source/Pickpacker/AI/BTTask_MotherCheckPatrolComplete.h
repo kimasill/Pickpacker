@@ -30,7 +30,7 @@ struct FMotherCheckPatrolCompleteMemory
  * This task should be placed in a sequence that loops until patrol is complete
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherCheckPatrolComplete : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherCheckPatrolComplete : public UBTTaskNode
 {
 	GENERATED_BODY()
 

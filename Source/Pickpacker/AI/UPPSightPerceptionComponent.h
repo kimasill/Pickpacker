@@ -12,7 +12,7 @@ class UAISenseConfig_Sight;
  * 시야 기반 AI Perception 공통 설정 (Mother / Brute / Drone 등).
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class BLASTER_API UPPSightPerceptionComponent : public UAIPerceptionComponent
+class PICKPACKER_API UPPSightPerceptionComponent : public UAIPerceptionComponent
 {
 	GENERATED_BODY()
 

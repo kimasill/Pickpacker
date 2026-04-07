@@ -3,8 +3,8 @@
 #include "PickpackerPlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
-#include "Blaster/GameState/PickpackerGameState.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
+#include "GameState/PickpackerGameState.h"
+#include "GameMode/PickpackerGameMode.h"
 
 APickpackerPlayerState::APickpackerPlayerState()
 {

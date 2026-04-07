@@ -11,7 +11,7 @@
  * 레벨에 배치하여 드론의 순찰 경로를 정의
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API APatrolPointActor : public AActor
+class PICKPACKER_API APatrolPointActor : public AActor
 {
 	GENERATED_BODY()
 	

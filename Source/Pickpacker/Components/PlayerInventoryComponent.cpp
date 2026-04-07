@@ -5,9 +5,9 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
-#include "Blaster/Components/InteractionComponent.h" // added to resolve incomplete type
+#include "Character/BlasterCharacter.h"
+#include "PlayerController/BlasterPlayerController.h"
+#include "Components/InteractionComponent.h" // added to resolve incomplete type
 #include "Components/StaticMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 

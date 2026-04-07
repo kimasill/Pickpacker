@@ -36,7 +36,7 @@ class UExplosiveSource : public UInterface
 	GENERATED_BODY()
 };
 
-class BLASTER_API IExplosiveSource
+class PICKPACKER_API IExplosiveSource
 {
 	GENERATED_BODY()	
 public:

@@ -5,7 +5,7 @@
 #include "EngineUtils.h"
 #include "GameplayTagContainer.h"
 #include "GameplayTagAssetInterface.h"
-#include "Blaster/DataAssets/DA_LevelVariant.h"
+#include "DataAssets/DA_LevelVariant.h"
 #include "Components/ActorComponent.h"
 
 UAnchorRuntimeSubsystem::UAnchorRuntimeSubsystem()

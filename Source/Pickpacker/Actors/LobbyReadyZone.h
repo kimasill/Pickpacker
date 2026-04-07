@@ -8,7 +8,7 @@
  * 로비 준비 구역: 구역에 들어오면 자동 준비, 나가면 준비 해제
  */
 UCLASS()
-class BLASTER_API ALobbyReadyZone : public ATriggerBox
+class PICKPACKER_API ALobbyReadyZone : public ATriggerBox
 {
 	GENERATED_BODY()
 

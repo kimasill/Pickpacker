@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "CarryPointsComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCarrySocketOccupied, FName, SocketName, class ACharacter*, Character);
@@ -14,7 +14,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCarrySocketFreed, FName, SocketN
  * Carry Points Component - Manages carry sockets for parcel attachment
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UCarryPointsComponent : public USceneComponent
+class PICKPACKER_API UCarryPointsComponent : public USceneComponent
 {
 	GENERATED_BODY()
 

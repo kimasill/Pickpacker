@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MotherAIController.h"
-#include "Blaster/AI/MotherAIActor.h"
+#include "AI/MotherAIActor.h"
 
 AMotherAIController::AMotherAIController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

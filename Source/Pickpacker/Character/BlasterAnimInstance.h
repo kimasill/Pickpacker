@@ -4,15 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
-#include "Blaster/BlasterTypes/TurningInPlace.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
+#include "BlasterTypes/TurningInPlace.h"
+#include "DataAssets/DA_ItemData.h"
 #include "BlasterAnimInstance.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API UBlasterAnimInstance : public UAnimInstance
+class PICKPACKER_API UBlasterAnimInstance : public UAnimInstance
 {
 	GENERATED_BODY()
 public:

@@ -3,8 +3,8 @@
 #include "BTTask_MotherCompleteInspection.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/MotherAIController.h"
+#include "AI/MotherAIActor.h"
+#include "AI/MotherAIController.h"
 
 UBTTask_MotherCompleteInspection::UBTTask_MotherCompleteInspection()
 {

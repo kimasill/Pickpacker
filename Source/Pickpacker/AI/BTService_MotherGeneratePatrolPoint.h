@@ -14,7 +14,7 @@
  * See PATROL_REFACTOR_GUIDE.md for migration instructions.
  */
 UCLASS()
-class BLASTER_API UBTService_MotherGeneratePatrolPoint : public UBTService
+class PICKPACKER_API UBTService_MotherGeneratePatrolPoint : public UBTService
 {
 	GENERATED_BODY()
 

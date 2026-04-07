@@ -7,8 +7,8 @@
 #include "UObject/UObjectGlobals.h"
 #include "Components/ActorComponent.h"
 #include "Blueprint/UserWidget.h"
-#include "Blaster/Shelf/ShelfPlacementTypes.h"
-#include "Blaster/Interaction/InteractionUIData.h"
+#include "Shelf/ShelfPlacementTypes.h"
+#include "Interaction/InteractionUIData.h"
 #include "InputAction.h"
 #include "InteractionComponent.generated.h"
 
@@ -23,7 +23,7 @@ class UInteractableInterface;
 class IInteractableInterface;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UInteractionComponent : public UActorComponent
+class PICKPACKER_API UInteractionComponent : public UActorComponent
 {
     GENERATED_BODY()
 

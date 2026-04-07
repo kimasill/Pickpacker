@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API ABlasterGameState : public AGameState
+class PICKPACKER_API ABlasterGameState : public AGameState
 {
 	GENERATED_BODY()
 public:

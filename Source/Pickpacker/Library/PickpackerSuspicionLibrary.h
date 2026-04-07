@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API UPickpackerSuspicionLibrary : public UBlueprintFunctionLibrary
+class PICKPACKER_API UPickpackerSuspicionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 	

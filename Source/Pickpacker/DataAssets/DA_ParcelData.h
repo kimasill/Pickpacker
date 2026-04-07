@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
+#include "DataAssets/DA_ItemData.h"
 #include "DA_ParcelData.generated.h"
 
 class UStaticMesh;
@@ -18,7 +18,7 @@ class AParcelActor;
  * 포장에 포함될 콘텐츠 (클래스 + 수량)
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelPackageContent
+struct PICKPACKER_API FParcelPackageContent
 {
 	GENERATED_BODY()
 
@@ -39,7 +39,7 @@ struct BLASTER_API FParcelPackageContent
  * 포장 레시피: 특정 태그를 가진 언팩 파슬을 Min~Max 수량 범위로 모아 포장된 번들 생성
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelPackageRecipe
+struct PICKPACKER_API FParcelPackageRecipe
 {
 	GENERATED_BODY()
 
@@ -96,7 +96,7 @@ struct BLASTER_API FParcelPackageRecipe
  * Parcel Configuration - Defines parcel properties and behavior
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelConfig
+struct PICKPACKER_API FParcelConfig
 {
 	GENERATED_BODY()
 
@@ -181,7 +181,7 @@ struct BLASTER_API FParcelConfig
  * Parcel Data Asset - Contains all parcel configurations for a level
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_ParcelData : public UDataAsset
+class PICKPACKER_API UDA_ParcelData : public UDataAsset
 {
 	GENERATED_BODY()
 

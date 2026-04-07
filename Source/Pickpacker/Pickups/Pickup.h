@@ -7,7 +7,7 @@
 #include "Pickup.generated.h"
 
 UCLASS()
-class BLASTER_API APickup : public AActor
+class PICKPACKER_API APickup : public AActor
 {
 	GENERATED_BODY()
 	

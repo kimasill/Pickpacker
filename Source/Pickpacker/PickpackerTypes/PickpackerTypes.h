@@ -12,7 +12,7 @@
  * Parcel state structure for replication
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelState
+struct PICKPACKER_API FParcelState
 {
 	GENERATED_BODY()
 
@@ -64,7 +64,7 @@ enum class EPickpackerParcelType : uint8
  * Parcel configuration data (renamed to avoid conflict with DA_ParcelData.h)
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FPickpackerParcelConfig
+struct PICKPACKER_API FPickpackerParcelConfig
 {
 	GENERATED_BODY()
 
@@ -110,7 +110,7 @@ struct BLASTER_API FPickpackerParcelConfig
  * Carry socket data
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FCarrySocket
+struct PICKPACKER_API FCarrySocket
 {
 	GENERATED_BODY()
 
@@ -143,7 +143,7 @@ struct BLASTER_API FCarrySocket
  * Objective row for PCG anchor spawning
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FObjectiveRow : public FTableRowBase
+struct PICKPACKER_API FObjectiveRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
@@ -176,7 +176,7 @@ struct BLASTER_API FObjectiveRow : public FTableRowBase
  * Spawner row for PCG anchor spawning
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FSpawnerRow : public FTableRowBase
+struct PICKPACKER_API FSpawnerRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
@@ -223,7 +223,7 @@ enum class EPCGAnchorType : uint8
  * PCG Anchor data structure
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FPCGAnchorData
+struct PICKPACKER_API FPCGAnchorData
 {
 	GENERATED_BODY()
 
@@ -255,7 +255,7 @@ struct BLASTER_API FPCGAnchorData
  * Mission/seed configuration for dungeon generation
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FSeedSet
+struct PICKPACKER_API FSeedSet
 {
 	GENERATED_BODY()
 
@@ -278,7 +278,7 @@ struct BLASTER_API FSeedSet
  * Definition of an order that players must fulfill
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelOrderDefinition
+struct PICKPACKER_API FParcelOrderDefinition
 {
 	GENERATED_BODY()
 
@@ -336,7 +336,7 @@ struct BLASTER_API FParcelOrderDefinition
  * Wave definition grouping multiple orders
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelOrderWave
+struct PICKPACKER_API FParcelOrderWave
 {
 	GENERATED_BODY()
 
@@ -365,7 +365,7 @@ struct BLASTER_API FParcelOrderWave
  * Runtime state of an order replicated to clients
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FActiveOrderState
+struct PICKPACKER_API FActiveOrderState
 {
 	GENERATED_BODY()
 
@@ -419,7 +419,7 @@ struct BLASTER_API FActiveOrderState
  * Credit transaction log entry
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FCreditTransaction
+struct PICKPACKER_API FCreditTransaction
 {
 	GENERATED_BODY()
 

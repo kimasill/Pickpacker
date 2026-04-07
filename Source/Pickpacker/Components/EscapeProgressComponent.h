@@ -41,7 +41,7 @@ struct FWorldFlagEntry
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class BLASTER_API UEscapeProgressComponent : public UActorComponent
+class PICKPACKER_API UEscapeProgressComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

@@ -4,7 +4,7 @@
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/PPPatrolBoundsLibrary.h"
+#include "AI/PPPatrolBoundsLibrary.h"
 
 UBTTask_PPGeneratePatrolPointInBounds::UBTTask_PPGeneratePatrolPointInBounds()
 {

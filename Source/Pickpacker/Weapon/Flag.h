@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AFlag : public AWeapon
+class PICKPACKER_API AFlag : public AWeapon
 {
 	GENERATED_BODY()
 

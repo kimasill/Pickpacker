@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UnpackedParcelActor.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "DataAssets/DA_ParcelData.h"
+#include "Parcel/ParcelActor.h"
 
 AUnpackedParcelActor::AUnpackedParcelActor()
 {

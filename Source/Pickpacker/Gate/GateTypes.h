@@ -10,7 +10,7 @@
  * 모든 조건은 AND로 평가되며, 각 필드 내부는 주석에 따라 OR/단일 매칭.
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FGateCondition
+struct PICKPACKER_API FGateCondition
 {
 	GENERATED_BODY()
 
@@ -35,7 +35,7 @@ struct BLASTER_API FGateCondition
  * 게이트 해제 시 수행할 결과 정보
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FGateUnlockResult
+struct PICKPACKER_API FGateUnlockResult
 {
 	GENERATED_BODY()
 

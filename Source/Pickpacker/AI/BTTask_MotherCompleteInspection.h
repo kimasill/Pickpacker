@@ -10,7 +10,7 @@
  * Complete inspection task (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherCompleteInspection : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherCompleteInspection : public UBTTaskNode
 {
 	GENERATED_BODY()
 

@@ -2,14 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "DA_OrderWaveData.generated.h"
 
 /**
  * Data asset describing order waves for the Pickpacker mode
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_OrderWaveData : public UDataAsset
+class PICKPACKER_API UDA_OrderWaveData : public UDataAsset
 {
 	GENERATED_BODY()
 

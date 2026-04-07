@@ -2,7 +2,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
-#include "Blaster/GameMode/LobbyGameMode.h"
+#include "GameMode/LobbyGameMode.h"
 
 ALobbyReadyZone::ALobbyReadyZone()
 {

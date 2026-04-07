@@ -11,7 +11,7 @@
 #include "Misc/Base64.h"
 #include "HAL/FileManager.h"
 
-namespace { static FString GetDebugLogPath() { return FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log"); } }
+namespace { static FString GetSubsystemDebugLogPath() { return FPaths::ProjectSavedDir() + TEXT("Logs/BlasterDebug.log"); } }
 
 UMultiplayerSessionsSubsystem::UMultiplayerSessionsSubsystem():
 	CreateSessionCompleteDelegate(FOnCreateSessionCompleteDelegate::CreateUObject(this, &ThisClass::OnCreateSessionComplete)),
@@ -127,7 +127,7 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
 			LastSessionSettings->bUsesPresence ? TEXT("true") : TEXT("false"),
 			LastSessionSettings->bUseLobbiesIfAvailable ? TEXT("true") : TEXT("false"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -148,7 +148,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:FindSessions\",\"message\":\"FindSessions start\",\"data\":{\"max\":%d,\"subsystem\":\"%s\",\"hasLP\":%s},\"timestamp\":%lld}\n"),
 			MaxSearchResults, *SubsystemName, bHasLP ? TEXT("true") : TEXT("false"), Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 
@@ -207,7 +207,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 				TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:FindSessions\",\"message\":\"FindSessions failed to start\",\"data\":{\"lanQuery\":%s},\"timestamp\":%lld}\n"),
 				LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 				Ms);
-			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+			FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 		}
 		// #endregion
 	}
@@ -219,7 +219,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
 			LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 			bIsNull ? TEXT("false") : TEXT("true"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -272,7 +272,7 @@ void UMultiplayerSessionsSubsystem::DestroySession()
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H5\",\"location\":\"MultiplayerSessionsSubsystem.cpp:DestroySession\",\"message\":\"DestroySession called\",\"data\":{\"recreateFlag\":%s},\"timestamp\":%lld}\n"),
 			bCreateSessionOnDestroy ? TEXT("true") : TEXT("false"),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -305,7 +305,7 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 				bwasSuccessful ? TEXT("true") : TEXT("false"),
 				LastSessionSearch->bIsLanQuery ? TEXT("true") : TEXT("false"),
 				Ms);
-			FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+			FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 		}
 		// #endregion
 		return;
@@ -344,7 +344,7 @@ void UMultiplayerSessionsSubsystem::OnFindSessionsComplete(bool bwasSuccessful)
 			LastSessionSearch->SearchResults.Num(),
 			*ResultsJson,
 			Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -393,7 +393,7 @@ void UMultiplayerSessionsSubsystem::OnDestroySessionComplete(FName SessionName, 
 			bCreateSessionOnDestroy ? TEXT("true") : TEXT("false"),
 			static_cast<int32>(LastSessionVisibility),
 			Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -414,7 +414,7 @@ void UMultiplayerSessionsSubsystem::UpdateSessionVisibility(ESessionVisibility N
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H3\",\"location\":\"MultiplayerSessionsSubsystem.cpp:UpdateSessionVisibility\",\"message\":\"Visibility update requested\",\"data\":{\"newVisibility\":%d},\"timestamp\":%lld}\n"),
 			static_cast<int32>(NewVisibility), Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }
@@ -436,7 +436,7 @@ void UMultiplayerSessionsSubsystem::UpdateSessionSettings(int32 NumPublicConnect
 		const FString Line = FString::Printf(
 			TEXT("{\"sessionId\":\"debug-session\",\"runId\":\"run-find\",\"hypothesisId\":\"H4\",\"location\":\"MultiplayerSessionsSubsystem.cpp:UpdateSessionSettings\",\"message\":\"Session settings update requested\",\"data\":{\"num\":%d,\"matchType\":\"%s\",\"title\":\"%s\",\"visibility\":%d,\"map\":\"%s\",\"mode\":\"%s\"},\"timestamp\":%lld}\n"),
 			NumPublicConnections, *MatchType, *SessionTitle, static_cast<int32>(Visibility), *SelectedMap, *GameMode, Ms);
-		FFileHelper::SaveStringToFile(Line, *GetDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+		FFileHelper::SaveStringToFile(Line, *GetSubsystemDebugLogPath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
 	}
 	// #endregion
 }

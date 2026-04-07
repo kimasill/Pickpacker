@@ -40,7 +40,7 @@ struct FMotherPatrolInVolumeMemory
  * See PATROL_REFACTOR_GUIDE.md for migration instructions.
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherPatrolInVolume : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherPatrolInVolume : public UBTTaskNode
 {
 	GENERATED_BODY()
 

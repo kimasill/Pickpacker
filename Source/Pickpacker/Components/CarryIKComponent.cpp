@@ -1,13 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CarryIKComponent.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/Components/CarryPointsComponent.h"
+#include "Parcel/ParcelActor.h"
+#include "Components/CarryPointsComponent.h"
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMeshSocket.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 #include "Engine/StaticMeshSocket.h" // 선택: 포인터 미사용이면 생략 가능
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"

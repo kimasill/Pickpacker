@@ -8,14 +8,14 @@
 
 namespace MatchState
 {
-	extern BLASTER_API const FName Cooldown;
+	extern PICKPACKER_API const FName Cooldown;
 }
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API ABlasterGameMode : public AGameMode
+class PICKPACKER_API ABlasterGameMode : public AGameMode
 {
 	GENERATED_BODY()
 public:

@@ -10,7 +10,7 @@
  * Service to check for suspicious players and update blackboard (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTService_MotherCheckSuspiciousPlayers : public UBTService
+class PICKPACKER_API UBTService_MotherCheckSuspiciousPlayers : public UBTService
 {
 	GENERATED_BODY()
 

@@ -10,7 +10,7 @@
  * Wait at a location for specified duration (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherWaitAtLocation : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherWaitAtLocation : public UBTTaskNode
 {
 	GENERATED_BODY()
 

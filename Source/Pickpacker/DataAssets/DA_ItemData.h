@@ -55,7 +55,7 @@ enum class EItemConsumePolicy : uint8
  * Item Property - key/value pair for item properties
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FItemProperty
+struct PICKPACKER_API FItemProperty
 {
 	GENERATED_BODY()
 
@@ -72,7 +72,7 @@ struct BLASTER_API FItemProperty
  * Item Data - Defines item properties and behavior
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FItemData
+struct PICKPACKER_API FItemData
 {
 	GENERATED_BODY()
 
@@ -141,7 +141,7 @@ struct BLASTER_API FItemData
  * Item Data Asset - Contains all item configurations
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_ItemData : public UDataAsset
+class PICKPACKER_API UDA_ItemData : public UDataAsset
 {
 	GENERATED_BODY()
 

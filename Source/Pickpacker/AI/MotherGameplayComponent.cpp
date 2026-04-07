@@ -1,9 +1,9 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MotherGameplayComponent.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/DroneActor.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "AI/MotherAIActor.h"
+#include "AI/DroneActor.h"
+#include "GameState/PickpackerGameState.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 

@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AJumpPickup : public APickup
+class PICKPACKER_API AJumpPickup : public APickup
 {
 	GENERATED_BODY()
 protected:

@@ -4,8 +4,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
-#include "Blaster/Subsystem/AnchorRuntimeSubsystem.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
+#include "Subsystem/AnchorRuntimeSubsystem.h"
+#include "GameMode/PickpackerGameMode.h"
 
 APickpackerGameState::APickpackerGameState()
 {

@@ -3,8 +3,8 @@
 #include "BTTask_MoveToNextPatrolPoint.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/PPPatrolRouteComponent.h"
-#include "Blaster/AI/PatrolPointActor.h"
+#include "AI/PPPatrolRouteComponent.h"
+#include "AI/PatrolPointActor.h"
 
 UBTTask_MoveToNextPatrolPoint::UBTTask_MoveToNextPatrolPoint()
 {

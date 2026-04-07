@@ -10,7 +10,7 @@ class APickpackerGameMode;
 class APickpackerGameState;
 
 UCLASS()
-class BLASTER_API APickpackerPlayerController : public APlayerController
+class PICKPACKER_API APickpackerPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 

@@ -4,14 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
-#include "Blaster/AI/MotherAIActor.h"
+#include "AI/MotherAIActor.h"
 #include "MotherAnimInstance.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API UMotherAnimInstance : public UAnimInstance
+class PICKPACKER_API UMotherAnimInstance : public UAnimInstance
 {
 	GENERATED_BODY()
 public:

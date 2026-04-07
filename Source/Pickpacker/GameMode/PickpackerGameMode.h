@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "PickpackerGameMode.generated.h"
 
 class UAnchorRuntimeSubsystem;
@@ -19,7 +19,7 @@ class AParcelActor;
  * Players are robots working under "Mother" AI surveillance
  */
 UCLASS()
-class BLASTER_API APickpackerGameMode : public AGameMode
+class PICKPACKER_API APickpackerGameMode : public AGameMode
 {
 	GENERATED_BODY()
 

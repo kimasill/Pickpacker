@@ -3,8 +3,8 @@
 #include "BTTask_MotherGeneratePatrolPoint.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/PPPatrolBoundsLibrary.h"
+#include "AI/MotherAIActor.h"
+#include "AI/PPPatrolBoundsLibrary.h"
 
 UBTTask_MotherGeneratePatrolPoint::UBTTask_MotherGeneratePatrolPoint()
 {

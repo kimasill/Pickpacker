@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/BlasterTypes/Team.h"
+#include "BlasterTypes/Team.h"
 #include "FlagZone.generated.h"
 
 UCLASS()
-class BLASTER_API AFlagZone : public AActor
+class PICKPACKER_API AFlagZone : public AActor
 {
 	GENERATED_BODY()
 	

@@ -6,7 +6,7 @@
 #include "TeamCreditsEditorToolActor.generated.h"
 
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ATeamCreditsEditorToolActor : public AActor
+class PICKPACKER_API ATeamCreditsEditorToolActor : public AActor
 {
 	GENERATED_BODY()
 

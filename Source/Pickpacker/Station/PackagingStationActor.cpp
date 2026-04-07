@@ -1,19 +1,19 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "PackagingStationActor.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/Parcel/PackedParcelActor.h"
-#include "Blaster/Parcel/UnpackedParcelActor.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "Parcel/ParcelActor.h"
+#include "Parcel/PackedParcelActor.h"
+#include "Parcel/UnpackedParcelActor.h"
+#include "DataAssets/DA_ParcelData.h"
+#include "GameMode/PickpackerGameMode.h"
+#include "GameState/PickpackerGameState.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Components/InteractionComponent.h"
+#include "Character/BlasterCharacter.h"
+#include "Components/InteractionComponent.h"
 
 APackagingStationActor::APackagingStationActor()
 {

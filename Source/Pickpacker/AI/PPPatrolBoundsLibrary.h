@@ -9,9 +9,9 @@
  */
 namespace PPPatrolBoundsLibrary
 {
-	BLASTER_API bool GetVolumeBoundsFromActor(AActor* VolumeActor, FVector& OutCenter, FVector& OutExtent);
+	PICKPACKER_API bool GetVolumeBoundsFromActor(AActor* VolumeActor, FVector& OutCenter, FVector& OutExtent);
 
-	BLASTER_API FVector GenerateRandomPatrolPointHorizontal(
+	PICKPACKER_API FVector GenerateRandomPatrolPointHorizontal(
 		const FVector& Center,
 		const FVector& Extent,
 		float MinPatrolRadius,

@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/Interfaces/ExplosiveSource.h"
-#include "Blaster/Weapon/Weapon.h"
+#include "Interfaces/ExplosiveSource.h"
+#include "Weapon/Weapon.h"
 #include "Projectile.generated.h"
 
 
 UCLASS()
-class BLASTER_API AProjectile : public AActor, public IExplosiveSource
+class PICKPACKER_API AProjectile : public AActor, public IExplosiveSource
 {
 	GENERATED_BODY()
 	

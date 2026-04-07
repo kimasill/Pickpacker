@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ParcelAVLibrary.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "Sound/SoundBase.h"
 #include "NiagaraSystem.h"
 #include "Materials/MaterialInterface.h"

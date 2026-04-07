@@ -2,11 +2,11 @@
 
 
 #include "PickpackerSuspicionLibrary.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Components/PlayerInventoryComponent.h"
-#include "Blaster/Components/InteractionComponent.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "Character/BlasterCharacter.h"
+#include "Components/PlayerInventoryComponent.h"
+#include "Components/InteractionComponent.h"
+#include "Parcel/ParcelActor.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 
 
 ESuspiciousBehavior UPickpackerSuspicionLibrary::CheckSuspiciousBehavior(ACharacter* Player)

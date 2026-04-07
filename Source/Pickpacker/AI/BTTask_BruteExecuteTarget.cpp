@@ -4,8 +4,8 @@
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/BruteActor.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "AI/BruteActor.h"
+#include "Character/BlasterCharacter.h"
 
 UBTTask_BruteExecuteTarget::UBTTask_BruteExecuteTarget()
 {

@@ -4,15 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "DataAssets/DA_ItemData.h"
+#include "Parcel/ParcelActor.h"
 #include "CarryIKComponent.generated.h"
 
 /**
  * IK 컴포넌트 - 소켓에 부착된 오브젝트를 잡는 IK 처리
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UCarryIKComponent : public UActorComponent
+class PICKPACKER_API UCarryIKComponent : public UActorComponent
 {
     GENERATED_BODY()
 

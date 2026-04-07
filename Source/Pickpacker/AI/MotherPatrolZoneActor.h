@@ -14,7 +14,7 @@ class UBoxComponent;
  * - BTTask_MotherPatrolInVolume, BTTask_MotherGeneratePatrolPoint 등과 연동
  */
 UCLASS(Blueprintable)
-class BLASTER_API AMotherPatrolZoneActor : public AActor
+class PICKPACKER_API AMotherPatrolZoneActor : public AActor
 {
 	GENERATED_BODY()
 

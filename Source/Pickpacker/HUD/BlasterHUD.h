@@ -26,7 +26,7 @@ public:
  * 
  */
 UCLASS()
-class BLASTER_API ABlasterHUD : public AHUD
+class PICKPACKER_API ABlasterHUD : public AHUD
 {
 	GENERATED_BODY()
 public:

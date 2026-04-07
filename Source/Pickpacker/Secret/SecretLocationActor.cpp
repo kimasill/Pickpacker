@@ -5,8 +5,8 @@
 #include "Components/BoxComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameFramework/Character.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Character/BlasterCharacter.h"
+#include "Components/PlayerInventoryComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 

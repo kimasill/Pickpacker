@@ -8,7 +8,7 @@
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class BLASTER_API UBuffComponent : public UActorComponent
+class PICKPACKER_API UBuffComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

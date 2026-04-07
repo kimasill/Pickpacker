@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
+#include "Parcel/ParcelActor.h"
+#include "DataAssets/DA_ItemData.h"
 #include "PlayerInventoryComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemCollected, class AParcelActor*, Item, int32, NewCount);
@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryUpdated, const TArray<c
  * Player Inventory Component - Manages player's collected items (unpackaged parcels)
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UPlayerInventoryComponent : public UActorComponent
+class PICKPACKER_API UPlayerInventoryComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

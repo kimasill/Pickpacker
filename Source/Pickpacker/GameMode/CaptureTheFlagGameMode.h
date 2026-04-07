@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API ACaptureTheFlagGameMode : public ATeamsGameMode
+class PICKPACKER_API ACaptureTheFlagGameMode : public ATeamsGameMode
 {
 	GENERATED_BODY()
 	

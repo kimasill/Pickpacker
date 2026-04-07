@@ -13,7 +13,7 @@
  * Suspicion HUD Widget - Displays team suspicion level
  */
 UCLASS()
-class BLASTER_API USuspicionHUDWidget : public UUserWidget
+class PICKPACKER_API USuspicionHUDWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

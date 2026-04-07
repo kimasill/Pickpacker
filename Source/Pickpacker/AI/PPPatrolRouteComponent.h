@@ -14,7 +14,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPPPatrolRouteChanged);
  * 웨이포인트 기반 순찰 경로 — Drone 등에서 재사용.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class BLASTER_API UPPPatrolRouteComponent : public UActorComponent
+class PICKPACKER_API UPPPatrolRouteComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

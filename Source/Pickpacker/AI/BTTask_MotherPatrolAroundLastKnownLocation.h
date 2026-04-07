@@ -12,7 +12,7 @@
  * Movement is handled by standard Move To task.
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherPatrolAroundLastKnownLocation : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherPatrolAroundLastKnownLocation : public UBTTaskNode
 {
 	GENERATED_BODY()
 

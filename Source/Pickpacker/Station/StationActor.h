@@ -4,12 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/DataAssets/DA_StationData.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/DataAssets/DA_LabelRuleData.h"
-#include "Blaster/Components/InteractionComponent.h"
+#include "DataAssets/DA_StationData.h"
+#include "DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_LabelRuleData.h"
+#include "Components/InteractionComponent.h"
 #include "GameplayTagContainer.h"
-#include "Blaster/Interfaces/InteractableInterface.h"
+#include "Interfaces/InteractableInterface.h"
 #include "StationActor.generated.h"
 
 class UStaticMeshComponent;
@@ -21,7 +21,7 @@ class UBoxComponent;
  * Handles interaction with parcels and label validation
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AStationActor : public AActor, public IInteractableInterface
+class PICKPACKER_API AStationActor : public AActor, public IInteractableInterface
 {
 	GENERATED_BODY()
 

@@ -4,14 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerStart.h"
-#include "Blaster/BlasterTypes/Team.h"
+#include "BlasterTypes/Team.h"
 #include "TeamPlayerStart.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API ATeamPlayerStart : public APlayerStart
+class PICKPACKER_API ATeamPlayerStart : public APlayerStart
 {
 	GENERATED_BODY()
 

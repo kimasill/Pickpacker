@@ -38,7 +38,7 @@ enum class EBruteState : uint8
  * - If target lost/out of range: suspicious for a while -> return to post/patrol
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ABruteActor : public ACharacter
+class PICKPACKER_API ABruteActor : public ACharacter
 {
 	GENERATED_BODY()
 

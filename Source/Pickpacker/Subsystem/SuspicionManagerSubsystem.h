@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "TimerManager.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "SuspicionManagerSubsystem.generated.h"
 
 class ABlasterCharacter;
@@ -63,7 +63,7 @@ struct FPlayerSuspicionState
  * 플레이어의 의심 행동을 이벤트로 브로드캐스트하고, 드론 등이 구독하여 처리
  */
 UCLASS()
-class BLASTER_API USuspicionManagerSubsystem : public UGameInstanceSubsystem
+class PICKPACKER_API USuspicionManagerSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 

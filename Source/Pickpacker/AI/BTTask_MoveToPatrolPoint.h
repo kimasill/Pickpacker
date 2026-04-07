@@ -36,7 +36,7 @@ struct FMoveToPatrolPointMemory
  * Custom Move To Task for Drone using Floating Pawn Movement
  */
 UCLASS()
-class BLASTER_API UBTTask_MoveToPatrolPoint : public UBTTaskNode
+class PICKPACKER_API UBTTask_MoveToPatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
 

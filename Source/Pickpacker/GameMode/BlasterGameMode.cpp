@@ -2,12 +2,12 @@
 
 
 #include "BlasterGameMode.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "Character/BlasterCharacter.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
-#include "Blaster/PlayerState/BlasterPlayerState.h"
-#include "Blaster/GameState/BlasterGameState.h"
+#include "PlayerState/BlasterPlayerState.h"
+#include "GameState/BlasterGameState.h"
 
 namespace MatchState
 {

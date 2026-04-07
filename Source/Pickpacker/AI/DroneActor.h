@@ -4,10 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "GameState/PickpackerGameState.h"
 #include "Perception/AIPerceptionTypes.h"
 #include "PickpackerTypes/PickpackerTypes.h" // for ESuspiciousBehavior
-#include "Blaster/AI/PPPatrolRouteComponent.h"
+#include "AI/PPPatrolRouteComponent.h"
 #include "DroneActor.generated.h"
 
 class UBehaviorTree;
@@ -36,7 +36,7 @@ enum class EDroneState : uint8
  * Drone Actor - Surveillance drone that patrols and detects suspicious player behavior
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ADroneActor : public APawn
+class PICKPACKER_API ADroneActor : public APawn
 {
 	GENERATED_BODY()
 

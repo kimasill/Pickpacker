@@ -16,7 +16,7 @@ class UGameplayActionInterface : public UInterface
 /**
  * 
  */
-class BLASTER_API IGameplayActionInterface
+class PICKPACKER_API IGameplayActionInterface
 {
 	GENERATED_BODY()
 

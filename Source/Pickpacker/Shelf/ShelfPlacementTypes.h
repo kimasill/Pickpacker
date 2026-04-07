@@ -4,7 +4,7 @@
 #include "ShelfPlacementTypes.generated.h"
 
 USTRUCT(BlueprintType)
-struct BLASTER_API FShelfPlacementPreview
+struct PICKPACKER_API FShelfPlacementPreview
 {
     GENERATED_BODY()
 

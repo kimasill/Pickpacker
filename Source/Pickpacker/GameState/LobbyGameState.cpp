@@ -2,8 +2,8 @@
 
 #include "LobbyGameState.h"
 #include "Net/UnrealNetwork.h"
-#include "Blaster/GameMode/LobbyGameMode.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "GameMode/LobbyGameMode.h"
+#include "Character/BlasterCharacter.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 

@@ -7,8 +7,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/Components/InteractionComponent.h"
+#include "Parcel/ParcelActor.h"
+#include "Components/InteractionComponent.h"
 #include "PackagingStationActor.generated.h"
 
 /**
@@ -26,7 +26,7 @@ enum class EPackagingMode : uint8
  * 단일 입력 영역에서 모드에 따라 포장/포장 해제 처리
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API APackagingStationActor : public AActor
+class PICKPACKER_API APackagingStationActor : public AActor
 {
 	GENERATED_BODY()
 

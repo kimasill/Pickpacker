@@ -2,12 +2,12 @@
 
 
 #include "LagCompensationComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Weapon/Weapon.h"
-#include "Blaster/Weapon/Projectile.h"
+#include "Character/BlasterCharacter.h"
+#include "Weapon/Weapon.h"
+#include "Weapon/Projectile.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "Blaster/Blaster.h"
+#include "Pickpacker.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/DamageType.h"
 

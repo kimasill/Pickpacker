@@ -4,9 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameState.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
-#include "Blaster/DataAssets/DA_LevelVariant.h"
-#include "Blaster/Components/EscapeProgressComponent.h"
+#include "PickpackerTypes/PickpackerTypes.h"
+#include "DataAssets/DA_LevelVariant.h"
+#include "Components/EscapeProgressComponent.h"
 #include "PickpackerGameState.generated.h"
 
 class UAnchorRuntimeSubsystem;
@@ -29,7 +29,7 @@ struct FOrderTimesUpdatePayload
  * Tracks suspicion levels, team performance, and game progression
  */
 UCLASS()
-class BLASTER_API APickpackerGameState : public AGameState
+class PICKPACKER_API APickpackerGameState : public AGameState
 {
 	GENERATED_BODY()
 

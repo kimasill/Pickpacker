@@ -4,16 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/DataAssets/ParcelRowNamePicker.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
-#include "Blaster/Components/ParcelStateComponent.h"
-#include "Blaster/Components/CarryPointsComponent.h"
-#include "Blaster/UI/ParcelHUDWidget.h"
+#include "DataAssets/DA_ParcelData.h"
+#include "DataAssets/ParcelRowNamePicker.h"
+#include "DataAssets/DA_ItemData.h"
+#include "Components/ParcelStateComponent.h"
+#include "Components/CarryPointsComponent.h"
+#include "UI/ParcelHUDWidget.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "GameplayTagContainer.h"
-#include "Blaster/Interfaces/InteractableInterface.h"
+#include "Interfaces/InteractableInterface.h"
 #include "ParcelActor.generated.h"
 
 class UCarryPointsComponent;
@@ -28,7 +28,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelItemUsed, class ACharacter
  * Parcel Actor - Represents a package that can be carried by players
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AParcelActor : public AActor, public IInteractableInterface
+class PICKPACKER_API AParcelActor : public AActor, public IInteractableInterface
 {
 	GENERATED_BODY()
 

@@ -10,7 +10,7 @@
  * Wait at Patrol Point Task
  */
 UCLASS()
-class BLASTER_API UBTTask_WaitAtPatrolPoint : public UBTTaskNode
+class PICKPACKER_API UBTTask_WaitAtPatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
 

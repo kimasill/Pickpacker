@@ -9,7 +9,7 @@
 enum class ESessionVisibility : uint8;
 
 UCLASS()
-class BLASTER_API ALobbyGameMode : public AGameMode
+class PICKPACKER_API ALobbyGameMode : public AGameMode
 {
 	GENERATED_BODY()
 public:

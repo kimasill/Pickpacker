@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WeaponTypes.h"
-#include "Blaster/BlasterTypes/Team.h"
+#include "BlasterTypes/Team.h"
 #include "Weapon.generated.h"
 
 
@@ -31,7 +31,7 @@ enum class EFireType : uint8
 };
 
 UCLASS()
-class BLASTER_API AWeapon : public AActor
+class PICKPACKER_API AWeapon : public AActor
 {
 	GENERATED_BODY()
 	

@@ -38,7 +38,7 @@ struct FMotherMoveToLocationMemory
  * Move to a specific location (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherMoveToLocation : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherMoveToLocation : public UBTTaskNode
 {
 	GENERATED_BODY()
 

@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AHitScanWeapon : public AWeapon
+class PICKPACKER_API AHitScanWeapon : public AWeapon
 {
 
 	GENERATED_BODY()

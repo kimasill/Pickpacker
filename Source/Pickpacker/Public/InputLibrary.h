@@ -18,7 +18,7 @@ struct FInputIconRow : public FTableRowBase
 };
 
 UCLASS()
-class BLASTER_API UInputLibrary : public UBlueprintFunctionLibrary
+class PICKPACKER_API UInputLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

@@ -11,7 +11,7 @@
  * This should be placed after MoveTo task in the sequence
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherIncrementPatrolCount : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherIncrementPatrolCount : public UBTTaskNode
 {
 	GENERATED_BODY()
 

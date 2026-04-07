@@ -24,7 +24,7 @@ enum class ELabelRuleType : uint8
  * Label Rule Configuration - Defines how labels should be validated
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FLabelRule
+struct PICKPACKER_API FLabelRule
 {
 	GENERATED_BODY()
 
@@ -78,7 +78,7 @@ struct BLASTER_API FLabelRule
  * Label Rule Data Asset - Contains all label validation rules for a level
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_LabelRuleData : public UDataAsset
+class PICKPACKER_API UDA_LabelRuleData : public UDataAsset
 {
 	GENERATED_BODY()
 

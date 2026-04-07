@@ -10,7 +10,7 @@
  * Move to Next Patrol Point Task
  */
 UCLASS()
-class BLASTER_API UBTTask_MoveToNextPatrolPoint : public UBTTaskNode
+class PICKPACKER_API UBTTask_MoveToNextPatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
 

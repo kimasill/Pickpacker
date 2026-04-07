@@ -18,7 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSequenceFinished);
  * - 모든 플레이어 로드 후 동시에 시퀀스 재생
  */
 UCLASS()
-class BLASTER_API AEndingGameMode : public AGameMode
+class PICKPACKER_API AEndingGameMode : public AGameMode
 {
 	GENERATED_BODY()
 

@@ -13,7 +13,7 @@
  * - OverHeadWidget으로 이름과 준비 상태 표시
  */
 UCLASS()
-class BLASTER_API ALobbyCharacter : public ABlasterCharacter
+class PICKPACKER_API ALobbyCharacter : public ABlasterCharacter
 {
 	GENERATED_BODY()
 

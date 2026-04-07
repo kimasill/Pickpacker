@@ -1,11 +1,11 @@
 // Copyright
 
-#include "Blaster/Environment/LadderActor.h"
+#include "Environment/LadderActor.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SplineComponent.h"
 #include "Components/PrimitiveComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 
 ALadderActor::ALadderActor()
 {

@@ -10,7 +10,7 @@
  * Blackboard의 타겟 플레이어에 대해 Brute 처형 실행 (BT 기반 Brute용).
  */
 UCLASS()
-class BLASTER_API UBTTask_BruteExecuteTarget : public UBTTaskNode
+class PICKPACKER_API UBTTask_BruteExecuteTarget : public UBTTaskNode
 {
 	GENERATED_BODY()
 

@@ -8,7 +8,7 @@
 class UBoxComponent;
 
 UCLASS()
-class BLASTER_API AElevatorPlatformActor : public AActor
+class PICKPACKER_API AElevatorPlatformActor : public AActor
 {
 	GENERATED_BODY()
 	

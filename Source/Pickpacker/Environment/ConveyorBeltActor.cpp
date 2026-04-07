@@ -1,10 +1,10 @@
-#include "Blaster/Environment/ConveyorBeltActor.h"
+#include "Environment/ConveyorBeltActor.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "Character/BlasterCharacter.h"
+#include "Parcel/ParcelActor.h"
 
 AConveyorBeltActor::AConveyorBeltActor()
 {

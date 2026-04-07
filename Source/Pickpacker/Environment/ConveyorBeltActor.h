@@ -27,7 +27,7 @@ struct FConveyedPrimitiveEntry
  * and releases them when they reach the drop volume so gravity can make them fall.
  */
 UCLASS()
-class BLASTER_API AConveyorBeltActor : public AActor
+class PICKPACKER_API AConveyorBeltActor : public AActor
 {
 	GENERATED_BODY()
 

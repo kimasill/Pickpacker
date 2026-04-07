@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API URocketMovementComponent : public UProjectileMovementComponent
+class PICKPACKER_API URocketMovementComponent : public UProjectileMovementComponent
 {
 	GENERATED_BODY()
 protected:

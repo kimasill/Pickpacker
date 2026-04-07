@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "DataAssets/DA_ParcelData.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "ParcelStateComponent.generated.h"
 
 class AParcelActor;
@@ -18,7 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnParcelInstabilityChanged, float,
  * Parcel State Component - Manages parcel durability, weight, and instability
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UParcelStateComponent : public UActorComponent
+class PICKPACKER_API UParcelStateComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

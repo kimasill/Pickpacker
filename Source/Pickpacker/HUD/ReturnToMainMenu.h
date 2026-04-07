@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API UReturnToMainMenu : public UUserWidget
+class PICKPACKER_API UReturnToMainMenu : public UUserWidget
 {
 	GENERATED_BODY()
 public:

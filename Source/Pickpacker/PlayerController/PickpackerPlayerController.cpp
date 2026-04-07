@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Blaster/PlayerController/PickpackerPlayerController.h"
+#include "PlayerController/PickpackerPlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerState.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "GameState/PickpackerGameState.h"
 #include "Engine/NetConnection.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
+#include "GameMode/PickpackerGameMode.h"
 
 namespace
 {

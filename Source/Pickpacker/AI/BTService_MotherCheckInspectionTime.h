@@ -10,7 +10,7 @@
  * Service to check if it's time for inspection and update blackboard (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTService_MotherCheckInspectionTime : public UBTService
+class PICKPACKER_API UBTService_MotherCheckInspectionTime : public UBTService
 {
 	GENERATED_BODY()
 

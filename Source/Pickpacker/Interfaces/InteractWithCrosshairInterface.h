@@ -16,7 +16,7 @@ class UInteractWithCrosshairInterface : public UInterface
 /**
  * 
  */
-class BLASTER_API IInteractWithCrosshairInterface
+class PICKPACKER_API IInteractWithCrosshairInterface
 {
 	GENERATED_BODY()
 

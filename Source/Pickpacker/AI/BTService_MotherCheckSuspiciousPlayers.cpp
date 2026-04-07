@@ -6,13 +6,13 @@
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Bool.h"
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Object.h"
 #include "AIController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/MotherAIController.h"
-#include "Blaster/AI/DroneActor.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Subsystem/SuspicionManagerSubsystem.h"
+#include "AI/MotherAIActor.h"
+#include "AI/MotherAIController.h"
+#include "AI/DroneActor.h"
+#include "Character/BlasterCharacter.h"
+#include "Subsystem/SuspicionManagerSubsystem.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 
 UBTService_MotherCheckSuspiciousPlayers::UBTService_MotherCheckSuspiciousPlayers()
 {

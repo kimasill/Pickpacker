@@ -4,6 +4,9 @@
 #include "ProjectileWeapon.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Projectile.h"
+#include "GameFramework/Pawn.h"
+#include "Engine/World.h"
+#include "Components/SkeletalMeshComponent.h"
 
 void AProjectileWeapon::Fire(const FVector& HitTarget)
 {

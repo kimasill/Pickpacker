@@ -1,6 +1,6 @@
 #include "MenuGameMode.h"
 
-#include "Blaster/PlayerController/MenuPlayerController.h"
+#include "PlayerController/MenuPlayerController.h"
 #include "Camera/CameraActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"

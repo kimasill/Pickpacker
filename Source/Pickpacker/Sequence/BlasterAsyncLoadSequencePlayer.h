@@ -15,7 +15,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBlasterSequencePlayerLoaded, ULeve
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBlasterSequencePlayerFailed);
 
 UCLASS()
-class BLASTER_API UBlasterAsyncLoadSequencePlayer : public UBlueprintAsyncActionBase
+class PICKPACKER_API UBlasterAsyncLoadSequencePlayer : public UBlueprintAsyncActionBase
 {
 	GENERATED_BODY()
 

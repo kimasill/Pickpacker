@@ -11,7 +11,7 @@
  * - 이동/카메라 입력 차단
  */
 UCLASS()
-class BLASTER_API AMenuPlayerController : public APlayerController
+class PICKPACKER_API AMenuPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 

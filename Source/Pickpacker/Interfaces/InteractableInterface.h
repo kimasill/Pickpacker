@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "Blaster/Interaction/InteractionUIData.h"
+#include "Interaction/InteractionUIData.h"
 #include "InteractableInterface.generated.h"
 
 UINTERFACE(MinimalAPI, BlueprintType)
@@ -11,7 +11,7 @@ class UInteractableInterface : public UInterface
 	GENERATED_BODY()
 };
 
-class BLASTER_API IInteractableInterface
+class PICKPACKER_API IInteractableInterface
 {
 	GENERATED_BODY()
 
@@ -40,6 +40,6 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="Interaction|Credits")
 	void GetCreditUnlockInfo(bool& bRequiresUnlock, int32& UnlockCost, FText& LockedMessage, FText& UnlockedMessage);
 
-	// ±âº» ±¸Çö
+	// ï¿½âº» ï¿½ï¿½ï¿½ï¿½
 	virtual void GetInteractionUIData_Implementation(FInteractionUIData& OutData) {}
 };

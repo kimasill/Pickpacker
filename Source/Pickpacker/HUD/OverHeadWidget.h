@@ -10,7 +10,7 @@
  * 플레이어 머리 위에 표시되는 위젯 (이름, 준비 상태 등)
  */
 UCLASS()
-class BLASTER_API UOverHeadWidget : public UUserWidget
+class PICKPACKER_API UOverHeadWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:

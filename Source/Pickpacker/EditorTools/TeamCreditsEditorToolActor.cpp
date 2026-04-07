@@ -1,6 +1,6 @@
 // Editor tool actor for setting team credits during PIE
-#include "Blaster/EditorTools/TeamCreditsEditorToolActor.h"
-#include "Blaster/GameState/PickpackerGameState.h"
+#include "EditorTools/TeamCreditsEditorToolActor.h"
+#include "GameState/PickpackerGameState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #if WITH_EDITOR

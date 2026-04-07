@@ -10,7 +10,7 @@
  * Execute punishment on target player (for Mother AI)
  */
 UCLASS()
-class BLASTER_API UBTTask_MotherExecutePunishment : public UBTTaskNode
+class PICKPACKER_API UBTTask_MotherExecutePunishment : public UBTTaskNode
 {
 	GENERATED_BODY()
 

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "ParcelAVLibrary.generated.h"
 
 class USoundBase;
@@ -16,7 +16,7 @@ class UNiagaraComponent;
  * Static library for resolving audio/VFX assets for parcels
  */
 UCLASS()
-class BLASTER_API UParcelAVLibrary : public UObject
+class PICKPACKER_API UParcelAVLibrary : public UObject
 {
 	GENERATED_BODY()
 

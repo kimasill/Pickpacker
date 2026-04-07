@@ -2,9 +2,9 @@
 
 
 #include "CaptureTheFlagGameMode.h"
-#include "Blaster/Weapon/Flag.h"
-#include "Blaster/CaptureTheFlag/FlagZone.h"
-#include "Blaster/GameState/BlasterGameState.h"
+#include "Weapon/Flag.h"
+#include "CaptureTheFlag/FlagZone.h"
+#include "GameState/BlasterGameState.h"
 
 void ACaptureTheFlagGameMode::PlayerEliminated(class ABlasterCharacter* EliminatedCharacter, class ABlasterPlayerController* VictimController, class ABlasterPlayerController* AttackerController)
 {

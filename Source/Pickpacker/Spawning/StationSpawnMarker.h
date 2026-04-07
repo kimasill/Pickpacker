@@ -10,7 +10,7 @@
  * Spawn marker specialized for stations. Chooses from Station candidate list.
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AStationSpawnMarker : public ASpawnMarkerBase
+class PICKPACKER_API AStationSpawnMarker : public ASpawnMarkerBase
 {
     GENERATED_BODY()
 

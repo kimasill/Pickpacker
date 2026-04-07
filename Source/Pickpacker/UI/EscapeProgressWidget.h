@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
-#include "Blaster/Escape/EscapeZoneActor.h"
+#include "DataAssets/DA_ItemData.h"
+#include "Escape/EscapeZoneActor.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/ScrollBox.h"
@@ -15,7 +15,7 @@
  * Escape Progress Widget - Displays escape progress and requirements
  */
 UCLASS()
-class BLASTER_API UEscapeProgressWidget : public UUserWidget
+class PICKPACKER_API UEscapeProgressWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

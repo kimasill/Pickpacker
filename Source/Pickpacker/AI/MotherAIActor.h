@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "Blaster/GameState/PickpackerGameState.h"
-#include "Blaster/AI/DroneActor.h"
+#include "GameState/PickpackerGameState.h"
+#include "AI/DroneActor.h"
 #include "Perception/AIPerceptionTypes.h"
 #include "MotherAIActor.generated.h"
 
@@ -35,7 +35,7 @@ enum class EMotherAIState : uint8
  * Uses Behavior Tree for AI logic
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AMotherAIActor : public ACharacter
+class PICKPACKER_API AMotherAIActor : public ACharacter
 {
 	GENERATED_BODY()
 

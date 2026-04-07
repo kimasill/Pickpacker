@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "PPPatrolRouteComponent.h"
-#include "Blaster/AI/PatrolPointActor.h"
+#include "AI/PatrolPointActor.h"
 
 UPPPatrolRouteComponent::UPPPatrolRouteComponent()
 {

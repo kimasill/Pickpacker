@@ -10,7 +10,7 @@
  * Get Current Patrol Point Task
  */
 UCLASS()
-class BLASTER_API UBTTask_GetCurrentPatrolPoint : public UBTTaskNode
+class PICKPACKER_API UBTTask_GetCurrentPatrolPoint : public UBTTaskNode
 {
 	GENERATED_BODY()
 

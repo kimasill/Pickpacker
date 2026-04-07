@@ -5,8 +5,8 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "TimerManager.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
+#include "Parcel/ParcelActor.h"
+#include "DataAssets/DA_ItemData.h"
 #include "Components/ScrollBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/VerticalBox.h"
@@ -22,7 +22,7 @@ class UInventoryItemSlotWidget;
  * Inventory Widget - Displays player's collected items
  */
 UCLASS()
-class BLASTER_API UInventoryWidget : public UUserWidget
+class PICKPACKER_API UInventoryWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
@@ -114,7 +114,7 @@ private:
  * Inventory Item Slot Widget - Individual item slot in inventory
  */
 UCLASS()
-class BLASTER_API UInventoryItemSlotWidget : public UUserWidget
+class PICKPACKER_API UInventoryItemSlotWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

@@ -5,8 +5,8 @@
 #include "MotherPatrolZoneActor.h"
 
 #include "Animation/AnimInstance.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerState/BlasterPlayerState.h"
+#include "Character/BlasterCharacter.h"
+#include "PlayerState/BlasterPlayerState.h"
 
 #include "AIController.h"
 #include "AITypes.h"
@@ -15,8 +15,8 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
-#include "Blaster/AI/UPPSightPerceptionComponent.h"
-#include "Blaster/AI/BruteAIController.h"
+#include "AI/UPPSightPerceptionComponent.h"
+#include "AI/BruteAIController.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "TimerManager.h"

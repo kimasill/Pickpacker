@@ -3,8 +3,8 @@
 
 #include "BlasterGameState.h"
 #include "Net/UnrealNetwork.h"
-#include "Blaster/PlayerState/BlasterPlayerState.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "PlayerState/BlasterPlayerState.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "Engine/World.h"
 
 void ABlasterGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

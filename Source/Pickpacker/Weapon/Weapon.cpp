@@ -4,14 +4,14 @@
 #include "Weapon.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimationAsset.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Casing.h"
 #include "Engine/SkeletalMeshSocket.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
-#include "Blaster/BlasterComponents/CombatComponent.h"
+#include "PlayerController/BlasterPlayerController.h"
+#include "BlasterComponents/CombatComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
 // Sets default values

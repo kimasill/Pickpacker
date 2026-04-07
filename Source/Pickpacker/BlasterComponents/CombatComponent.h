@@ -3,14 +3,14 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Blaster/HUD/BlasterHUD.h"
-#include "Blaster/Weapon/WeaponTypes.h"
-#include "Blaster/BlasterTypes/CombatState.h"
+#include "HUD/BlasterHUD.h"
+#include "Weapon/WeaponTypes.h"
+#include "BlasterTypes/CombatState.h"
 #include "CombatComponent.generated.h"
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class BLASTER_API UCombatComponent : public UActorComponent
+class PICKPACKER_API UCombatComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

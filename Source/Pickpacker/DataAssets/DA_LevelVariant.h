@@ -15,7 +15,7 @@ class UDA_LabelRuleData;
  * Anchor Group Definition - Groups anchors with similar functionality
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FAnchorGroup
+struct PICKPACKER_API FAnchorGroup
 {
 	GENERATED_BODY()
 
@@ -56,7 +56,7 @@ struct BLASTER_API FAnchorGroup
  * Anchor Replacement Rule - Defines how to replace anchors
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FAnchorReplacementRule
+struct PICKPACKER_API FAnchorReplacementRule
 {
 	GENERATED_BODY()
 
@@ -87,7 +87,7 @@ struct BLASTER_API FAnchorReplacementRule
  * Level Variant Data Asset - Defines anchor groups and randomization rules for a level
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_LevelVariant : public UDataAsset
+class PICKPACKER_API UDA_LevelVariant : public UDataAsset
 {
 	GENERATED_BODY()
 

@@ -10,7 +10,7 @@ class UDataTable;
  * Central subsystem that owns the input icon data table and shares it with UI widgets
  */
 UCLASS()
-class BLASTER_API UInputIconSubsystem : public UGameInstanceSubsystem
+class PICKPACKER_API UInputIconSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 

@@ -2,9 +2,9 @@
 
 
 #include "TeamsGameMode.h"
-#include "Blaster/GameState/BlasterGameState.h"
-#include "Blaster/PlayerState/BlasterPlayerState.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "GameState/BlasterGameState.h"
+#include "PlayerState/BlasterPlayerState.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
 ATeamsGameMode::ATeamsGameMode()

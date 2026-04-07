@@ -1,12 +1,12 @@
-#include "Blaster/Station/SubmissionZoneActor.h"
+#include "Station/SubmissionZoneActor.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/GameMode/PickpackerGameMode.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "Parcel/ParcelActor.h"
+#include "GameMode/PickpackerGameMode.h"
+#include "Character/BlasterCharacter.h"
+#include "PlayerController/BlasterPlayerController.h"
 
 ASubmissionZoneActor::ASubmissionZoneActor()
 {

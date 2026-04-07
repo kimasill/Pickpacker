@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "Parcel/ParcelActor.h"
 #include "UnpackedParcelActor.generated.h"
 
 /**
@@ -11,7 +11,7 @@
  * ParcelConfig의 RowName을 사용하여 설정됨
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AUnpackedParcelActor : public AParcelActor
+class PICKPACKER_API AUnpackedParcelActor : public AParcelActor
 {
 	GENERATED_BODY()
 

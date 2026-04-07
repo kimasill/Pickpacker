@@ -10,7 +10,7 @@
  * Decorator to check if Mother AI has a target player (for Behavior Tree)
  */
 UCLASS()
-class BLASTER_API UBTDecorator_MotherHasTargetPlayer : public UBTDecorator
+class PICKPACKER_API UBTDecorator_MotherHasTargetPlayer : public UBTDecorator
 {
 	GENERATED_BODY()
 

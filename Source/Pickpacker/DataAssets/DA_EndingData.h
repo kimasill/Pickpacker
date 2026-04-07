@@ -16,7 +16,7 @@ enum class EEndingType : uint8
 };
 
 UCLASS()
-class BLASTER_API UDA_EndingData : public UDataAsset
+class PICKPACKER_API UDA_EndingData : public UDataAsset
 {
 	GENERATED_BODY()
 

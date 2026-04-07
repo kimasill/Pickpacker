@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/DataAssets/DA_ItemData.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "DataAssets/DA_ItemData.h"
+#include "Parcel/ParcelActor.h"
 #include "EscapeZoneActor.generated.h"
 
 class UBoxComponent;
@@ -16,7 +16,7 @@ class UWidgetComponent;
  * Escape Requirement - Defines what is needed to escape
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FEscapeRequirement
+struct PICKPACKER_API FEscapeRequirement
 {
 	GENERATED_BODY()
 
@@ -44,7 +44,7 @@ struct BLASTER_API FEscapeRequirement
  * Escape Zone Actor - Zone where players can escape if requirements are met
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AEscapeZoneActor : public AActor
+class PICKPACKER_API AEscapeZoneActor : public AActor
 {
 	GENERATED_BODY()
 

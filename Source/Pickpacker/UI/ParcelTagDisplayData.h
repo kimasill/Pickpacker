@@ -8,7 +8,7 @@
 #include "ParcelTagDisplayData.generated.h"
 
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelHUDTagDisplayRow : public FTableRowBase
+struct PICKPACKER_API FParcelHUDTagDisplayRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Spawning/SpawnMarkerBase.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "Components/BoxComponent.h"
 #include "ParcelSpawnMarker.generated.h"
 
@@ -32,7 +32,7 @@ struct FParcelSpawnCandidate
  * Spawn marker specialized for parcels. Supports continuous respawn.
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API AParcelSpawnMarker : public ASpawnMarkerBase
+class PICKPACKER_API AParcelSpawnMarker : public ASpawnMarkerBase
 {
     GENERATED_BODY()
 

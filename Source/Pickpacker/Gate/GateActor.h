@@ -3,9 +3,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Blaster/Gate/GateTypes.h"
-#include "Blaster/Interfaces/InteractableInterface.h"
-#include "Blaster/Interaction/InteractionUIData.h"
+#include "Gate/GateTypes.h"
+#include "Interfaces/InteractableInterface.h"
+#include "Interaction/InteractionUIData.h"
 #include "GateActor.generated.h"
 
 class ACharacter;
@@ -15,7 +15,7 @@ class UPlayerInventoryComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGateUnlocked, AActor*, GateActor);
 
 UCLASS(Blueprintable)
-class BLASTER_API AGateActor : public AActor, public IInteractableInterface
+class PICKPACKER_API AGateActor : public AActor, public IInteractableInterface
 {
 	GENERATED_BODY()
 

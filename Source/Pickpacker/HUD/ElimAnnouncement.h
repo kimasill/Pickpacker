@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API UElimAnnouncement : public UUserWidget
+class PICKPACKER_API UElimAnnouncement : public UUserWidget
 {
 	GENERATED_BODY()
 public:

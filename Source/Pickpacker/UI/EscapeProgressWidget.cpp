@@ -4,8 +4,8 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/ScrollBox.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/Components/PlayerInventoryComponent.h"
+#include "Character/BlasterCharacter.h"
+#include "Components/PlayerInventoryComponent.h"
 
 UEscapeProgressWidget::UEscapeProgressWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

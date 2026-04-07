@@ -8,7 +8,7 @@
  * Instability factor provider - attach to parcels or special items to add instability
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class BLASTER_API UInstabilityFactorComponent : public UActorComponent
+class PICKPACKER_API UInstabilityFactorComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

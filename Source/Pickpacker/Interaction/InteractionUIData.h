@@ -21,7 +21,7 @@ enum class EInteractionType : uint8
 };
 
 USTRUCT(BlueprintType)
-struct BLASTER_API FInteractionUIData
+struct PICKPACKER_API FInteractionUIData
 {
 	GENERATED_BODY()
 

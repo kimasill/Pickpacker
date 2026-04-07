@@ -7,14 +7,14 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Styling/SlateBrush.h"
-#include "Blaster/Interaction/InteractionUIData.h"
+#include "Interaction/InteractionUIData.h"
 #include "InteractionPromptWidget.generated.h"
 
 /**
  * Interaction Prompt Widget - Displays interaction prompt when player looks at interactable objects
  */
 UCLASS()
-class BLASTER_API UInteractionPromptWidget : public UUserWidget
+class PICKPACKER_API UInteractionPromptWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

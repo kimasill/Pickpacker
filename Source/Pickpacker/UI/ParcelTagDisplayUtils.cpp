@@ -2,7 +2,7 @@
 
 #include "ParcelTagDisplayUtils.h"
 #include "Engine/DataTable.h"
-#include "Blaster/UI/ParcelTagDisplayData.h"
+#include "UI/ParcelTagDisplayData.h"
 
 FString FParcelTagDisplayUtils::GetTagLastPart(const FGameplayTag& Tag)
 {

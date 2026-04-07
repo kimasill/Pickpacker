@@ -1,6 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-
 # Treat common UE text formats as text
 *.ini text eol=lf
 *.uproject text eol=lf
@@ -15,7 +14,6 @@
 *.m text eol=lf
 *.py text eol=lf
 *.json text eol=lf
-
 # Track UE assets with LFS
 *.uasset filter=lfs diff=lfs merge=lfs -text
 *.umap filter=lfs diff=lfs merge=lfs -text
@@ -25,14 +23,12 @@
 *.upack filter=lfs diff=lfs merge=lfs -text
 *.utexture filter=lfs diff=lfs merge=lfs -text
 *.dds filter=lfs diff=lfs merge=lfs -text
-
 # Track common media with LFS
 *.wav filter=lfs diff=lfs merge=lfs -text
 *.mp3 filter=lfs diff=lfs merge=lfs -text
 *.ogg filter=lfs diff=lfs merge=lfs -text
 *.mp4 filter=lfs diff=lfs merge=lfs -text
 *.mov filter=lfs diff=lfs merge=lfs -text
-
 # Track art/source binaries with LFS
 *.fbx filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
@@ -49,7 +45,6 @@
 *.pak filter=lfs diff=lfs merge=lfs -text
 *.ucas filter=lfs diff=lfs merge=lfs -text
 *.utoc filter=lfs diff=lfs merge=lfs -text
-
 # Ignore diffs for binary files
 *.uasset -diff
 *.umap -diff
@@ -58,8 +53,9 @@
 *.png -diff
 *.jpg -diff
 *.tga -diff
-
 # Keep pointer-size consistency on Windows binaries
 *.dll -text
 *.lib -text
 *.exe -text
+Content/Maps/*.umap filter=lfs diff=lfs merge=lfs -text
+Content/Maps/**/*.umap filter=lfs diff=lfs merge=lfs -text

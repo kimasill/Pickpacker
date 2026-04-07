@@ -3,14 +3,14 @@
 #include "HitScanWeapon.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
+#include "Character/BlasterCharacter.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Sound/SoundCue.h"
 #include "DrawDebugHelpers.h"
 #include "WeaponTypes.h"
-#include "Blaster/BlasterComponents/LagCompensationComponent.h"
+#include "BlasterComponents/LagCompensationComponent.h"
 #include "GameFramework/DamageType.h"
 
 void AHitScanWeapon::Fire(const FVector& HitTarget)

@@ -4,11 +4,11 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
-#include "Blaster/DataAssets/DA_ParcelData.h"
+#include "DataAssets/DA_ParcelData.h"
 #include "GameplayTagsManager.h"
-#include "Blaster/Components/InstabilityFactorComponent.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/Parcel/ParcelAVLibrary.h"
+#include "Components/InstabilityFactorComponent.h"
+#include "Parcel/ParcelActor.h"
+#include "Parcel/ParcelAVLibrary.h"
 
 namespace ParcelClassification
 {

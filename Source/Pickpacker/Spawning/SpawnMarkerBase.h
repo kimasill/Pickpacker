@@ -11,7 +11,7 @@
  * Server-only spawning; supports spawn on begin play and manual triggering.
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ASpawnMarkerBase : public AActor
+class PICKPACKER_API ASpawnMarkerBase : public AActor
 {
     GENERATED_BODY()
 

@@ -9,7 +9,7 @@ class UDA_ParcelData;
  * 에디터에서 DataAsset을 선택하면 해당 Asset의 RowName을 드롭다운으로 보여주기 위한 래퍼
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FParcelRowNamePicker
+struct PICKPACKER_API FParcelRowNamePicker
 {
 	GENERATED_BODY()
 

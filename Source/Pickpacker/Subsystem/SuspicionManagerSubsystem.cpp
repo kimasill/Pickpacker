@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SuspicionManagerSubsystem.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
-#include "Blaster/AI/DroneActor.h"
+#include "AI/DroneActor.h"
 
 void USuspicionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

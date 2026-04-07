@@ -1,9 +1,9 @@
 
 #include "BlasterPlayerState.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/PlayerController/BlasterPlayerController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/DroneActor.h"
+#include "Character/BlasterCharacter.h"
+#include "PlayerController/BlasterPlayerController.h"
+#include "AI/MotherAIActor.h"
+#include "AI/DroneActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"

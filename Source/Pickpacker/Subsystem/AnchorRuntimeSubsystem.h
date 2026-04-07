@@ -26,7 +26,7 @@ struct FTaggedActors
  * Replaces PCG system with tag-based anchor scanning and random placement
  */
 UCLASS()
-class BLASTER_API UAnchorRuntimeSubsystem : public UWorldSubsystem
+class PICKPACKER_API UAnchorRuntimeSubsystem : public UWorldSubsystem
 {
 	GENERATED_BODY()
 

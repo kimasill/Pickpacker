@@ -9,13 +9,13 @@
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
 #include "Camera/CameraShakeBase.h"
-#include "Blaster/BlasterTypes/TurningInPlace.h"
-#include "Blaster/Interfaces/InteractWithCrosshairInterface.h"
+#include "BlasterTypes/TurningInPlace.h"
+#include "Interfaces/InteractWithCrosshairInterface.h"
 #include "Components/TimelineComponent.h"
-#include "Blaster/BlasterTypes/CombatState.h"
-#include "Blaster/BlasterComponents/CombatComponent.h"
-#include "Blaster/BlasterTypes/Team.h"
-#include "Blaster/PickpackerTypes/PickpackerTypes.h"
+#include "BlasterTypes/CombatState.h"
+#include "BlasterComponents/CombatComponent.h"
+#include "BlasterTypes/Team.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "InputActionValue.h"
 #include "OnlineSubsystem.h"
 #include "Interfaces/onlineSessionInterface.h"
@@ -60,7 +60,7 @@ public:
 };
 
 UCLASS()
-class BLASTER_API ABlasterCharacter : public ACharacter, public IInteractWithCrosshairInterface
+class PICKPACKER_API ABlasterCharacter : public ACharacter, public IInteractWithCrosshairInterface
 {
 	GENERATED_BODY()
 

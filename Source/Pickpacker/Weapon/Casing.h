@@ -6,7 +6,7 @@
 #include "Casing.generated.h"
 
 UCLASS()
-class BLASTER_API ACasing : public AActor
+class PICKPACKER_API ACasing : public AActor
 {
 	GENERATED_BODY()
 	

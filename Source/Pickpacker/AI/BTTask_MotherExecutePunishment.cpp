@@ -3,8 +3,8 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/MotherAIController.h"
+#include "AI/MotherAIActor.h"
+#include "AI/MotherAIController.h"
 #include "GameFramework/Character.h"
 
 UBTTask_MotherExecutePunishment::UBTTask_MotherExecutePunishment()
@@ -45,7 +45,7 @@ EBTNodeResult::Type UBTTask_MotherExecutePunishment::ExecuteTask(UBehaviorTreeCo
 		CachedMotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
 	}
 
-	// Mother AI ÂüÁ¶ ÀúÀå
+	// Mother AI ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	CachedMotherAI = MotherAI;
 
 	MotherAI->OnPunishmentFinished.AddDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);
@@ -64,7 +64,7 @@ void UBTTask_MotherExecutePunishment::OnPunishmentFinished(bool interrupted)
 		FinishLatentTask(*CachedOwnerComp, interrupted ? EBTNodeResult::Failed : EBTNodeResult::Succeeded);
 	}
 
-	// ÀÌº¥Æ® ÇØÁ¦
+	// ï¿½Ìºï¿½Æ® ï¿½ï¿½ï¿½ï¿½
 	if (CachedMotherAI)
 	{
 		CachedMotherAI->OnPunishmentFinished.RemoveDynamic(this, &UBTTask_MotherExecutePunishment::OnPunishmentFinished);

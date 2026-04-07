@@ -23,7 +23,7 @@ enum class EStationType : uint8
  * Station Configuration - Defines station behavior and parameters
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FStationConfig
+struct PICKPACKER_API FStationConfig
 {
 	GENERATED_BODY()
 
@@ -82,7 +82,7 @@ struct BLASTER_API FStationConfig
  * Station Data Asset - Contains all station configurations for a level
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_StationData : public UDataAsset
+class PICKPACKER_API UDA_StationData : public UDataAsset
 {
 	GENERATED_BODY()
 

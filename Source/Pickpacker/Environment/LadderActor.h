@@ -12,7 +12,7 @@ class USceneComponent;
 class USplineComponent;
 
 UCLASS()
-class BLASTER_API ALadderActor : public AActor
+class PICKPACKER_API ALadderActor : public AActor
 {
 	GENERATED_BODY()
 

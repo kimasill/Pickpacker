@@ -4,7 +4,7 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/DroneActor.h"
+#include "AI/DroneActor.h"
 #include "GameFramework/FloatingPawnMovement.h"
 #include "Engine/Engine.h"
 #include "Kismet/KismetMathLibrary.h"

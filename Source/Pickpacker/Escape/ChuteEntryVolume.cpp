@@ -1,8 +1,8 @@
 #include "ChuteEntryVolume.h"
 
 #include "Components/BoxComponent.h"
-#include "Blaster/GameState/PickpackerGameState.h"
-#include "Blaster/Components/EscapeProgressComponent.h"
+#include "GameState/PickpackerGameState.h"
+#include "Components/EscapeProgressComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/Character.h"
 #include "Engine/World.h"

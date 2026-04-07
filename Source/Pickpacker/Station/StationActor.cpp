@@ -1,10 +1,10 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "StationActor.h"
-#include "Blaster/Parcel/ParcelActor.h"
-#include "Blaster/DataAssets/DA_LabelRuleData.h"
-#include "Blaster/GameState/PickpackerGameState.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Parcel/ParcelActor.h"
+#include "DataAssets/DA_LabelRuleData.h"
+#include "GameState/PickpackerGameState.h"
+#include "Character/BlasterCharacter.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"

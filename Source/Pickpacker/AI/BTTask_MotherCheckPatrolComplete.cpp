@@ -4,8 +4,8 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "AIController.h"
-#include "Blaster/AI/MotherAIActor.h"
-#include "Blaster/AI/MotherAIController.h"
+#include "AI/MotherAIActor.h"
+#include "AI/MotherAIController.h"
 #include "Engine/World.h"
 
 UBTTask_MotherCheckPatrolComplete::UBTTask_MotherCheckPatrolComplete()

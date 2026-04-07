@@ -10,7 +10,7 @@
  * 사망 이동 위치 지정용 액터
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ADeathLocationActor : public AActor
+class PICKPACKER_API ADeathLocationActor : public AActor
 {
 	GENERATED_BODY()
 

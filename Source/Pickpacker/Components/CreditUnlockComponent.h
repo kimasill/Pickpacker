@@ -13,7 +13,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FCreditUnlockEvent);
  * Blueprint actors can attach this component and forward interaction events to RequestUnlock().
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class BLASTER_API UCreditUnlockComponent : public UActorComponent
+class PICKPACKER_API UCreditUnlockComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

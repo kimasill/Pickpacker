@@ -1,4 +1,4 @@
-#include "Blaster/DataAssets/DA_OrderWaveData.h"
+#include "DataAssets/DA_OrderWaveData.h"
 
 const FParcelOrderWave* UDA_OrderWaveData::GetWave(int32 WaveIndex) const
 {

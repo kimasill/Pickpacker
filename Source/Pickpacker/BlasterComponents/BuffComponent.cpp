@@ -2,7 +2,7 @@
 
 
 #include "BuffComponent.h"
-#include "Blaster/Character/BlasterCharacter.h"
+#include "Character/BlasterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
 

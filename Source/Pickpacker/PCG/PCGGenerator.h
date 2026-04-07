@@ -11,7 +11,7 @@
  * Blueprint can inherit from this class and implement PCG_Generation to run PCG logic.
  */
 UCLASS(Blueprintable)
-class BLASTER_API APCGGenerator : public AActor
+class PICKPACKER_API APCGGenerator : public AActor
 {
 	GENERATED_BODY()
 public:

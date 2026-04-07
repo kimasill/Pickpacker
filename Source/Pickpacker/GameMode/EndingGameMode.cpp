@@ -1,7 +1,7 @@
 #include "EndingGameMode.h"
 
-#include "Blaster/PlayerController/BlasterPlayerController.h"
-#include "Blaster/Sequence/BlasterLevelSequenceLibrary.h"
+#include "PlayerController/BlasterPlayerController.h"
+#include "Sequence/BlasterLevelSequenceLibrary.h"
 #include "Engine/World.h"
 
 AEndingGameMode::AEndingGameMode()

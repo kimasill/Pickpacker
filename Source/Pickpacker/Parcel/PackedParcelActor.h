@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blaster/Parcel/ParcelActor.h"
+#include "Parcel/ParcelActor.h"
 #include "PackedParcelActor.generated.h"
 
 class AParcelSpawnMarker;
@@ -14,7 +14,7 @@ class AParcelSpawnMarker;
  * 초기 콘텐츠 지정 가능
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API APackedParcelActor : public AParcelActor
+class PICKPACKER_API APackedParcelActor : public AParcelActor
 {
 	GENERATED_BODY()
 

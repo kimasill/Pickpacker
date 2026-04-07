@@ -4,14 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
-#include "Blaster/BlasterTypes/Team.h"
+#include "BlasterTypes/Team.h"
 #include "BlasterPlayerState.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class BLASTER_API ABlasterPlayerState : public APlayerState
+class PICKPACKER_API ABlasterPlayerState : public APlayerState
 {
 	GENERATED_BODY()
 public:

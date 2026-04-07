@@ -186,12 +186,17 @@ Source/**/*~
 *.ogg
 *.uasset
 *.umap
+# But allow project maps to be tracked
+!Content/Maps/*.umap
+!Content/Maps/**/*.umap
 
 # Additional heavy content exclusions to reduce LFS footprint
 # Textures and large reference content can be re-sourced or packed separately
 Content/Textures/**
 # Project demo/reference maps are bulky; exclude maps from VCS (keep in external storage)
-Content/Maps/**
+# Content/Maps/**  # Re-enabled: maps are now tracked
+!Content/Maps/
+!Content/Maps/**
 # Exclude reference asset packs inside Assets
 Content/Assets/Ref/**
 

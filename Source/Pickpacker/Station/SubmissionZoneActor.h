@@ -13,7 +13,7 @@ class USceneComponent;
  * Detects parcels that reach the zone and notifies the game mode.
  */
 UCLASS(BlueprintType, Blueprintable)
-class BLASTER_API ASubmissionZoneActor : public AActor
+class PICKPACKER_API ASubmissionZoneActor : public AActor
 {
 	GENERATED_BODY()
 

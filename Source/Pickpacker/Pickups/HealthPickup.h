@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AHealthPickup : public APickup
+class PICKPACKER_API AHealthPickup : public APickup
 {
 	GENERATED_BODY()
 public:

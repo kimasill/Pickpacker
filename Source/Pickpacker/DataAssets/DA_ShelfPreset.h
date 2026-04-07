@@ -9,7 +9,7 @@
  * Defines expected items per shelf slot.
  */
 USTRUCT(BlueprintType)
-struct BLASTER_API FShelfSlotPreset
+struct PICKPACKER_API FShelfSlotPreset
 {
 	GENERATED_BODY()
 
@@ -33,7 +33,7 @@ struct BLASTER_API FShelfSlotPreset
  * Data asset describing shelf slot presets.
  */
 UCLASS(BlueprintType)
-class BLASTER_API UDA_ShelfPreset : public UDataAsset
+class PICKPACKER_API UDA_ShelfPreset : public UDataAsset
 {
 	GENERATED_BODY()
 

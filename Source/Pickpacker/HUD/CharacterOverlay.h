@@ -11,7 +11,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API UCharacterOverlay : public UUserWidget
+class PICKPACKER_API UCharacterOverlay : public UUserWidget
 {
 	GENERATED_BODY()
 public:

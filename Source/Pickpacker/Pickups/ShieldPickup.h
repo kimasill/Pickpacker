@@ -10,7 +10,7 @@
  * 
  */
 UCLASS()
-class BLASTER_API AShieldPickup : public APickup
+class PICKPACKER_API AShieldPickup : public APickup
 {
 	GENERATED_BODY()
 protected:

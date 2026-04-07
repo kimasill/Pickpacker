@@ -2,8 +2,8 @@
 
 
 #include "HealthPickup.h"
-#include "Blaster/Character/BlasterCharacter.h"
-#include "Blaster/BlasterComponents/BuffComponent.h"
+#include "Character/BlasterCharacter.h"
+#include "BlasterComponents/BuffComponent.h"
 
 AHealthPickup::AHealthPickup()
 {

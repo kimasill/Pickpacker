@@ -13,7 +13,7 @@ class UBlackboardData;
  * Pickpacker 공통 AI 컨트롤러 베이스 — CrowdFollowing + 동일한 BT/BB 초기화 경로.
  */
 UCLASS(Abstract)
-class BLASTER_API APPAIControllerBase : public AAIController
+class PICKPACKER_API APPAIControllerBase : public AAIController
 {
 	GENERATED_BODY()
 
