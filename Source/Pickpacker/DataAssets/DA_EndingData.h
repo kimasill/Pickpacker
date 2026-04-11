@@ -12,6 +12,8 @@ enum class EEndingType : uint8
 {
     Ending_Bad UMETA(DisplayName = "Bad"),
     Ending_Normal UMETA(DisplayName = "Normal"),
+    Ending_Good UMETA(DisplayName = "Good"),
+    Ending_True UMETA(DisplayName = "True"),
     Ending_Fail UMETA(DisplayName = "Fail")
 };
 
@@ -51,6 +53,18 @@ public:
 	/** 엔딩 메시지 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
 	FText EndingMessage;
+
+	/** 최소 요구 페르소나 티어 (None = 제한 없음) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending|Persona")
+	int32 MinPersonaTier = -1;
+
+	/** 최대 페르소나 티어 (-1 = 제한 없음, 예: Bad 엔딩은 0~1 구간) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending|Persona")
+	int32 MaxPersonaTier = -1;
+
+	/** 엔딩 평가 우선순위 (높을수록 먼저 평가, 동일 시 배열 순서) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
+	int32 EvaluationPriority = 0;
 };
 
 

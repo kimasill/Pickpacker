@@ -108,6 +108,17 @@ int32 UEscapeProgressComponent::GetWorldFlag(const FGameplayTag& Flag) const
 	return 0;
 }
 
+bool UEscapeProgressComponent::IsWorldFlagAtLeast(const FGameplayTag& Flag, int32 MinValue) const
+{
+	return GetWorldFlag(Flag) >= MinValue;
+}
+
+bool UEscapeProgressComponent::IsWorldFlagInRange(const FGameplayTag& Flag, int32 MinValue, int32 MaxValue) const
+{
+	const int32 Value = GetWorldFlag(Flag);
+	return (MinValue < 0 || Value >= MinValue) && (MaxValue < 0 || Value <= MaxValue);
+}
+
 void UEscapeProgressComponent::AddAuthorizedPlayer(APlayerState* PlayerState)
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority() || !PlayerState)
@@ -155,7 +166,13 @@ void UEscapeProgressComponent::EvaluateEndings()
 		return;
 	}
 
-	for (const UDA_EndingData* EndingData : EndingDataAssets)
+	// 우선순위 정렬된 배열 생성
+	TArray<TObjectPtr<UDA_EndingData>> SortedEndings = EndingDataAssets;
+	SortedEndings.Sort([](const UDA_EndingData& A, const UDA_EndingData& B) {
+		return A.EvaluationPriority > B.EvaluationPriority;
+	});
+
+	for (const UDA_EndingData* EndingData : SortedEndings)
 	{
 		if (!EndingData)
 		{
@@ -177,6 +194,7 @@ bool UEscapeProgressComponent::IsEndingConditionMet(const UDA_EndingData* Ending
 		return false;
 	}
 
+	// 필수 월드 플래그 체크
 	for (const FGameplayTag& Flag : EndingData->RequiredWorldFlags)
 	{
 		const int32 Value = GetWorldFlag(Flag);
@@ -186,9 +204,20 @@ bool UEscapeProgressComponent::IsEndingConditionMet(const UDA_EndingData* Ending
 		}
 	}
 
+	// 인증 플레이어 수 체크
 	if (EndingData->RequiredAuthorizedPlayers > 0 && AuthorizedPlayerCount < EndingData->RequiredAuthorizedPlayers)
 	{
 		return false;
+	}
+
+	// 페르소나 티어 체크 (WorldFlag.Persona 태그 사용 가정)
+	const FGameplayTag PersonaTag = FGameplayTag::RequestGameplayTag(FName("WorldFlag.Persona"), false);
+	if (PersonaTag.IsValid())
+	{
+		if (!IsWorldFlagInRange(PersonaTag, EndingData->MinPersonaTier, EndingData->MaxPersonaTier))
+		{
+			return false;
+		}
 	}
 
 	return true;

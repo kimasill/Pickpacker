@@ -192,6 +192,29 @@ struct PICKPACKER_API FLootTradeEntry
 };
 
 // ============================================================
+// NPC Persona Rule — defines how interacting affects persona
+// ============================================================
+
+/** Rule for how an NPC interaction changes persona value */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FNPCPersonaRule
+{
+	GENERATED_BODY()
+
+	/** Item tag the player must give/use to trigger this rule (empty = any interaction) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Persona")
+	FGameplayTag RequiredItemTag;
+
+	/** Delta to apply to persona (positive = increase, negative = decrease) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Persona")
+	float PersonaDelta = 0.0f;
+
+	/** Description for debug/design */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Persona")
+	FText RuleDescription;
+};
+
+// ============================================================
 // NPC Profile (Data-driven NPC configuration)
 // ============================================================
 
@@ -247,6 +270,10 @@ struct PICKPACKER_API FNPCProfile
 	/** World flag that changes this NPC to Hostile */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Narrative")
 	FGameplayTag HostileFlag;
+
+	/** Persona rules — how interactions with this NPC affect persona */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Persona")
+	TArray<FNPCPersonaRule> PersonaRules;
 };
 
 // ============================================================

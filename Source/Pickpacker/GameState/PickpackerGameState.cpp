@@ -23,6 +23,7 @@ APickpackerGameState::APickpackerGameState()
 	LastReplicatedTeamCredits = 0;
 
 	EscapeProgressComponent = CreateDefaultSubobject<UEscapeProgressComponent>(TEXT("EscapeProgressComponent"));
+	TrainTravelComponent = CreateDefaultSubobject<UTrainTravelComponent>(TEXT("TrainTravelComponent"));
 }
 
 void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

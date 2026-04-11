@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "PickpackerTypes/CoreLoopTypes.h"
 
 class ULevelSequence;
 class UUserWidget;
@@ -116,6 +117,20 @@ public:
 	/** 로비 복귀 보장 (클라이언트에서 로비가 아니면 접속 재시도) */
 	UFUNCTION(Client, Reliable)
 	void ClientEnsureLobbyTravel(const FString& HostAddress, const FString& LobbyPath);
+
+	// --- 열차 목적지 선택 ---
+
+	/** 클라이언트 → 서버: 목적지 선택 요청 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Train")
+	void ServerSelectTrainDestination(FName DestinationId);
+
+	/** 서버 → 클라이언트: 목적지 선택 UI 표시 */
+	UFUNCTION(Client, Reliable, Category = "Train")
+	void ClientOpenDestinationSelectUI();
+
+	/** 블루프린트에서 목적지 선택 UI 구현 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Train")
+	void BP_OpenDestinationSelectUI();
 
 	UFUNCTION(BlueprintCallable, Category = "Loading")
 	void ShowLoadingScreen();

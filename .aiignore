@@ -1,0 +1,36 @@
+# Unreal Engine - Binary & Generated
+Saved/
+Intermediate/
+DerivedDataCache/
+Binaries/
+Build/
+*.uasset
+*.umap
+*.upk
+*.pdb
+*.obj
+*.dll
+*.exe
+*.lib
+*.exp
+
+# Visual Studio / Rider
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Steam
+steam_appid.txt
+
+# Large media
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tga
+*.wav
+*.mp3
+*.ogg
+*.fbx
+*.blend

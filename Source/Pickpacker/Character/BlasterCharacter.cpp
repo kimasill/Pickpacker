@@ -30,6 +30,7 @@
 #include "Components/InteractionComponent.h"
 #include "Components/CarryIKComponent.h"
 #include "Components/PlayerInventoryComponent.h"
+#include "Components/PersonaComponent.h"
 #include "Library/PickpackerSuspicionLibrary.h"
 #include "Subsystem/SuspicionManagerSubsystem.h"
 #include "GameState/LobbyGameState.h"
@@ -93,6 +94,7 @@ ABlasterCharacter::ABlasterCharacter()
 	
 	CarryIKComponent = CreateDefaultSubobject<UCarryIKComponent>(TEXT("CarryIKComponent"));
 	PlayerInventoryComponent = CreateDefaultSubobject<UPlayerInventoryComponent>(TEXT("PlayerInventoryComponent"));
+	PersonaComponent = CreateDefaultSubobject<UPersonaComponent>(TEXT("PersonaComponent"));
 
 	// Shadow-only head proxy (hidden, but casts shadow)
 	HeadShadowProxy = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("HeadShadowProxy"));

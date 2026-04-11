@@ -8,6 +8,7 @@
 #include "PickpackerTypes/CoreLoopTypes.h"
 #include "DataAssets/DA_LevelVariant.h"
 #include "Components/EscapeProgressComponent.h"
+#include "Components/TrainTravelComponent.h"
 #include "PickpackerGameState.generated.h"
 
 class UAnchorRuntimeSubsystem;
@@ -43,6 +44,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Ending")
 	UEscapeProgressComponent* GetEscapeProgressComponent() const { return EscapeProgressComponent; }
+
+	/** 열차 이동 관리 컴포넌트 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Train")
+	UTrainTravelComponent* GetTrainTravelComponent() const { return TrainTravelComponent; }
 
 	/**
 	 * Set the level variant data (Server Only)
@@ -328,6 +333,10 @@ private:
 	/** 엔딩/월드 진행도 관리 컴포넌트 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Ending", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UEscapeProgressComponent> EscapeProgressComponent;
+
+	/** 열차 이동 관리 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Train", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTrainTravelComponent> TrainTravelComponent;
 
 	/** 게임 시간 시스템 변수 */
 	

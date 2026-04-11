@@ -38,6 +38,10 @@
 #include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "UObject/UObjectGlobals.h"
+#include "GameState/PickpackerGameState.h"
+#include "Components/TrainTravelComponent.h"
+#include "DataAssets/DA_TrainDestinationData.h"
+#include "Subsystem/CoreLoopSubsystem.h"
 
 namespace
 {
@@ -1524,4 +1528,62 @@ TArray<AActor*> ABlasterPlayerController::GetSpectateTargets() const
 	}
 
 	return Targets;
+}
+
+// =========================================================================
+// Train Destination Selection
+// =========================================================================
+
+void ABlasterPlayerController::ServerSelectTrainDestination_Implementation(FName DestinationId)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APickpackerGameState* GS = Cast<APickpackerGameState>(World->GetGameState());
+	if (!GS)
+	{
+		return;
+	}
+
+	UTrainTravelComponent* TrainTravel = GS->GetTrainTravelComponent();
+	if (!TrainTravel)
+	{
+		return;
+	}
+
+	// 이미 목적지가 선택된 경우 무시
+	if (TrainTravel->IsDestinationSelected())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerController] Destination already selected, ignoring request"));
+		return;
+	}
+
+	// CoreLoopSubsystem에서 등록된 목적지 검색
+	UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>();
+	if (!CoreLoop)
+	{
+		return;
+	}
+
+	TArray<FTrainDestination> Available = CoreLoop->GetAvailableDestinations();
+	for (const FTrainDestination& Dest : Available)
+	{
+		if (Dest.DestinationId == DestinationId)
+		{
+			TrainTravel->SelectDestination(Dest);
+			UE_LOG(LogTemp, Log, TEXT("[BlasterPlayerController] Player %s selected destination: %s"),
+				*GetName(), *DestinationId.ToString());
+			return;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerController] Destination %s not found or not available"), *DestinationId.ToString());
+}
+
+void ABlasterPlayerController::ClientOpenDestinationSelectUI_Implementation()
+{
+	BP_OpenDestinationSelectUI();
 }

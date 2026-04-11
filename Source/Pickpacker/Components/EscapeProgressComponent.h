@@ -58,6 +58,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
 	int32 GetWorldFlag(const FGameplayTag& Flag) const;
 
+	/** 월드 플래그 존재 여부 및 최소값 확인 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
+	bool IsWorldFlagAtLeast(const FGameplayTag& Flag, int32 MinValue) const;
+
+	/** 월드 플래그가 범위 내인지 확인 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
+	bool IsWorldFlagInRange(const FGameplayTag& Flag, int32 MinValue, int32 MaxValue) const;
+
 	/** 인증 플레이어 추가 (중복 방지) */
 	UFUNCTION(BlueprintCallable, Category = "EscapeProgress")
 	void AddAuthorizedPlayer(APlayerState* PlayerState);

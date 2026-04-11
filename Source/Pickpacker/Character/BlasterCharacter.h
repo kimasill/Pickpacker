@@ -413,6 +413,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
 	class UPlayerInventoryComponent* PlayerInventoryComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Persona")
+	class UPersonaComponent* PersonaComponent;
+
 	/** 현재 의심 행동 상태 */
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentSuspiciousBehavior, BlueprintReadOnly, Category = "Suspicion")
 	ESuspiciousBehavior CurrentSuspiciousBehavior = ESuspiciousBehavior::None;

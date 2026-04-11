@@ -1,0 +1,6 @@
+{
+  "name": "Pickpacker MCP",
+  "description": "Pickpacker 프로젝트 외부 툴 연동 설정",
+  "version": "1.0.0",
+  "tools": []
+}

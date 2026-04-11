@@ -39,7 +39,8 @@ public class Pickpacker : ModuleRules
 			Path.Combine(ModuleDirectory, "Interaction"),
 			Path.Combine(ModuleDirectory, "Interfaces"),
 			Path.Combine(ModuleDirectory, "NPC"),
-			Path.Combine(ModuleDirectory, "DataAssets")
+			Path.Combine(ModuleDirectory, "DataAssets"),
+			Path.Combine(ModuleDirectory, "Components/Persona")
 		});
 	}
 }
