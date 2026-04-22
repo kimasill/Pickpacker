@@ -1,0 +1,80 @@
+name: Create Linear Issue
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Linear issue title
+        required: true
+        type: string
+      description:
+        description: Linear issue description
+        required: false
+        type: string
+      team_id:
+        description: Optional Linear team UUID override
+        required: false
+        type: string
+
+jobs:
+  create-linear-issue:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create issue in Linear
+        id: create
+        shell: pwsh
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_WORKSPACE_URL: ${{ vars.LINEAR_WORKSPACE_URL }}
+          LINEAR_TITLE: ${{ inputs.title }}
+          LINEAR_DESCRIPTION: ${{ inputs.description }}
+          LINEAR_TEAM_ID_INPUT: ${{ inputs.team_id }}
+          LINEAR_TEAM_ID_DEFAULT: ${{ vars.LINEAR_TEAM_ID }}
+        run: |
+          $teamId = if (-not [string]::IsNullOrWhiteSpace($env:LINEAR_TEAM_ID_INPUT)) {
+            $env:LINEAR_TEAM_ID_INPUT
+          } else {
+            $env:LINEAR_TEAM_ID_DEFAULT
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:LINEAR_API_KEY)) {
+            throw "GitHub secret LINEAR_API_KEY is not configured."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($teamId)) {
+            throw "Provide workflow input team_id or configure repository variable LINEAR_TEAM_ID."
+          }
+
+          $json = & .\Scripts\Create-LinearIssue.ps1 `
+            -Title $env:LINEAR_TITLE `
+            -Description $env:LINEAR_DESCRIPTION `
+            -TeamId $teamId `
+            -ApiKey $env:LINEAR_API_KEY `
+            -WorkspaceUrl $env:LINEAR_WORKSPACE_URL `
+            -OutputJson
+
+          $result = $json | ConvertFrom-Json
+
+          "identifier=$($result.identifier)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "branch_name=$($result.branchName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          if ($result.issueUrl) {
+            "issue_url=$($result.issueUrl)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+          @"
+          ## Linear issue created
+
+          - Identifier: $($result.identifier)
+          - Title: $($result.title)
+          - Suggested branch: `"$($result.branchName)`"
+          - Issue URL: $($result.issueUrl)
+
+          Local branch command:
+          `git checkout -b $($result.branchName)`
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

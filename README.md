@@ -17,6 +17,10 @@
 
 > UE5 기반 협동 멀티플레이 **Pickpacker** 소스 레포지토리입니다. 서버 권한·복제를 축으로 한 핵심 구현과 코드 위치를 아래에 개조식으로 정리합니다.
 
+### Workflow Integration
+
+- Linear + GitHub 최소 연동 가이드: [Docs/Linear_GitHub_Minimal_Integration.md](Docs/Linear_GitHub_Minimal_Integration.md)
+
 ### Overview
 
 | 항목 | 내용 |

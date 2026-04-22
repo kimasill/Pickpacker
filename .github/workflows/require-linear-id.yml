@@ -1,0 +1,34 @@
+name: Require Linear Issue ID
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+
+jobs:
+  validate-linear-link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure the PR references a Linear issue
+        shell: pwsh
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          $pattern = "(?i)\b[A-Z][A-Z0-9]*-\d+\b"
+
+          if (
+            $env:BRANCH_NAME -match $pattern -or
+            $env:PR_TITLE -match $pattern -or
+            $env:PR_BODY -match $pattern
+          ) {
+            Write-Host "Linear issue ID detected. Branch='$env:BRANCH_NAME'"
+            exit 0
+          }
+
+          Write-Error "Missing Linear issue ID. Put the issue ID in the branch name, PR title, or PR body. Example: PP-123-fix-order-tracker"
