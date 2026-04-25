@@ -21,9 +21,11 @@
 #include "HUD/ReturnToMainMenu.h"
 #include "BlasterTypes/Announcement.h"
 #include "UI/InventoryWidget.h"
+#include "UI/TrainDestinationSelectionWidget.h"
 #include "Parcel/ParcelActor.h"
 #include "LevelSequence.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
@@ -32,6 +34,7 @@
 #include "Engine/NetDriver.h"
 #include "Engine/NetConnection.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/GameMode.h"
 #include "TimerManager.h"
 #include "GameFramework/GameStateBase.h"
 #include "Misc/FileHelper.h"
@@ -41,7 +44,13 @@
 #include "GameState/PickpackerGameState.h"
 #include "Components/TrainTravelComponent.h"
 #include "DataAssets/DA_TrainDestinationData.h"
+#include "Components/NPCDialogueComponent.h"
+#include "NPC/ModularNPCActor.h"
 #include "Subsystem/CoreLoopSubsystem.h"
+#include "UI/NPCDialogueWidget.h"
+#include "InputAction.h"
+#include "PickpackerAssetPaths.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
@@ -166,14 +175,74 @@ void ABlasterPlayerController::ClientElimAnnouncement_Implementation(APlayerStat
 }
 ABlasterPlayerController::ABlasterPlayerController()
 {
+	static ConstructorHelpers::FObjectFinder<UInputAction> QuitActionRef(
+		PickpackerAssetPaths::Blueprints::InputOpenPauseMenu);
+	if (QuitActionRef.Succeeded())
+	{
+		QuitAction = QuitActionRef.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction> LobbyPanelActionRef(
+		PickpackerAssetPaths::Blueprints::InputOpenLobbyMenu);
+	if (LobbyPanelActionRef.Succeeded())
+	{
+		LobbyPanelAction = LobbyPanelActionRef.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction> PanelActionRef(
+		PickpackerAssetPaths::Blueprints::InputOpenPanel);
+	if (PanelActionRef.Succeeded())
+	{
+		PanelAction = PanelActionRef.Object;
+	}
+
+	static ConstructorHelpers::FClassFinder<UUserWidget> LoadingScreenWidgetClassRef(
+		PickpackerAssetPaths::Blueprints::WidgetLoadingScreen);
+	if (LoadingScreenWidgetClassRef.Succeeded())
+	{
+		LoadingScreenWidgetClass = LoadingScreenWidgetClassRef.Class;
+	}
+
+	static ConstructorHelpers::FClassFinder<UUserWidget> LobbySettingsWidgetClassRef(
+		PickpackerAssetPaths::Blueprints::WidgetLobbyMenu);
+	if (LobbySettingsWidgetClassRef.Succeeded())
+	{
+		LobbySettingsWidgetClass = LobbySettingsWidgetClassRef.Class;
+	}
+
 	LoadingTextMap.Add(TEXT("Booting"), TEXT("시스템 부팅 중.."));
 	LoadingTextMap.Add(TEXT("Ready"), TEXT("곧 작동을 시작합니다"));
 	LoadingTextMap.Add(TEXT("Error"), TEXT("시스템 오류 -"));
 }
 
+void ABlasterPlayerController::EnsureDefaultAssetReferences()
+{
+	if (!QuitAction)
+	{
+		QuitAction = LoadObject<UInputAction>(nullptr, PickpackerAssetPaths::Blueprints::InputOpenPauseMenu);
+	}
+	if (!LobbyPanelAction)
+	{
+		LobbyPanelAction = LoadObject<UInputAction>(nullptr, PickpackerAssetPaths::Blueprints::InputOpenLobbyMenu);
+	}
+	if (!PanelAction)
+	{
+		PanelAction = LoadObject<UInputAction>(nullptr, PickpackerAssetPaths::Blueprints::InputOpenPanel);
+	}
+	if (!LoadingScreenWidgetClass)
+	{
+		LoadingScreenWidgetClass = LoadClass<UUserWidget>(nullptr, PickpackerAssetPaths::Blueprints::WidgetLoadingScreenClass);
+	}
+	if (!LobbySettingsWidgetClass)
+	{
+		LobbySettingsWidgetClass = LoadClass<UUserWidget>(nullptr, PickpackerAssetPaths::Blueprints::WidgetLobbyMenuClass);
+	}
+}
+
 void ABlasterPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+	EnsureDefaultAssetReferences();
 
 	if (!bTravelDelegatesBound && GEngine)
 	{
@@ -212,13 +281,90 @@ void ABlasterPlayerController::BeginPlay()
 
 	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
 	ServerCheckMatchState();
+	EnsureGameplayHUD();
 
 	// 패키징 빌드 클라이언트: BeginPlay 시점에 IsLocalController 준비 안 됐을 수 있음 → 0.5초 후 블루프린트 HUD 재생성 시도
 	if (IsLocalController() && GetWorld())
 	{
 		FTimerHandle DeferredHUDTimer;
 		GetWorld()->GetTimerManager().SetTimer(DeferredHUDTimer, this, &ABlasterPlayerController::TriggerDeferredHUDCreation, 0.5f, false);
+		EnsureTrainDestinationSelectionBinding();
 	}
+}
+
+void ABlasterPlayerController::EnsureGameplayHUD()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	if (BlasterHUD == nullptr)
+	{
+		return;
+	}
+
+	APawn* CurrentPawn = GetPawn();
+	const bool bHasGameplayPawn = CurrentPawn && !CurrentPawn->GetClass()->GetName().Contains(TEXT("LobbyCharacter"));
+
+	if (bHasGameplayPawn)
+	{
+		const bool bHasPickpackerHUD = EnsurePickpackerHUDWidget();
+		if (bHasPickpackerHUD && BlasterHUD->CharacterOverlay)
+		{
+			BlasterHUD->CharacterOverlay->RemoveFromParent();
+			BlasterHUD->CharacterOverlay = nullptr;
+		}
+		if (!bHasPickpackerHUD && BlasterHUD->CharacterOverlay == nullptr)
+		{
+			BlasterHUD->AddCharacterOverlay();
+		}
+	}
+
+	if (bHasGameplayPawn && BlasterHUD->Announcement)
+	{
+		BlasterHUD->Announcement->SetVisibility(ESlateVisibility::Hidden);
+	}
+	else if (!bHasGameplayPawn && MatchState == MatchState::WaitingToStart && BlasterHUD->Announcement == nullptr)
+	{
+		BlasterHUD->AddAnnouncement();
+	}
+}
+
+bool ABlasterPlayerController::EnsurePickpackerHUDWidget()
+{
+	if (!IsLocalController())
+	{
+		return false;
+	}
+
+	UClass* PickpackerHUDClass = LoadClass<UUserWidget>(nullptr, PickpackerAssetPaths::Blueprints::WidgetPickpackerHUDClass);
+	if (!PickpackerHUDClass)
+	{
+		return false;
+	}
+
+	TArray<UUserWidget*> ExistingWidgets;
+	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this, ExistingWidgets, PickpackerHUDClass, false);
+	UUserWidget* PickpackerHUDWidget = ExistingWidgets.Num() > 0 ? ExistingWidgets[0] : nullptr;
+
+	if (!IsValid(PickpackerHUDWidget))
+	{
+		PickpackerHUDWidget = CreateWidget<UUserWidget>(this, PickpackerHUDClass);
+		if (PickpackerHUDWidget)
+		{
+			PickpackerHUDWidget->AddToViewport();
+		}
+	}
+
+	if (PickpackerHUDWidget)
+	{
+		PickpackerHUDWidget->SetVisibility(ESlateVisibility::Visible);
+		return true;
+	}
+
+	return false;
 }
 
 void ABlasterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -235,6 +381,8 @@ void ABlasterPlayerController::TriggerDeferredHUDCreation()
 	{
 		ProcessEvent(Func, nullptr);
 	}
+
+	EnsureGameplayHUD();
 }
 
 void ABlasterPlayerController::HideTeamScores()
@@ -438,16 +586,31 @@ void ABlasterPlayerController::StopHighPingWarning()
 
 void ABlasterPlayerController::ServerCheckMatchState_Implementation()
 {
-	ABlasterGameMode* GameMode = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this));
-	if (GameMode)
+	float Warmup = 0.f;
+	float Match = 0.f;
+	float Cooldown = 0.f;
+	float StartingTime = 0.f;
+	FName CurrentMatchState = MatchState::WaitingToStart;
+
+	if (ABlasterGameMode* BlasterGameModeInstance = Cast<ABlasterGameMode>(UGameplayStatics::GetGameMode(this)))
 	{
-		WarmupTime = GameMode->WarmupTime;
-		MatchTime = GameMode->MatchTime;
-		CooldownTime = GameMode->CooldownTime;
-		LevelStartingTime = GameMode->LevelStartingTime;
-		MatchState = GameMode->GetMatchState();
-		ClientJoinMidgame(MatchState, WarmupTime, MatchTime, CooldownTime, LevelStartingTime);
+		Warmup = BlasterGameModeInstance->WarmupTime;
+		Match = BlasterGameModeInstance->MatchTime;
+		Cooldown = BlasterGameModeInstance->CooldownTime;
+		StartingTime = BlasterGameModeInstance->LevelStartingTime;
+		CurrentMatchState = BlasterGameModeInstance->GetMatchState();
 	}
+	else if (AGameMode* GenericGameMode = Cast<AGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		CurrentMatchState = GenericGameMode->GetMatchState();
+	}
+
+	WarmupTime = Warmup;
+	MatchTime = Match;
+	CooldownTime = Cooldown;
+	LevelStartingTime = StartingTime;
+	MatchState = CurrentMatchState;
+	ClientJoinMidgame(CurrentMatchState, Warmup, Match, Cooldown, StartingTime);
 }
 
 void ABlasterPlayerController::ClientJoinMidgame_Implementation(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime)
@@ -462,6 +625,7 @@ void ABlasterPlayerController::ClientJoinMidgame_Implementation(FName StateOfMat
 	{
 		BlasterHUD->AddAnnouncement();
 	}
+	EnsureGameplayHUD();
 }
 
 void ABlasterPlayerController::OnPossess(APawn* InPawn)
@@ -486,6 +650,7 @@ void ABlasterPlayerController::OnPossess(APawn* InPawn)
 			}
 		}
 	}
+	EnsureGameplayHUD();
 	const int32 MoveModeValue = (BlasterCharacter && BlasterCharacter->GetCharacterMovement())
 		? static_cast<int32>(BlasterCharacter->GetCharacterMovement()->MovementMode)
 		: -1;
@@ -503,6 +668,11 @@ void ABlasterPlayerController::OnPossess(APawn* InPawn)
 		*FString::FromInt(NetModeValue),
 		FDateTime::UtcNow().ToUnixTimestamp() * 1000));
 	// #endregion
+}
+
+void ABlasterPlayerController::OnOpenLobbyUI()
+{
+	ToggleLobbySettingsPanel();
 }
 
 void ABlasterPlayerController::SetHUDHealth(float Health, float MaxHealth)
@@ -747,6 +917,7 @@ void ABlasterPlayerController::PollInit()
 void ABlasterPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+	EnsureDefaultAssetReferences();
 	
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
@@ -795,6 +966,7 @@ void ABlasterPlayerController::ReceivedPlayer()
 	if (IsLocalController())
 	{
 		ServerRequestServerTime(GetWorld()->GetTimeSeconds());
+		EnsureTrainDestinationSelectionBinding();
 	}
 }
 
@@ -1044,6 +1216,8 @@ void ABlasterPlayerController::PostSeamlessTravel()
 	if (IsLocalController())
 	{
 		OnPostSeamlessTravel_RecreateHUD();
+		EnsureTrainDestinationSelectionBinding();
+		RefreshTrainDestinationSelectionWidget();
 	}
 }
 
@@ -1176,6 +1350,100 @@ void ABlasterPlayerController::SetLoadingTextKey(FName TextKey)
 	}
 }
 
+void ABlasterPlayerController::ClientShowNPCDialogue_Implementation(AActor* DialogueActor, const FDialogueUIState& DialogueState)
+{
+	if (!IsLocalController() || !DialogueActor)
+	{
+		return;
+	}
+
+	ActiveDialogueActor = DialogueActor;
+	EnsureNPCDialogueWidget();
+	if (!NPCDialogueWidget)
+	{
+		return;
+	}
+
+	NPCDialogueWidget->ApplyDialogueState(DialogueState);
+	SetNPCDialogueVisible(true);
+}
+
+void ABlasterPlayerController::ClientCloseNPCDialogue_Implementation(AActor* DialogueActor)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (DialogueActor && ActiveDialogueActor && ActiveDialogueActor != DialogueActor)
+	{
+		return;
+	}
+
+	ActiveDialogueActor = nullptr;
+	SetNPCDialogueVisible(false);
+}
+
+void ABlasterPlayerController::ServerSelectNPCDialogueChoice_Implementation(AActor* DialogueActor, int32 ChoiceIndex)
+{
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+	if (!BlasterCharacter || !DialogueActor)
+	{
+		return;
+	}
+
+	if (AModularNPCActor* NPCActor = Cast<AModularNPCActor>(DialogueActor))
+	{
+		NPCActor->SelectDialogueChoiceForInteractor(BlasterCharacter, ChoiceIndex);
+		return;
+	}
+
+	if (UNPCDialogueComponent* DialogueComponent = DialogueActor->FindComponentByClass<UNPCDialogueComponent>())
+	{
+		DialogueComponent->SelectChoiceForInteractor(BlasterCharacter, ChoiceIndex);
+	}
+}
+
+void ABlasterPlayerController::ServerAdvanceNPCDialogue_Implementation(AActor* DialogueActor)
+{
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+	if (!BlasterCharacter || !DialogueActor)
+	{
+		return;
+	}
+
+	if (AModularNPCActor* NPCActor = Cast<AModularNPCActor>(DialogueActor))
+	{
+		NPCActor->AdvanceDialogueForInteractor(BlasterCharacter);
+		return;
+	}
+
+	if (UNPCDialogueComponent* DialogueComponent = DialogueActor->FindComponentByClass<UNPCDialogueComponent>())
+	{
+		DialogueComponent->AdvanceDialogueForInteractor(BlasterCharacter);
+	}
+}
+
+void ABlasterPlayerController::ServerCloseNPCDialogue_Implementation(AActor* DialogueActor)
+{
+	ABlasterCharacter* BlasterCharacter = Cast<ABlasterCharacter>(GetPawn());
+	if (!BlasterCharacter || !DialogueActor)
+	{
+		return;
+	}
+
+	if (AModularNPCActor* NPCActor = Cast<AModularNPCActor>(DialogueActor))
+	{
+		NPCActor->EndDialogueForInteractor(BlasterCharacter);
+		return;
+	}
+
+	if (UNPCDialogueComponent* DialogueComponent = DialogueActor->FindComponentByClass<UNPCDialogueComponent>())
+	{
+		DialogueComponent->EndDialogueForInteractor(BlasterCharacter);
+	}
+}
+
 void ABlasterPlayerController::ShowLoadingScreen()
 {
 	if (!IsLocalController())
@@ -1230,6 +1498,20 @@ void ABlasterPlayerController::HideLoadingScreen()
 	if (LoadingScreenWidget && LoadingScreenWidget->IsInViewport())
 	{
 		LoadingScreenWidget->RemoveFromParent();
+	}
+
+	if (NPCDialogueWidget && NPCDialogueWidget->IsInViewport())
+	{
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetWidgetToFocus(NPCDialogueWidget->TakeWidget());
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		return;
 	}
 
 	SetIgnoreMoveInput(false);
@@ -1322,6 +1604,286 @@ void ABlasterPlayerController::UpdateLoadingScreenText()
 		FSetLoadingTextParams Params;
 		Params.LoadingText = LoadingText;
 		LoadingScreenWidget->ProcessEvent(Func, &Params);
+	}
+}
+
+UTrainTravelComponent* ABlasterPlayerController::GetTrainTravelComponent() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	const APickpackerGameState* PickpackerGameState = Cast<APickpackerGameState>(World->GetGameState());
+	return PickpackerGameState ? PickpackerGameState->GetTrainTravelComponent() : nullptr;
+}
+
+void ABlasterPlayerController::EnsureNPCDialogueWidget()
+{
+	if (!IsLocalController() || NPCDialogueWidget)
+	{
+		return;
+	}
+
+	TSubclassOf<UNPCDialogueWidget> WidgetClass = NPCDialogueWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = LoadClass<UNPCDialogueWidget>(nullptr, PickpackerAssetPaths::Blueprints::WidgetNPCDialogueClass);
+	}
+	if (!WidgetClass)
+	{
+		WidgetClass = UNPCDialogueWidget::StaticClass();
+	}
+
+	NPCDialogueWidget = CreateWidget<UNPCDialogueWidget>(this, WidgetClass);
+	if (!NPCDialogueWidget)
+	{
+		return;
+	}
+
+	NPCDialogueWidget->OnChoiceSelected.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueChoiceSelected);
+	NPCDialogueWidget->OnAdvanceRequested.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueAdvanceRequested);
+	NPCDialogueWidget->OnClosedRequested.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueClosedRequested);
+}
+
+void ABlasterPlayerController::SetNPCDialogueVisible(bool bVisible)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	EnsureNPCDialogueWidget();
+	if (!NPCDialogueWidget)
+	{
+		return;
+	}
+
+	if (bVisible)
+	{
+		if (!NPCDialogueWidget->IsInViewport())
+		{
+			NPCDialogueWidget->AddToViewport(300);
+		}
+
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(NPCDialogueWidget->TakeWidget());
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		bEnableClickEvents = true;
+		bEnableMouseOverEvents = true;
+		NPCDialogueWidget->FocusPreferredWidget();
+		return;
+	}
+
+	if (NPCDialogueWidget->IsInViewport())
+	{
+		NPCDialogueWidget->RemoveFromParent();
+	}
+
+	if (!LoadingScreenWidget || !LoadingScreenWidget->IsInViewport())
+	{
+		SetIgnoreMoveInput(false);
+		SetIgnoreLookInput(false);
+	}
+
+	if (TrainDestinationSelectionWidget && TrainDestinationSelectionWidget->IsInViewport())
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetWidgetToFocus(TrainDestinationSelectionWidget->TakeWidget());
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		return;
+	}
+
+	if (!LoadingScreenWidget || !LoadingScreenWidget->IsInViewport())
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+		bShowMouseCursor = false;
+		bEnableClickEvents = false;
+		bEnableMouseOverEvents = false;
+	}
+}
+
+void ABlasterPlayerController::HandleNPCDialogueChoiceSelected(int32 ChoiceIndex)
+{
+	if (ActiveDialogueActor)
+	{
+		ServerSelectNPCDialogueChoice(ActiveDialogueActor, ChoiceIndex);
+	}
+}
+
+void ABlasterPlayerController::HandleNPCDialogueAdvanceRequested()
+{
+	if (ActiveDialogueActor)
+	{
+		ServerAdvanceNPCDialogue(ActiveDialogueActor);
+	}
+}
+
+void ABlasterPlayerController::HandleNPCDialogueClosedRequested()
+{
+	if (ActiveDialogueActor)
+	{
+		ServerCloseNPCDialogue(ActiveDialogueActor);
+	}
+}
+
+void ABlasterPlayerController::EnsureTrainDestinationSelectionBinding()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	UTrainTravelComponent* TrainTravelComponent = GetTrainTravelComponent();
+	if (BoundTrainTravelComponent == TrainTravelComponent && TrainTravelComponent)
+	{
+		return;
+	}
+
+	if (BoundTrainTravelComponent)
+	{
+		BoundTrainTravelComponent->OnSelectionContextUpdated.RemoveDynamic(this, &ABlasterPlayerController::HandleTrainSelectionContextUpdated);
+		BoundTrainTravelComponent->OnDestinationVotesUpdated.RemoveDynamic(this, &ABlasterPlayerController::HandleTrainDestinationVotesUpdated);
+		BoundTrainTravelComponent->OnRouteSelectionResultUpdated.RemoveDynamic(this, &ABlasterPlayerController::HandleTrainRouteSelectionResultUpdated);
+	}
+
+	BoundTrainTravelComponent = TrainTravelComponent;
+	if (!BoundTrainTravelComponent)
+	{
+		return;
+	}
+
+	BoundTrainTravelComponent->OnSelectionContextUpdated.AddDynamic(this, &ABlasterPlayerController::HandleTrainSelectionContextUpdated);
+	BoundTrainTravelComponent->OnDestinationVotesUpdated.AddDynamic(this, &ABlasterPlayerController::HandleTrainDestinationVotesUpdated);
+	BoundTrainTravelComponent->OnRouteSelectionResultUpdated.AddDynamic(this, &ABlasterPlayerController::HandleTrainRouteSelectionResultUpdated);
+}
+
+void ABlasterPlayerController::EnsureTrainDestinationSelectionWidget()
+{
+	if (!IsLocalController() || TrainDestinationSelectionWidget)
+	{
+		return;
+	}
+
+	TSubclassOf<UTrainDestinationSelectionWidget> WidgetClass = TrainDestinationSelectionWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UTrainDestinationSelectionWidget::StaticClass();
+	}
+
+	TrainDestinationSelectionWidget = CreateWidget<UTrainDestinationSelectionWidget>(this, WidgetClass);
+}
+
+void ABlasterPlayerController::RefreshTrainDestinationSelectionWidget()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	EnsureTrainDestinationSelectionBinding();
+	EnsureTrainDestinationSelectionWidget();
+
+	if (!TrainDestinationSelectionWidget || !BoundTrainTravelComponent)
+	{
+		return;
+	}
+
+	TrainDestinationSelectionWidget->ApplySelectionContext(BoundTrainTravelComponent->GetSelectionContext());
+	TrainDestinationSelectionWidget->ApplyVoteStates(BoundTrainTravelComponent->GetDestinationVotes());
+	TrainDestinationSelectionWidget->ApplyRouteSelectionResult(BoundTrainTravelComponent->GetRouteSelectionResult());
+	SetTrainDestinationSelectionVisible(BoundTrainTravelComponent->GetSelectionContext().bSelectionOpen);
+}
+
+void ABlasterPlayerController::SetTrainDestinationSelectionVisible(bool bVisible)
+{
+	if (!IsLocalController() || !TrainDestinationSelectionWidget)
+	{
+		return;
+	}
+
+	if (bVisible)
+	{
+		if (!TrainDestinationSelectionWidget->IsInViewport())
+		{
+			TrainDestinationSelectionWidget->AddToViewport(200);
+		}
+
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetWidgetToFocus(TrainDestinationSelectionWidget->TakeWidget());
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		bEnableClickEvents = true;
+		bEnableMouseOverEvents = true;
+		return;
+	}
+
+	if (TrainDestinationSelectionWidget->IsInViewport())
+	{
+		TrainDestinationSelectionWidget->RemoveFromParent();
+	}
+
+	if (NPCDialogueWidget && NPCDialogueWidget->IsInViewport())
+	{
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(NPCDialogueWidget->TakeWidget());
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		bEnableClickEvents = true;
+		bEnableMouseOverEvents = true;
+		NPCDialogueWidget->FocusPreferredWidget();
+		return;
+	}
+
+	if (!LoadingScreenWidget || !LoadingScreenWidget->IsInViewport())
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+		bShowMouseCursor = false;
+		bEnableClickEvents = false;
+		bEnableMouseOverEvents = false;
+	}
+}
+
+void ABlasterPlayerController::HandleTrainSelectionContextUpdated(const FTrainSelectionContext& SelectionContext)
+{
+	EnsureTrainDestinationSelectionWidget();
+	if (TrainDestinationSelectionWidget)
+	{
+		TrainDestinationSelectionWidget->ApplySelectionContext(SelectionContext);
+	}
+	SetTrainDestinationSelectionVisible(SelectionContext.bSelectionOpen);
+}
+
+void ABlasterPlayerController::HandleTrainDestinationVotesUpdated(const TArray<FTrainDestinationVoteState>& VoteStates)
+{
+	EnsureTrainDestinationSelectionWidget();
+	if (TrainDestinationSelectionWidget)
+	{
+		TrainDestinationSelectionWidget->ApplyVoteStates(VoteStates);
+	}
+}
+
+void ABlasterPlayerController::HandleTrainRouteSelectionResultUpdated(const FRouteSelectionResult& RouteSelectionResult)
+{
+	EnsureTrainDestinationSelectionWidget();
+	if (TrainDestinationSelectionWidget)
+	{
+		TrainDestinationSelectionWidget->ApplyRouteSelectionResult(RouteSelectionResult);
 	}
 }
 
@@ -1554,36 +2116,31 @@ void ABlasterPlayerController::ServerSelectTrainDestination_Implementation(FName
 		return;
 	}
 
-	// 이미 목적지가 선택된 경우 무시
 	if (TrainTravel->IsDestinationSelected())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerController] Destination already selected, ignoring request"));
 		return;
 	}
 
-	// CoreLoopSubsystem에서 등록된 목적지 검색
-	UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>();
-	if (!CoreLoop)
+	APlayerState* LocalPlayerState = GetPlayerState<APlayerState>();
+	if (!LocalPlayerState)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerController] Missing PlayerState for train destination vote"));
 		return;
 	}
 
-	TArray<FTrainDestination> Available = CoreLoop->GetAvailableDestinations();
-	for (const FTrainDestination& Dest : Available)
-	{
-		if (Dest.DestinationId == DestinationId)
-		{
-			TrainTravel->SelectDestination(Dest);
-			UE_LOG(LogTemp, Log, TEXT("[BlasterPlayerController] Player %s selected destination: %s"),
-				*GetName(), *DestinationId.ToString());
-			return;
-		}
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("[BlasterPlayerController] Destination %s not found or not available"), *DestinationId.ToString());
+	TrainTravel->SubmitDestinationVote(LocalPlayerState, DestinationId);
+	UE_LOG(LogTemp, Log, TEXT("[BlasterPlayerController] Player %s voted for destination: %s"),
+		*GetNameSafe(LocalPlayerState), *DestinationId.ToString());
 }
 
 void ABlasterPlayerController::ClientOpenDestinationSelectUI_Implementation()
 {
-	BP_OpenDestinationSelectUI();
+	EnsureTrainDestinationSelectionBinding();
+	RefreshTrainDestinationSelectionWidget();
+
+	if (!TrainDestinationSelectionWidget)
+	{
+		BP_OpenDestinationSelectUI();
+	}
 }
