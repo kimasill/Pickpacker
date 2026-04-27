@@ -1,0 +1,25 @@
+File,Line,CurrentPath,RecommendedTarget,ChangeTiming,Notes
+Config/DefaultEngine.ini,6,/Game/Maps/GameStartupMap.GameStartupMap,/Game/Pickpacker/Maps/GameStartupMap.GameStartupMap,After Batch 05-Maps,Editor startup map
+Config/DefaultEngine.ini,8,/Game/Maps/TransitionMap.TransitionMap,/Game/Pickpacker/Maps/TransitionMap.TransitionMap,After Batch 05-Maps,Transition map
+Config/DefaultEngine.ini,15,/Game/Maps/GameStartupMap.GameStartupMap,/Game/Pickpacker/Maps/GameStartupMap.GameStartupMap,After Batch 05-Maps,Game default map
+Config/DefaultEngine.ini,16,/Game/Maps/GameStartupMap.GameStartupMap,/Game/Pickpacker/Maps/GameStartupMap.GameStartupMap,After Batch 05-Maps,Server default map
+Config/DefaultEngine.ini,17,/Game/BluePrints/GameModes/BP_PickPackerGameMode.BP_PickPackerGameMode_C,/Game/Pickpacker/Core/GameModes/BP_PickPackerGameMode.BP_PickPackerGameMode_C,After Batch 03-Blueprints,Default game mode class
+Config/DefaultEngine.ini,59,/Game/BluePrints/Data/ML_Ob_MacroLibrary,/Game/Pickpacker/Core/Data/Blueprints/ML_Ob_MacroLibrary,After Batch 03-Blueprints,Update existing redirect NewName after data blueprint migration
+Config/DefaultEngine.ini,60,/Game/BluePrints/Data/ML_A_MacroLibrary,/Game/Pickpacker/Core/Data/Blueprints/ML_A_MacroLibrary,After Batch 03-Blueprints,Update existing redirect NewName after data blueprint migration
+Config/DefaultEngine.ini,61,/Game/BluePrints/Data/BP_FunctionLibrary,/Game/Pickpacker/Core/Data/Blueprints/BP_FunctionLibrary,After Batch 03-Blueprints,Update existing redirect NewName after data blueprint migration
+Config/DefaultEngine.ini,62,/Game/BluePrints/Pawn/ThirdPersonCharacter,/Game/Pickpacker/Characters/ThirdPersonCharacter,After Batch 03-Blueprints,Update redirect target if pawn moves with character content
+Config/DefaultEngine.ini,63,/Game/BluePrints/RenderTarget/RT_DroneCamera,/Game/Pickpacker/Core/Shared/RenderTarget/RT_DroneCamera,After Batch 03-Blueprints,Keep DirectoriesToAlwaysCook aligned
+Config/DefaultEngine.ini,64,/Game/BluePrints/UI/W_Crane,/Game/Pickpacker/Core/UI/W_Crane,After Batch 03-Blueprints,Update redirect target
+Config/DefaultEngine.ini,65,/Game/BluePrints/UI/W_Drone,/Game/Pickpacker/Core/UI/W_Drone,After Batch 03-Blueprints,Update redirect target
+Config/DefaultEngine.ini,66,/Game/BluePrints/GamePlay/AC_CallAction,/Game/Pickpacker/Gameplay/Systems/AC_CallAction,After Batch 03-Blueprints,Update redirect target
+Config/DefaultEngine.ini,67,/Game/BluePrints/GamePlay/BP_RobotHend,/Game/Pickpacker/Gameplay/Systems/BP_RobotHend,After Batch 03-Blueprints,Update redirect target
+Config/DefaultEngine.ini,68,/Game/BluePrints/UI/W_HitPoint,/Game/Pickpacker/Core/UI/W_HitPoint,After Batch 03-Blueprints,Update redirect target
+Config/DefaultEngine.ini,69,/Game/BluePrints/UI/W_OutCar,/Game/Pickpacker/Core/UI/W_OutCar,After Batch 03-Blueprints,Update redirect target
+Config/DefaultGame.ini,6,/Game/EasyGameUI/EasyInputPrompts/Datas/DataTables/DT_InputsPrompts_MouseKeyboard.DT_InputsPrompts_MouseKeyboard,/Game/ThirdParty/EasyGameUI/EasyInputPrompts/Datas/DataTables/DT_InputsPrompts_MouseKeyboard.DT_InputsPrompts_MouseKeyboard,After Batch 04-ThirdParty,Input icon data table path
+Config/DefaultGame.ini,110,/Game/Maps/GameStartupMap,/Game/Pickpacker/Maps/GameStartupMap,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,111,/Game/Maps/Lobby,/Game/Pickpacker/Maps/Lobby,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,112,/Game/Maps/IndustralMap,/Game/Pickpacker/Maps/IndustralMap,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,113,/Game/Maps/ElevatorEndingMap,/Game/Pickpacker/Maps/ElevatorEndingMap,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,114,/Game/Maps/TransitionMap,/Game/Pickpacker/Maps/TransitionMap,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,115,/Game/Maps/Section/ControlRoom,/Game/Pickpacker/Maps/Section/ControlRoom,After Batch 05-Maps,MapsToCook entry
+Config/DefaultGame.ini,116,/Game/BluePrints/RenderTarget,/Game/Pickpacker/Core/Shared/RenderTarget,After Batch 03-Blueprints,DirectoriesToAlwaysCook entry

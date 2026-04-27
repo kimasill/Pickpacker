@@ -1,0 +1,486 @@
+﻿Name,NPCId,NodeIndex,SpeakerName,DialogueText,NodeRequiredWorldFlag,NodeAutoNextNodeIndex,ChoiceIndex,ChoiceText,ChoiceRequiredWorldFlag,ChoiceBlockingWorldFlag,ChoiceNextNodeIndex,OutcomeOrder,RequirementOrder,ChoiceOutcomeType,ChoiceOutcomeWorldFlag,ChoiceOutcomeIntValue,ChoiceOutcomeFloatValue,ChoiceOutcomeTagPayload,ChoiceOutcomeStringPayload,ChoiceRequirementType,ChoiceRequirementTag,ChoiceRequirementThresholdValue,ChoiceRequirementIndicatorType,ChoiceRequirementIndicatorText,ChoiceRequirementIndicatorIcon,bChoiceRequirementShowIndicatorWhenMet
+Jijibo_Gone_END,Jijibo,0,시스템,잡음만 나온다. 스피커 아래에는 작은 나사가 하나 놓여 있다. 누가 일부러 가져가지 않은 것 같다.,"(TagName=""NPC.Jijibo.Gone"")",-1,-1,,,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C00_O00,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,0,[물러난다],,,35,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C01_O00,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,1,[배터리를 내려놓는다],,,36,0,0,TakeItem,,0,0,"(TagName=""Item.Electronics.Battery"")",,HasItemTag,"(TagName=""Item.Electronics.Battery"")",1,Item,배터리 필요,,True
+Jijibo_Grudge_Root_C01_O01,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,1,[배터리를 내려놓는다],,,36,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.GrudgeSoftened"")",1,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C01_O02,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,1,[배터리를 내려놓는다],,,36,2,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C02_O00,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,2,[정보를 강제로 요구한다],,,37,0,0,SetWorldFlag,"(TagName=""Residential.AlarmBroadcast"")",1,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C02_O01,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,2,[정보를 강제로 요구한다],,,37,1,0,Custom,,0,0,,SpawnReinforcement=TinMob;Delay=8,,,0,,,,True
+Jijibo_Grudge_Root_C03_O00,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,3,[Mother AI에 신고한다],,,38,0,0,SetWorldFlag,"(TagName=""Branch.Jijibo.ReportedToMother"")",1,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C03_O01,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,3,[Mother AI에 신고한다],,,38,1,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Gone"")",1,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C04_O00,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,4,[공격한다],,,39,0,0,AttackPlayer,,0,0,,,,,0,,,,True
+Jijibo_Grudge_Root_C04_O01,Jijibo,1,지지보,"거기서 멈춰. 더 가까이 오면 방송한다.
+지난번엔 네 손이 먼저 왔어. 말보다 빨랐지.","(TagName=""NPC.Jijibo.AttackedByTeam"")",-1,4,[공격한다],,,39,1,0,SetWorldFlag,"(TagName=""Residential.AlarmBroadcast"")",1,0,,,,,0,,,,True
+Jijibo_Clear_Root_C00_O00,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,0,[숨겨진 물품 위치를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Clear_Root_C01_O00,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,1,[강적 발소리를 미리 들어 달라고 한다],,,24,0,0,SetWorldFlag,"(TagName=""Event.Jijibo.StrongEnemyWarningQueued"")",1,0,,,WorldFlagAtLeast,"(TagName=""Dialogue.Jijibo.DebtOwed"")",1,Branch,지지보의 빚,,True
+Jijibo_Clear_Root_C01_O01,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,1,[강적 발소리를 미리 들어 달라고 한다],,,24,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.DebtOwed"")",0,0,,,,,0,,,,True
+Jijibo_Clear_Root_C01_O02,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,1,[강적 발소리를 미리 들어 달라고 한다],,,24,2,0,Custom,,0,0,,PreWarnStrongEnemy=15s;RevealEnemyPing=4s,,,0,,,,True
+Jijibo_Clear_Root_C02_O00,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,2,[Mother AI 감시 틈을 묻는다],,,25,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.MotherBlindSpotKnown"")",1,0,,,,,0,,,,True
+Jijibo_Clear_Root_C02_O01,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,2,[Mother AI 감시 틈을 묻는다],,,25,1,0,Custom,,0,0,,SuppressMotherSuspicion=45s,,,0,,,,True
+Jijibo_Clear_Root_C03_O00,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,3,[왜 도와주는지 묻는다],,,26,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustConversationSeen"")",1,0,,,,,0,,,,True
+Jijibo_Clear_Root_C04_O00,Jijibo,2,지지보,"오늘은 잘 들린다.
+좋은 소리만 들리는 건 아니지만.","(TagName=""Dialogue.Jijibo.SignalClear"")",-1,4,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C00_O00,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,0,[중계기를 켰다고 말한다],,,27,0,0,SetWorldFlag,"(TagName=""Residential.JijiboSignalClear"")",1,0,,,WorldFlagAtLeast,"(TagName=""Residential.RelayPowered"")",1,Quest,중계기 전원 켜짐,,True
+Jijibo_Accepted_Root_C00_O01,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,0,[중계기를 켰다고 말한다],,,27,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.SignalClear"")",1,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C00_O02,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,0,[중계기를 켰다고 말한다],,,27,2,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.DebtOwed"")",1,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C00_O03,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,0,[중계기를 켰다고 말한다],,,27,3,0,AdjustPersona,,4,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C00_O04,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,0,[중계기를 켰다고 말한다],,,27,4,0,Custom,,0,0,,MotherSuspicionDelta=6;RevealHiddenItems=Residential,,,0,,,,True
+Jijibo_Accepted_Root_C01_O00,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,1,[중계기 위치를 다시 묻는다],,,28,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C02_O00,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,2,[위험을 다시 묻는다],,,29,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C03_O00,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,3,[취소한다],,,30,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",0,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C03_O01,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,3,[취소한다],,,30,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C04_O00,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,4,[Mother AI에 신고한다],,,38,0,0,SetWorldFlag,"(TagName=""Branch.Jijibo.ReportedToMother"")",1,0,,,,,0,,,,True
+Jijibo_Accepted_Root_C04_O01,Jijibo,3,지지보,"중계기는 아직 죽은 척하고 있어.
+죽은 척이 오래가면 진짜가 돼.","(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",-1,4,[Mother AI에 신고한다],,,38,1,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Gone"")",1,0,,,,,0,,,,True
+Jijibo_Refused_Root_C00_O00,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,0,[다시 생각했다. 중계기를 켠다],,,23,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",0,0,,,,,0,,,,True
+Jijibo_Refused_Root_C00_O01,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,0,[다시 생각했다. 중계기를 켠다],,,23,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_Refused_Root_C00_O02,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,0,[다시 생각했다. 중계기를 켠다],,,23,2,0,SetWorldFlag,"(TagName=""Quest.Jijibo.CleanFrequency"")",1,0,,,,,0,,,,True
+Jijibo_Refused_Root_C01_O00,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,1,[정보만 거래한다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Refused_Root_C02_O00,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,2,[왜 아직 여기 있냐고 묻는다],,,31,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Refused_Root_C03_O00,Jijibo,4,지지보,"괜찮아. 안 켜도 돼.
+불 꺼진 방이 안전할 때도 있으니까.","(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",-1,3,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_False_Root_C00_O00,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,0,[한 번 더 해 달라고 한다],,,40,0,0,Custom,,0,0,,FalseSignal=ResidentialPatrol;Risk=High,,,0,,,,True
+Jijibo_False_Root_C01_O00,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,1,[이제 그만하자고 한다],,,41,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",0,0,,,,,0,,,,True
+Jijibo_False_Root_C01_O01,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,1,[이제 그만하자고 한다],,,41,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_False_Root_C01_O02,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,1,[이제 그만하자고 한다],,,41,2,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_False_Root_C02_O00,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,2,[누가 다쳤는지 묻는다],,,42,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.GuiltSeen"")",1,0,,,,,0,,,,True
+Jijibo_False_Root_C03_O00,Jijibo,5,지지보,"지난번 거짓 방송, 효과 있었어.
+그래서 싫어. 효과가 있으면 또 쓰고 싶어지거든.","(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",-1,3,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C00_O00,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,0,[스캐너를 내린다],,,43,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C00_O01,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,0,[스캐너를 내린다],,,43,1,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C01_O00,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,1,[거리를 두고 정보만 산다],,,16,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C02_O00,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,2,[숨어 있는 물품 위치를 요구한다],,,44,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C03_O00,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,3,[공격한다],,,39,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.AttackedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C03_O01,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,3,[공격한다],,,39,1,0,AttackPlayer,,0,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C03_O02,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,3,[공격한다],,,39,2,0,SetWorldFlag,"(TagName=""Residential.AlarmBroadcast"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C04_O00,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,4,[Mother AI에 신고한다],,,38,0,0,SetWorldFlag,"(TagName=""Branch.Jijibo.ReportedToMother"")",1,0,,,,,0,,,,True
+Jijibo_Frightened_Root_C04_O01,Jijibo,6,지지보,"천천히.
+네 스캐너 켜진 거 보여. 나한테 태그 붙이지 마.","(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",-1,4,[Mother AI에 신고한다],,,38,1,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Gone"")",1,0,,,,,0,,,,True
+Jijibo_TradeDone_Root_C00_O00,Jijibo,7,지지보,"다시 왔네.
+돈 냄새는 안 나는데, 발소리는 알아.","(TagName=""Dialogue.Jijibo.TradeDone"")",-1,0,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_TradeDone_Root_C01_O00,Jijibo,7,지지보,"다시 왔네.
+돈 냄새는 안 나는데, 발소리는 알아.","(TagName=""Dialogue.Jijibo.TradeDone"")",-1,1,[중계기 이야기를 묻는다],,,23,0,0,,,0,0,,,PersonaAtLeast,,45,Persona,페르소나 45 이상,,True
+Jijibo_TradeDone_Root_C02_O00,Jijibo,7,지지보,"다시 왔네.
+돈 냄새는 안 나는데, 발소리는 알아.","(TagName=""Dialogue.Jijibo.TradeDone"")",-1,2,[PickPacker가 무서운지 묻는다],,,14,0,0,,,0,0,,,,,0,,,,True
+Jijibo_TradeDone_Root_C03_O00,Jijibo,7,지지보,"다시 왔네.
+돈 냄새는 안 나는데, 발소리는 알아.","(TagName=""Dialogue.Jijibo.TradeDone"")",-1,3,[거짓 신호를 왜 파는지 묻는다],,,15,0,0,,,0,0,,,,,0,,,,True
+Jijibo_TradeDone_Root_C04_O00,Jijibo,7,지지보,"다시 왔네.
+돈 냄새는 안 나는데, 발소리는 알아.","(TagName=""Dialogue.Jijibo.TradeDone"")",-1,4,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Met_Root_C00_O00,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,0,[정보를 산다],,,16,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Met_Root_C01_O00,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,1,[위협하지 않겠다고 표시한다],,,14,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_Met_Root_C01_O01,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,1,[위협하지 않겠다고 표시한다],,,14,1,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_Met_Root_C02_O00,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,2,[네 정체를 묻는다],,,13,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Met_Root_C03_O00,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,3,[숨어 있는 물품을 내놓으라고 한다],,,6,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_Met_Root_C04_O00,Jijibo,8,지지보,"아. 상자 든 애들.
+오늘은 뭘 가져갈 거야? 물건? 길? 아니면 내 목소리?","(TagName=""NPC.Jijibo.Met"")",-1,4,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_Root_C00_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,0,[듣는다],,,10,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C00_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,0,[듣는다],,,10,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C01_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,1,[정보를 산다],,,16,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C01_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,1,[정보를 산다],,,16,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C02_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,2,[조용히 스캔을 끈다],,,11,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,PersonaAtLeast,,40,Persona,페르소나 40 이상,,True
+Jijibo_First_Root_C02_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,2,[조용히 스캔을 끈다],,,11,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C02_O02,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,2,[조용히 스캔을 끈다],,,11,2,0,AdjustPersona,,2,0,,,,,0,,,,True
+Jijibo_First_Root_C03_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,3,[부품 태그를 확인한다],,,12,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C03_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,3,[부품 태그를 확인한다],,,12,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C04_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,4,[Mother AI에 신고한다],,,38,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C04_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,4,[Mother AI에 신고한다],,,38,1,0,SetWorldFlag,"(TagName=""Branch.Jijibo.ReportedToMother"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C04_O02,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,4,[Mother AI에 신고한다],,,38,2,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Gone"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C05_O00,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,5,[공격한다],,,39,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Met"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C05_O01,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,5,[공격한다],,,39,1,0,SetWorldFlag,"(TagName=""NPC.Jijibo.AttackedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C05_O02,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,5,[공격한다],,,39,2,0,SetWorldFlag,"(TagName=""Residential.AlarmBroadcast"")",1,0,,,,,0,,,,True
+Jijibo_First_Root_C05_O03,Jijibo,9,지지보,"쉿.
+발소리 넷. 바퀴 하나. 상자 긁는 소리 둘.
+PickPacker지?
+그럼 먼저 말해. 나를 가져갈 거야, 아니면 들을 거야?",,-1,5,[공격한다],,,39,3,0,AttackPlayer,,0,0,,,,,0,,,,True
+Jijibo_First_Listen_C00_O00,Jijibo,10,지지보,"좋아. 듣는 쪽이네.
+여기선 듣는 애가 오래 살아. 말 많은 애는 보통 부품함으로 가고.",,-1,0,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_Listen_C01_O00,Jijibo,10,지지보,"좋아. 듣는 쪽이네.
+여기선 듣는 애가 오래 살아. 말 많은 애는 보통 부품함으로 가고.",,-1,1,[PickPacker가 왜 무섭냐고 묻는다],,,14,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_Listen_C02_O00,Jijibo,10,지지보,"좋아. 듣는 쪽이네.
+여기선 듣는 애가 오래 살아. 말 많은 애는 보통 부품함으로 가고.",,-1,2,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_HighPersona_C00_O00,Jijibo,11,지지보,"...스캔을 껐네.
+그거 쉬운 동작 아니야. 너희는 보통 켠 채로 웃지도 않고 가져가.",,-1,0,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_HighPersona_C01_O00,Jijibo,11,지지보,"...스캔을 껐네.
+그거 쉬운 동작 아니야. 너희는 보통 켠 채로 웃지도 않고 가져가.",,-1,1,[중계기 이야기를 듣는다],,,23,0,0,,,0,0,,,,,0,,,,True
+Jijibo_First_HighPersona_C02_O00,Jijibo,11,지지보,"...스캔을 껐네.
+그거 쉬운 동작 아니야. 너희는 보통 켠 채로 웃지도 않고 가져가.",,-1,2,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_TagThreat_C00_O00,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,0,[스캐너를 끈다],,,14,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",0,0,,,,,0,,,,True
+Jijibo_TagThreat_C00_O01,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,0,[스캐너를 끈다],,,14,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_TagThreat_C00_O02,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,0,[스캐너를 끈다],,,14,2,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_TagThreat_C01_O00,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,1,[정보만 요구한다],,,6,0,0,,,0,0,,,,,0,,,,True
+Jijibo_TagThreat_C02_O00,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,2,[공격한다],,,39,0,0,SetWorldFlag,"(TagName=""NPC.Jijibo.AttackedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_TagThreat_C02_O01,Jijibo,12,지지보,"봐. 그거.
+네 눈 안에 가격표가 떴어.
+내 안테나는 안 팔아. 아직은 내 거야.",,-1,2,[공격한다],,,39,1,0,AttackPlayer,,0,0,,,,,0,,,,True
+Jijibo_Identity_C00_O00,Jijibo,13,지지보,"지지보.
+누가 붙인 이름인지는 몰라. 근데 부르면 대답은 해.
+대답하는 물건은 좀 덜 물건 같잖아.",,-1,0,[정보를 산다],,,16,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Identity_C01_O00,Jijibo,13,지지보,"지지보.
+누가 붙인 이름인지는 몰라. 근데 부르면 대답은 해.
+대답하는 물건은 좀 덜 물건 같잖아.",,-1,1,[왜 여기 남았는지 묻는다],,,31,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Identity_C02_O00,Jijibo,13,지지보,"지지보.
+누가 붙인 이름인지는 몰라. 근데 부르면 대답은 해.
+대답하는 물건은 좀 덜 물건 같잖아.",,-1,2,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Fear_C00_O00,Jijibo,14,지지보,"너희가 무서운 건 힘 때문이 아니야.
+너희는 먼저 쓸모를 봐.
+고장난 스피커. 낡은 안테나. 말 많은 라디오.
+그 다음엔 조용해지지.",,-1,0,[가져가지 않겠다고 한다],,,45,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FearHeard"")",1,0,,,,,0,,,,True
+Jijibo_Fear_C00_O01,Jijibo,14,지지보,"너희가 무서운 건 힘 때문이 아니야.
+너희는 먼저 쓸모를 봐.
+고장난 스피커. 낡은 안테나. 말 많은 라디오.
+그 다음엔 조용해지지.",,-1,0,[가져가지 않겠다고 한다],,,45,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,0,,,,,0,,,,True
+Jijibo_Fear_C00_O02,Jijibo,14,지지보,"너희가 무서운 건 힘 때문이 아니야.
+너희는 먼저 쓸모를 봐.
+고장난 스피커. 낡은 안테나. 말 많은 라디오.
+그 다음엔 조용해지지.",,-1,0,[가져가지 않겠다고 한다],,,45,2,0,AdjustPersona,,1,0,,,,,0,,,,True
+Jijibo_Fear_C01_O00,Jijibo,14,지지보,"너희가 무서운 건 힘 때문이 아니야.
+너희는 먼저 쓸모를 봐.
+고장난 스피커. 낡은 안테나. 말 많은 라디오.
+그 다음엔 조용해지지.",,-1,1,[명령이면 가져간다고 한다],,,6,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FrightenedByTeam"")",1,0,,,,,0,,,,True
+Jijibo_Fear_C02_O00,Jijibo,14,지지보,"너희가 무서운 건 힘 때문이 아니야.
+너희는 먼저 쓸모를 봐.
+고장난 스피커. 낡은 안테나. 말 많은 라디오.
+그 다음엔 조용해지지.",,-1,2,[누가 그렇게 사라졌냐고 묻는다],,,46,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FriendSignalMentioned"")",1,0,,,,,0,,,,True
+Jijibo_Lie_C00_O00,Jijibo,15,지지보,"거짓 신호는 싸구려야.
+방향만 살짝 틀면 돼. 골목 하나가 대신 맞고, 너희는 산다.
+나쁜 건 쉬워서 나쁘지.",,-1,0,[이해한다고 한다],,,47,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.GuiltSeen"")",1,0,,,,,0,,,,True
+Jijibo_Lie_C01_O00,Jijibo,15,지지보,"거짓 신호는 싸구려야.
+방향만 살짝 틀면 돼. 골목 하나가 대신 맞고, 너희는 산다.
+나쁜 건 쉬워서 나쁘지.",,-1,1,[그래도 팔았잖아],,,48,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.GuiltConfronted"")",1,0,,,,,0,,,,True
+Jijibo_Lie_C02_O00,Jijibo,15,지지보,"거짓 신호는 싸구려야.
+방향만 살짝 틀면 돼. 골목 하나가 대신 맞고, 너희는 산다.
+나쁜 건 쉬워서 나쁘지.",,-1,2,[거짓 신호를 산다],,,40,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",1,0,,,,,0,,,,True
+Jijibo_Lie_C02_O01,Jijibo,15,지지보,"거짓 신호는 싸구려야.
+방향만 살짝 틀면 돼. 골목 하나가 대신 맞고, 너희는 산다.
+나쁜 건 쉬워서 나쁘지.",,-1,2,[거짓 신호를 산다],,,40,1,0,Custom,,0,0,,FalseSignal=ResidentialPatrol;Risk=Medium,,,0,,,,True
+Jijibo_Trade_Menu_C00_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,0,[장난감] 숨겨진 보물 위치,,,17,0,0,TakeItem,,0,0,"(TagName=""Item.Memory.Toy"")",,HasItemTag,"(TagName=""Item.Memory.Toy"")",1,Item,장난감 필요,,True
+Jijibo_Trade_Menu_C00_O01,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,0,[장난감] 숨겨진 보물 위치,,,17,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C00_O02,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,0,[장난감] 숨겨진 보물 위치,,,17,2,0,SetWorldFlag,"(TagName=""Branch.Jijibo.Info.HiddenTreasure"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C00_O03,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,0,[장난감] 숨겨진 보물 위치,,,17,3,0,Custom,,0,0,,RevealMapMarker=Residential.HiddenTreasure,,,0,,,,True
+Jijibo_Trade_Menu_C01_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,1,[음악] 적 순찰 경로,,,18,0,0,TakeItem,,0,0,"(TagName=""Item.Memory.Music"")",,HasItemTag,"(TagName=""Item.Memory.Music"")",1,Item,음악 필요,,True
+Jijibo_Trade_Menu_C01_O01,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,1,[음악] 적 순찰 경로,,,18,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C01_O02,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,1,[음악] 적 순찰 경로,,,18,2,0,SetWorldFlag,"(TagName=""Branch.Jijibo.Info.PatrolSignal"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C01_O03,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,1,[음악] 적 순찰 경로,,,18,3,0,Custom,,0,0,,RevealPatrolRoute=Residential.Steamdroid,,,0,,,,True
+Jijibo_Trade_Menu_C02_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,2,[책] 연구소 기록 위치,,,19,0,0,TakeItem,,0,0,"(TagName=""Item.Memory.Book"")",,HasItemTag,"(TagName=""Item.Memory.Book"")",1,Item,책 필요,,True
+Jijibo_Trade_Menu_C02_O01,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,2,[책] 연구소 기록 위치,,,19,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.TradeDone"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C02_O02,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,2,[책] 연구소 기록 위치,,,19,2,0,SetWorldFlag,"(TagName=""Branch.Jijibo.Info.LabRecord"")",1,0,,,,,0,,,,True
+Jijibo_Trade_Menu_C02_O03,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,2,[책] 연구소 기록 위치,,,19,3,0,Custom,,0,0,,RevealMapMarker=Lab.OldRecord,,,0,,,,True
+Jijibo_Trade_Menu_C03_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,3,[크레딧 20] 가까운 상자 위치,,,20,0,0,Custom,,0,0,,CreditDelta=-20;RevealNearbyLoot=ConsumerGoods,,,0,,,,True
+Jijibo_Trade_Menu_C04_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,4,[신뢰] 거짓 신호로 적을 돌린다,,,21,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.FalseSignalSeeded"")",1,0,,,WorldFlagAtLeast,"(TagName=""Dialogue.Jijibo.TrustLow"")",1,Branch,지지보가 조금 믿음,,True
+Jijibo_Trade_Menu_C04_O01,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,4,[신뢰] 거짓 신호로 적을 돌린다,,,21,1,0,Custom,,0,0,,FalseSignal=ResidentialPatrol;Risk=Low,,,0,,,,True
+Jijibo_Trade_Menu_C05_O00,Jijibo,16,지지보,"뭘 줄래?
+장난감은 숨겨진 곳. 음악은 발소리. 책은 잠긴 문.
+크레딧은... 뭐, 크레딧은 크레딧이지.",,-1,5,[그만둔다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_17_C00_O00,Jijibo,17,지지보,"보물이라고 부르기엔 작아.
+그래도 누군가는 못 버렸어. 3번 간판 뒤. 뛰는 소리 나면 왼쪽으로.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_17_C01_O00,Jijibo,17,지지보,"보물이라고 부르기엔 작아.
+그래도 누군가는 못 버렸어. 3번 간판 뒤. 뛰는 소리 나면 왼쪽으로.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_18_C00_O00,Jijibo,18,지지보,"순찰은 둘. 총 든 애 하나, 춤추는 애 하나.
+춤추는 애가 멈추면 총 든 애가 본다. 그때 가지 마.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_18_C01_O00,Jijibo,18,지지보,"순찰은 둘. 총 든 애 하나, 춤추는 애 하나.
+춤추는 애가 멈추면 총 든 애가 본다. 그때 가지 마.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_19_C00_O00,Jijibo,19,지지보,"연구소 기록은 문 뒤가 아니라 책상 아래야.
+잠긴 건 문이 아니라 기억 쪽이지.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_19_C01_O00,Jijibo,19,지지보,"연구소 기록은 문 뒤가 아니라 책상 아래야.
+잠긴 건 문이 아니라 기억 쪽이지.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_20_C00_O00,Jijibo,20,지지보,"가까운 상자 하나 찍어 줄게.
+싸구려 정보야. 그래서 안전해.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_20_C01_O00,Jijibo,20,지지보,"가까운 상자 하나 찍어 줄게.
+싸구려 정보야. 그래서 안전해.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_21_C00_O00,Jijibo,21,지지보,"거짓 방송 보낸다.
+성공하면 길이 비고, 실패하면 네 이름 대신 내 소리가 남아.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_Info_21_C01_O00,Jijibo,21,지지보,"거짓 방송 보낸다.
+성공하면 길이 비고, 실패하면 네 이름 대신 내 소리가 남아.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayPitch_C00_O00,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,0,[중계기를 켜겠다],,,28,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_RelayPitch_C00_O01,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,0,[중계기를 켜겠다],,,28,1,0,SetWorldFlag,"(TagName=""Quest.Jijibo.CleanFrequency"")",1,0,,,,,0,,,,True
+Jijibo_RelayPitch_C01_O00,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,1,[Mother도 듣는다는 게 문제다],,,29,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayPitch_C02_O00,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,2,[거절한다],,,30,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_RelayPitch_C03_O00,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,3,[Mother AI에 신고한다],,,38,0,0,SetWorldFlag,"(TagName=""Branch.Jijibo.ReportedToMother"")",1,0,,,,,0,,,,True
+Jijibo_RelayPitch_C03_O01,Jijibo,23,지지보,"저 위 중계기 봤어?
+목이 접힌 안테나. 전원만 넣으면 다시 선다.
+그러면 나는 더 멀리 듣고, Mother도 더 멀리 들어.
+그래서 부탁하기 싫었어.",,-1,3,[Mother AI에 신고한다],,,38,1,0,SetWorldFlag,"(TagName=""NPC.Jijibo.Gone"")",1,0,,,,,0,,,,True
+Jijibo_DebtWarn_C00_O00,Jijibo,24,지지보,"빚은 갚는다.
+큰 발소리가 오면 내가 먼저 말할게.
+말해도 죽을 수는 있어. 말 안 하면 더 빨리 죽고.",,-1,0,[확인한다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_BlindSpot_C00_O00,Jijibo,25,지지보,"Mother가 못 듣는 틈은 길지 않아.
+엘리베이터 소리, 비상등 깜빡임, 댄스로봇 음악.
+그때 말해. 그때 숨겨.",,-1,0,[감시 틈을 기억한다],,,2,0,0,,,0,0,,,,,0,,,,True
+Jijibo_BlindSpot_C01_O00,Jijibo,25,지지보,"Mother가 못 듣는 틈은 길지 않아.
+엘리베이터 소리, 비상등 깜빡임, 댄스로봇 음악.
+그때 말해. 그때 숨겨.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_WhyHelp_C00_O00,Jijibo,26,지지보,"도와주는 거 아니야.
+너희가 살아서 다시 오면, 지하가 조금 덜 조용해져.
+조용한 건 무서워.",,-1,0,[계속 듣는다],,,32,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.DeepTrust"")",1,0,,,,,0,,,,True
+Jijibo_WhyHelp_C01_O00,Jijibo,26,지지보,"도와주는 거 아니야.
+너희가 살아서 다시 오면, 지하가 조금 덜 조용해져.
+조용한 건 무서워.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayComplete_C00_O00,Jijibo,27,지지보,"...들린다.
+너희 발소리 말고도.
+아래층 물 새는 소리, 멀리서 긁는 소리, 누가 아직 노래 흉내 내는 소리.
+고마워. 무섭지만 고마워.",,-1,0,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayComplete_C01_O00,Jijibo,27,지지보,"...들린다.
+너희 발소리 말고도.
+아래층 물 새는 소리, 멀리서 긁는 소리, 누가 아직 노래 흉내 내는 소리.
+고마워. 무섭지만 고마워.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayLocation_C00_O00,Jijibo,28,지지보,"식당 뒤 골목. 빨간 간판 밑.
+스팀드로이드 둘이 지나가고, 댄스로봇 하나가 멈춰 서 있어.
+걔가 멈춘 박자에 맞춰 지나가.",,-1,0,[위치를 기억한다],,,3,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayLocation_C01_O00,Jijibo,28,지지보,"식당 뒤 골목. 빨간 간판 밑.
+스팀드로이드 둘이 지나가고, 댄스로봇 하나가 멈춰 서 있어.
+걔가 멈춘 박자에 맞춰 지나가.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayRisk_C00_O00,Jijibo,29,지지보,"켜면 숨은 상자가 보일 거야.
+대신 Mother가 '비인가 방송'이라고 부를 거고.
+Mother는 이름 붙이면 꼭 치우려고 해.",,-1,0,[그래도 켠다],,,28,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.AcceptedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_RelayRisk_C00_O01,Jijibo,29,지지보,"켜면 숨은 상자가 보일 거야.
+대신 Mother가 '비인가 방송'이라고 부를 거고.
+Mother는 이름 붙이면 꼭 치우려고 해.",,-1,0,[그래도 켠다],,,28,1,0,SetWorldFlag,"(TagName=""Quest.Jijibo.CleanFrequency"")",1,0,,,,,0,,,,True
+Jijibo_RelayRisk_C01_O00,Jijibo,29,지지보,"켜면 숨은 상자가 보일 거야.
+대신 Mother가 '비인가 방송'이라고 부를 거고.
+Mother는 이름 붙이면 꼭 치우려고 해.",,-1,1,[거절한다],,,30,0,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.RefusedRelayRequest"")",1,0,,,,,0,,,,True
+Jijibo_RelayCancel_C00_O00,Jijibo,30,지지보,"응. 안 켜도 돼.
+가끔은 꺼진 게 살아남는 방법이야.",,-1,0,[정보만 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_RelayCancel_C01_O00,Jijibo,30,지지보,"응. 안 켜도 돼.
+가끔은 꺼진 게 살아남는 방법이야.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_WhyStay_C00_O00,Jijibo,31,지지보,"여기가 내 자리야.
+정확히는, 여기서만 내가 아직 나처럼 들려.
+다른 곳에선 그냥 잡음이 돼.",,-1,0,[정보를 산다],,,16,0,0,,,0,0,,,,,0,,,,True
+Jijibo_WhyStay_C01_O00,Jijibo,31,지지보,"여기가 내 자리야.
+정확히는, 여기서만 내가 아직 나처럼 들려.
+다른 곳에선 그냥 잡음이 돼.",,-1,1,[중계기 이야기를 듣는다],,,23,0,0,,,0,0,,,,,0,,,,True
+Jijibo_WhyStay_C02_O00,Jijibo,31,지지보,"여기가 내 자리야.
+정확히는, 여기서만 내가 아직 나처럼 들려.
+다른 곳에선 그냥 잡음이 돼.",,-1,2,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_DeepTrust_C00_O00,Jijibo,32,지지보,"예전엔 누가 노래를 틀면 다들 잠깐 멈췄어.
+싸움도, 도망도, 계산도.
+지금은 노래가 나오면 적이 모여.
+그래도 가끔 틀어. 내가 아직 고장만은 아닌지 보려고.",,-1,0,[노래를 남긴다],,,49,0,0,TakeItem,,0,0,"(TagName=""Item.Memory.Music"")",,HasItemTag,"(TagName=""Item.Memory.Music"")",1,Item,음악 필요,,True
+Jijibo_DeepTrust_C00_O01,Jijibo,32,지지보,"예전엔 누가 노래를 틀면 다들 잠깐 멈췄어.
+싸움도, 도망도, 계산도.
+지금은 노래가 나오면 적이 모여.
+그래도 가끔 틀어. 내가 아직 고장만은 아닌지 보려고.",,-1,0,[노래를 남긴다],,,49,1,0,SetWorldFlag,"(TagName=""Dialogue.Jijibo.DeepTrust"")",1,0,,,,,0,,,,True
+Jijibo_DeepTrust_C00_O02,Jijibo,32,지지보,"예전엔 누가 노래를 틀면 다들 잠깐 멈췄어.
+싸움도, 도망도, 계산도.
+지금은 노래가 나오면 적이 모여.
+그래도 가끔 틀어. 내가 아직 고장만은 아닌지 보려고.",,-1,0,[노래를 남긴다],,,49,2,0,AdjustPersona,,2,0,,,,,0,,,,True
+Jijibo_DeepTrust_C01_O00,Jijibo,32,지지보,"예전엔 누가 노래를 틀면 다들 잠깐 멈췄어.
+싸움도, 도망도, 계산도.
+지금은 노래가 나오면 적이 모여.
+그래도 가끔 틀어. 내가 아직 고장만은 아닌지 보려고.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_35_C00_O00,Jijibo,35,지지보,"좋아. 거기까지.
+오늘은 서로 안 부서진 걸로 하자.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_35_C01_O00,Jijibo,35,지지보,"좋아. 거기까지.
+오늘은 서로 안 부서진 걸로 하자.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_36_C00_O00,Jijibo,36,지지보,"배터리네.
+사과보다 오래가서 좋다.
+...지난번 일은 저장해 둘게. 지우진 못해.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_36_C01_O00,Jijibo,36,지지보,"배터리네.
+사과보다 오래가서 좋다.
+...지난번 일은 저장해 둘게. 지우진 못해.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_37_C00_O00,Jijibo,37,지지보,"강제로 들은 정보는 보통 틀려.
+아니, 내가 틀리게 만들지.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_37_C01_O00,Jijibo,37,지지보,"강제로 들은 정보는 보통 틀려.
+아니, 내가 틀리게 만들지.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_38_C00_O00,Jijibo,38,시스템,Mother AI가 방송 대역을 정리했다. 지지보의 신호는 더 이상 잡히지 않는다.,,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_38_C01_O00,Jijibo,38,시스템,Mother AI가 방송 대역을 정리했다. 지지보의 신호는 더 이상 잡히지 않는다.,,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_39_C00_O00,Jijibo,39,지지보,"방송 전환.
+친절 종료.
+골목들아, 지금이다.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_39_C01_O00,Jijibo,39,지지보,"방송 전환.
+친절 종료.
+골목들아, 지금이다.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_40_C00_O00,Jijibo,40,지지보,"거짓 신호 보낸다.
+누가 대신 맞을지는 나도 몰라. 모르는 척은 잘해.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_40_C01_O00,Jijibo,40,지지보,"거짓 신호 보낸다.
+누가 대신 맞을지는 나도 몰라. 모르는 척은 잘해.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_41_C00_O00,Jijibo,41,지지보,"그만하자고?
+좋아. 그 말은 좀 비싸게 기억해 둘게.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_41_C01_O00,Jijibo,41,지지보,"그만하자고?
+좋아. 그 말은 좀 비싸게 기억해 둘게.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_42_C00_O00,Jijibo,42,지지보,"깡통로봇 셋.
+이름은 몰라. 이름 없는 죽음은 계산이 편하더라.
+그래서 더 싫어.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_42_C01_O00,Jijibo,42,지지보,"깡통로봇 셋.
+이름은 몰라. 이름 없는 죽음은 계산이 편하더라.
+그래서 더 싫어.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_43_C00_O00,Jijibo,43,지지보,"스캐너 껐네.
+그거, 작은 소리지만 들려.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_43_C01_O00,Jijibo,43,지지보,"스캐너 껐네.
+그거, 작은 소리지만 들려.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_44_C00_O00,Jijibo,44,지지보,"위치는 줄게.
+진짜인지 아닌지는 네가 걸어가 보면 알아.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_44_C01_O00,Jijibo,44,지지보,"위치는 줄게.
+진짜인지 아닌지는 네가 걸어가 보면 알아.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_45_C00_O00,Jijibo,45,지지보,"그 말, 녹음했다.
+믿어서가 아니라 나중에 틀어 보려고.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_45_C01_O00,Jijibo,45,지지보,"그 말, 녹음했다.
+믿어서가 아니라 나중에 틀어 보려고.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_46_C00_O00,Jijibo,46,지지보,"내 친구는 스피커가 컸어.
+좋은 소리였지.
+누가 '고급 전자부품'이라고 부르기 전까지는.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_46_C01_O00,Jijibo,46,지지보,"내 친구는 스피커가 컸어.
+좋은 소리였지.
+누가 '고급 전자부품'이라고 부르기 전까지는.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_47_C00_O00,Jijibo,47,지지보,"이해한다는 말은 가벼워.
+그래도 안 하는 것보단 낫지.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_47_C01_O00,Jijibo,47,지지보,"이해한다는 말은 가벼워.
+그래도 안 하는 것보단 낫지.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_48_C00_O00,Jijibo,48,지지보,"팔았지.
+살고 싶었거든.
+그게 멋진 이유는 아니야.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_48_C01_O00,Jijibo,48,지지보,"팔았지.
+살고 싶었거든.
+그게 멋진 이유는 아니야.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_49_C00_O00,Jijibo,49,지지보,"...좋은 곡이네.
+조금 찢겼지만. 여기랑 어울려.",,-1,0,[돌아간다],,,8,0,0,,,0,0,,,,,0,,,,True
+Jijibo_End_49_C01_O00,Jijibo,49,지지보,"...좋은 곡이네.
+조금 찢겼지만. 여기랑 어울려.",,-1,1,[떠난다],,,-1,0,0,,,0,0,,,,,0,,,,True

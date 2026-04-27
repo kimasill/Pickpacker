@@ -1,0 +1,7 @@
+Asset: /Game/Pickpacker/Core/UI/WBP_NPCDialogue
+Loaded: <Object '/Game/Pickpacker/Core/UI/WBP_NPCDialogue.WBP_NPCDialogue' (0x000001DC44373800) Class 'WidgetBlueprint'>
+ERROR: 'AssetTools' object has no attribute 'dump_asset_to_temp_file'
+
+Asset: /Game/Pickpacker/Core/UI/WBP_NPCDialogueChoice
+Loaded: <Object '/Game/Pickpacker/Core/UI/WBP_NPCDialogueChoice.WBP_NPCDialogueChoice' (0x000001DC44379A00) Class 'WidgetBlueprint'>
+ERROR: 'AssetTools' object has no attribute 'dump_asset_to_temp_file'

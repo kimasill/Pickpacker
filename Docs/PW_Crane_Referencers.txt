@@ -1,0 +1,35 @@
+=== /Game/Pickpacker/Characters/Pawn/PW_Crane ===
+Referencers: 0
+
+=== /Game/BluePrints/Pawn/PW_Crane ===
+Referencers: 0
+
+=== /Game/BluePrints/UI/W_Crane ===
+Referencers: 0
+
+=== /Game/Pickpacker/Core/Data/Blueprints/Virtual_AC_RunAction ===
+Referencers: 12
+  - /Game/Blueprints/Data/Virtual_AC_RunAction
+  - /Game/Pickpacker/Gameplay/Systems/AC_DoorAction_Func
+  - /Game/Pickpacker/Gameplay/Systems/AC_DoorAction_I
+  - /Game/Pickpacker/Gameplay/Systems/AC_Elevator
+  - /Game/Pickpacker/Gameplay/Systems/AC_Elevator_I
+  - /Game/Pickpacker/Gameplay/Systems/AC_PlayAnimation
+  - /Game/Pickpacker/Gameplay/Systems/AC_RunTruck
+  - /Game/Pickpacker/Gameplay/Systems/AC_Shower
+  - /Game/Pickpacker/Gameplay/Systems/AC_SitInCar
+  - /Game/Pickpacker/Gameplay/Systems/AC_SitInDrone
+  - /Game/Pickpacker/Gameplay/Systems/AC_SlideDoorAction_Func
+  - /Game/Pickpacker/Gameplay/Systems/AC_SlideDoorAction_I
+
+=== /Game/BluePrints/Data/Virtual_AC_RunAction ===
+Referencers: 1
+  - /Game/BluePrints/GamePlay/AC_CallAction
+
+=== /Game/BluePrints/Data/ML_A_MacroLibrary ===
+Referencers: 1
+  - /Game/BluePrints/GamePlay/BP_RobotHend
+
+=== /Game/BluePrints/Data/ML_Ob_MacroLibrary ===
+Referencers: 1
+  - /Game/BluePrints/GamePlay/AC_CallAction

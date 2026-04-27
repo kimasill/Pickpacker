@@ -60,6 +60,32 @@ Linear API 키는 `Settings -> Account -> Security & Access`에서 생성합니�
 
 ## 사용 방법
 
+### 0. 로컬 터미널용 환경변수 설정
+
+GitHub secret/variable을 넣어도 로컬 터미널은 그 값을 자동으로 읽지 않습니다.
+이 저장소의 에이전트가 로컬에서 바로 Linear 이슈를 만들게 하려면 Windows 사용자 환경변수에도 같은 값을 넣어야 합니다.
+
+현재 열려 있는 PowerShell 세션에서 실행:
+
+```powershell
+.\Scripts\Set-LinearEnv.ps1
+```
+
+실행하면 아래 3개를 입력받아 저장합니다.
+
+- `LINEAR_API_KEY`
+- `LINEAR_TEAM_ID`
+- `LINEAR_WORKSPACE_URL`
+
+기본값은 `User` 스코프라서 현재 Windows 사용자 계정에 저장됩니다.
+지금 세션에서 실행하면 현재 터미널에도 바로 반영되고, 새 터미널을 열어도 계속 사용할 수 있습니다.
+
+확인은 아래 명령으로 합니다.
+
+```powershell
+.\Scripts\Test-LinearEnv.ps1
+```
+
 ### A. 로컬에서 Linear 이슈 만들고 바로 브랜치 시작
 
 PowerShell:

@@ -1,0 +1,5 @@
+Name,RequirementTag,IndicatorType,Icon
+Persona_Default,,Persona,/Game/Assets/ProHUDV2/Textures/T_Icon1_64x64.T_Icon1_64x64
+Quest_Default,,Quest,/Game/Assets/ProHUDV2/Textures/MissionNoti/T_MissionIcon_Active.T_MissionIcon_Active
+Branch_Default,,Branch,/Game/Assets/ProHUDV2/Textures/MissionNoti/T_MissionIcon_Checked.T_MissionIcon_Checked
+Item_Default,,Item,/Game/Assets/ProHUDV2/Textures/PickupNoti/T_PU_Icon_Ornament.T_PU_Icon_Ornament

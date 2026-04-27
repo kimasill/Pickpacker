@@ -1,0 +1,59 @@
+Name,NPCId,NodeIndex,SpeakerName,DialogueText,NodeRequiredWorldFlag,NodeAutoNextNodeIndex,ChoiceIndex,ChoiceText,ChoiceRequiredWorldFlag,ChoiceBlockingWorldFlag,ChoiceNextNodeIndex,OutcomeOrder,RequirementOrder,ChoiceOutcomeType,ChoiceOutcomeWorldFlag,ChoiceOutcomeIntValue,ChoiceOutcomeFloatValue,ChoiceOutcomeTagPayload,ChoiceOutcomeStringPayload,ChoiceRequirementType,ChoiceRequirementTag,ChoiceRequirementThresholdValue,ChoiceRequirementIndicatorType,ChoiceRequirementIndicatorText,ChoiceRequirementIndicatorIcon,bChoiceRequirementShowIndicatorWhenMet
+Jijibo_Delivered_AskStatus,Jijibo,0,지지보,"잡음이 줄었어. 네가 건네준 모듈 덕분에 잃어버린 곡의 윤곽이 다시 돌아오고 있어.",Dialogue.Jijibo.SpeakerModuleDelivered,1,0,"모듈은 잘 작동해?",,,10,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Delivered_HiddenFreq,Jijibo,0,지지보,"잡음이 줄었어. 네가 건네준 모듈 덕분에 잃어버린 곡의 윤곽이 다시 돌아오고 있어.",Dialogue.Jijibo.SpeakerModuleDelivered,1,1,"숨겨둔 주파수를 들려줘.",,,11,0,0,None,,0,0,,,WorldFlagAtLeast,Dialogue.Jijibo.TrustHigh,1,Branch,신뢰 분기,,True
+Jijibo_Delivered_StayQuiet,Jijibo,0,지지보,"잡음이 줄었어. 네가 건네준 모듈 덕분에 잃어버린 곡의 윤곽이 다시 돌아오고 있어.",Dialogue.Jijibo.SpeakerModuleDelivered,1,2,"오늘은 노래만 들을게.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Accepted_NotYet,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,0,"아직 못 찾았어.",,,13,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Accepted_Deliver_Take,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,1,"스피커 모듈을 가져왔어.",,,14,0,0,TakeItem,,0,0,Item.Part.SpeakerModule,,HasItemTag,Item.Part.SpeakerModule,0,Item,스피커 모듈,,True
+Jijibo_Accepted_Deliver_Flag,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,1,"스피커 모듈을 가져왔어.",,,14,1,0,SetWorldFlag,Dialogue.Jijibo.SpeakerModuleDelivered,1,0,,,None,,0,None,,,True
+Jijibo_Accepted_Deliver_Persona,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,1,"스피커 모듈을 가져왔어.",,,14,2,0,AdjustPersona,,0,8,,,None,,0,None,,,True
+Jijibo_Accepted_WhyImportant,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,2,"왜 그게 그렇게 중요해?",,,15,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Accepted_PersonaTrust_Flag,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,3,"네가 찾는 건 부품보다 기억 같은데.",,,16,0,0,SetWorldFlag,Dialogue.Jijibo.TrustHigh,1,0,,,PersonaAtLeast,,50,Persona,> 50,,True
+Jijibo_Accepted_PersonaTrust_Persona,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,3,"네가 찾는 건 부품보다 기억 같은데.",,,16,1,0,AdjustPersona,,0,5,,,None,,0,None,,,True
+Jijibo_Accepted_PowerBranch,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,4,"전력이 돌아왔어. 우회 방송을 열 수 있지?",,,17,0,0,SetWorldFlag,Dialogue.Jijibo.SignalUnlocked,1,0,,,WorldFlagAtLeast,World.Power.On,1,Quest,전원 복구,,True
+Jijibo_Accepted_Leave,Jijibo,1,지지보,"아직도 주파수는 열어 둔 채야. 스피커 모듈만 돌아오면 끊긴 합주를 이어 볼 수 있어.",Dialogue.Jijibo.AcceptedRequest,2,5,"다음에 다시 올게.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Refused_Reconsider_Flag,Jijibo,2,지지보,"그때는 망설였지. 하지만 방송은 아직 안 꺼졌어. 마음이 바뀌었다면 지금이라도 늦지 않아.",Dialogue.Jijibo.RefusedRequest,3,0,"생각해보니 도와줄게.",,,18,0,0,SetWorldFlag,Dialogue.Jijibo.AcceptedRequest,1,0,,,None,,0,None,,,True
+Jijibo_Refused_Reconsider_Quest,Jijibo,2,지지보,"그때는 망설였지. 하지만 방송은 아직 안 꺼졌어. 마음이 바뀌었다면 지금이라도 늦지 않아.",Dialogue.Jijibo.RefusedRequest,3,0,"생각해보니 도와줄게.",,,18,1,0,SetWorldFlag,Quest.Jijibo.SpeakerModule,1,0,,,None,,0,None,,,True
+Jijibo_Refused_ExplainAgain,Jijibo,2,지지보,"그때는 망설였지. 하지만 방송은 아직 안 꺼졌어. 마음이 바뀌었다면 지금이라도 늦지 않아.",Dialogue.Jijibo.RefusedRequest,3,1,"뭘 찾는지 다시 설명해줘.",,,15,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Refused_NotNow,Jijibo,2,지지보,"그때는 망설였지. 하지만 방송은 아직 안 꺼졌어. 마음이 바뀌었다면 지금이라도 늦지 않아.",Dialogue.Jijibo.RefusedRequest,3,2,"아직은 못 하겠어.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_FirstIntro_Continue,Jijibo,3,지지보,"치직... 수신 확인. 네 쪽에서 내 주파수를 붙잡았네. 낯선 손인데도 이상하게 익숙한 잡음이 섞여 있어.",, -1,0,"주파수는 맞았어. 계속 말해.",,,4,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_FirstIntro_WhoAreYou,Jijibo,3,지지보,"치직... 수신 확인. 네 쪽에서 내 주파수를 붙잡았네. 낯선 손인데도 이상하게 익숙한 잡음이 섞여 있어.",, -1,1,"누구야?",,,5,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_FirstIntro_Busy,Jijibo,3,지지보,"치직... 수신 확인. 네 쪽에서 내 주파수를 붙잡았네. 낯선 손인데도 이상하게 익숙한 잡음이 섞여 있어.",, -1,2,"지금은 바빠.",,,6,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_WarmIntro_Memory,Jijibo,4,지지보,"좋아. 그럼 짧게 갈게. 이 선로엔 오래전에 끊긴 합주가 남아 있어. 나는 그 마지막 박자를 아직 기억하고 있어.",, -1,0,"남아 있는 기억?",,,7,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_WarmIntro_Request,Jijibo,4,지지보,"좋아. 그럼 짧게 갈게. 이 선로엔 오래전에 끊긴 합주가 남아 있어. 나는 그 마지막 박자를 아직 기억하고 있어.",, -1,1,"무슨 부탁을 하려는 거야?",,,8,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_WarmIntro_WhyBroadcast,Jijibo,4,지지보,"좋아. 그럼 짧게 갈게. 이 선로엔 오래전에 끊긴 합주가 남아 있어. 나는 그 마지막 박자를 아직 기억하고 있어.",, -1,2,"잡음이 심한데도 계속 방송하는 이유가 있어?",,,9,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Reveal_NameFlag,Jijibo,5,지지보,"나는 지지보. 이동형 라디오 유닛. 전투 기능은 없고, 기억이 섞인 방송을 놓치지 않으려 주파수를 떠돌고 있어.",, -1,0,"이름이 지지보인 이유가 뭐야?",,,9,0,0,SetWorldFlag,Dialogue.Jijibo.HeardName,1,0,,,None,,0,None,,,True
+Jijibo_Reveal_Request,Jijibo,5,지지보,"나는 지지보. 이동형 라디오 유닛. 전투 기능은 없고, 기억이 섞인 방송을 놓치지 않으려 주파수를 떠돌고 있어.",, -1,1,"무슨 도움이 필요해?",,,8,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Reveal_Leave,Jijibo,5,지지보,"나는 지지보. 이동형 라디오 유닛. 전투 기능은 없고, 기억이 섞인 방송을 놓치지 않으려 주파수를 떠돌고 있어.",, -1,2,"나중에 다시 듣지.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_BusyLeave_End,Jijibo,6,지지보,"알겠어. 주파수는 닫지 않을게. 마음이 바뀌면 다시 맞춰.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_MemoryHint_BackstoryFlag,Jijibo,7,지지보,"정확히는... 합주가 아니라, 그 곡을 함께 틀던 이들의 반응이야. 웃음, 숨소리, 박수. 잡음 사이에 아직 남아 있어.",, -1,0,"그 기억을 되살릴 방법이 있어?",,,8,0,0,SetWorldFlag,Dialogue.Jijibo.HeardBackstory,1,0,,,None,,0,None,,,True
+Jijibo_MemoryHint_SongMemory,Jijibo,7,지지보,"정확히는... 합주가 아니라, 그 곡을 함께 틀던 이들의 반응이야. 웃음, 숨소리, 박수. 잡음 사이에 아직 남아 있어.",, -1,1,"노래가 기억을 붙잡고 있는 거야?",,,20,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_MemoryHint_Safe,Jijibo,7,지지보,"정확히는... 합주가 아니라, 그 곡을 함께 틀던 이들의 반응이야. 웃음, 숨소리, 박수. 잡음 사이에 아직 남아 있어.",, -1,2,"위험한 일은 아니지?",,,8,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Request_Accept_Flag,Jijibo,8,지지보,"오래된 스피커 모듈이 하나 필요해. 지금 내 출력은 반쯤 죽어 있어. 그 모듈만 있으면 마지막 합주를 다시 틀 수 있어.",, -1,0,"찾으면 가져다줄게.",,,18,0,0,SetWorldFlag,Dialogue.Jijibo.AcceptedRequest,1,0,,,None,,0,None,,,True
+Jijibo_Request_Accept_Quest,Jijibo,8,지지보,"오래된 스피커 모듈이 하나 필요해. 지금 내 출력은 반쯤 죽어 있어. 그 모듈만 있으면 마지막 합주를 다시 틀 수 있어.",, -1,0,"찾으면 가져다줄게.",,,18,1,0,SetWorldFlag,Quest.Jijibo.SpeakerModule,1,0,,,None,,0,None,,,True
+Jijibo_Request_SearchHint_Flag,Jijibo,8,지지보,"오래된 스피커 모듈이 하나 필요해. 지금 내 출력은 반쯤 죽어 있어. 그 모듈만 있으면 마지막 합주를 다시 틀 수 있어.",, -1,1,"어디서 찾아야 해?",,,21,0,0,SetWorldFlag,Dialogue.Jijibo.AcceptedRequest,1,0,,,None,,0,None,,,True
+Jijibo_Request_SearchHint_Quest,Jijibo,8,지지보,"오래된 스피커 모듈이 하나 필요해. 지금 내 출력은 반쯤 죽어 있어. 그 모듈만 있으면 마지막 합주를 다시 틀 수 있어.",, -1,1,"어디서 찾아야 해?",,,21,1,0,SetWorldFlag,Quest.Jijibo.SpeakerModule,1,0,,,None,,0,None,,,True
+Jijibo_Request_Refuse,Jijibo,8,지지보,"오래된 스피커 모듈이 하나 필요해. 지금 내 출력은 반쯤 죽어 있어. 그 모듈만 있으면 마지막 합주를 다시 틀 수 있어.",, -1,2,"장담은 못 해.",,,19,0,0,SetWorldFlag,Dialogue.Jijibo.RefusedRequest,1,0,,,None,,0,None,,,True
+Jijibo_WhyBroadcast_Alone,Jijibo,9,지지보,"방송을 멈추면, 누가 마지막 곡을 기억해 줄까? 누군가는 잡음 속에서도 신호를 붙잡아야 하잖아.",, -1,0,"혼자 계속 듣고 있었구나.",,,20,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_WhyBroadcast_Reward,Jijibo,9,지지보,"방송을 멈추면, 누가 마지막 곡을 기억해 줄까? 누군가는 잡음 속에서도 신호를 붙잡아야 하잖아.",, -1,1,"도와주면 뭘 들을 수 있어?",,,8,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_WhyBroadcast_Enough,Jijibo,9,지지보,"방송을 멈추면, 누가 마지막 곡을 기억해 줄까? 누군가는 잡음 속에서도 신호를 붙잡아야 하잖아.",, -1,2,"충분히 들었어.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Delivered_StatusNode,Jijibo,10,지지보,"모듈이 맞물리면서 파형이 살아났어. 아직 완벽하진 않지만, 이제는 박자 사이의 숨도 들린다.",,-1,0,"직접 들어보자.",,,22,0,0,AdjustPersona,,0,4,,,None,,0,None,,,True
+Jijibo_Delivered_StatusMemory,Jijibo,10,지지보,"모듈이 맞물리면서 파형이 살아났어. 아직 완벽하진 않지만, 이제는 박자 사이의 숨도 들린다.",,-1,1,"이제 기억난 게 있어?",,,23,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Delivered_StatusHidden,Jijibo,10,지지보,"모듈이 맞물리면서 파형이 살아났어. 아직 완벽하진 않지만, 이제는 박자 사이의 숨도 들린다.",,-1,2,"숨겨둔 방송 로그를 열어줘.",,,11,0,0,None,,0,0,,,WorldFlagAtLeast,Dialogue.Jijibo.TrustHigh,1,Branch,신뢰 분기,,True
+Jijibo_HiddenFreq_UnlockBranch,Jijibo,11,지지보,"좋아. 네가 여기까지 왔다면 들려줄 수 있어. 폐선 아래에 숨겨 둔 우회 방송이 있어. 원래는 아무에게도 열지 않으려 했지.",,-1,-1,,,,,0,0,SetWorldFlag,Branch.Jijibo.Broadcast,1,0,,,None,,0,None,,,True
+Jijibo_QuietEnd,Jijibo,12,지지보,"좋아. 그럼 잠시 말 수를 줄일게. 필요해지면 다시 주파수를 맞춰.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_ReminderEnd,Jijibo,13,지지보,"괜찮아. 방송은 계속 열어 둘게. 모듈을 손에 넣는 순간 다시 말 걸어 줘.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_DeliveryComplete_End,Jijibo,14,지지보,"이 주파수... 맞아. 내가 잃어버린 바로 그 울림이야. 네가 돌려준 건 부품이 아니라, 끊긴 합주로 가는 문이야.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_ImportanceExplain_End,Jijibo,15,지지보,"그 모듈엔 단순한 출력값만 남아 있는 게 아니야. 마지막으로 송출된 곡의 잔향과 반응까지 엉켜 있어. 나는 그걸 놓치고 싶지 않아.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_PersonaTrust_End,Jijibo,16,지지보,"...그래. 대부분은 그냥 고철 얘기로 넘기는데, 넌 다르게 듣는구나. 그 말은 기억해 둘게.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_PowerBranch_End,Jijibo,17,지지보,"전원이 돌아왔다면 우회 송출도 가능해. 다음엔 더 깊은 대역을 열어 둘게. 잡음 뒤에 숨겨 둔 로그가 있다.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_AcceptedQuest_End,Jijibo,18,지지보,"고마워. 스피커 모듈은 보통 버려진 방송 설비나 전자 부품 더미 근처에서 흔적이 남아. 찾으면 바로 내게 가져와.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_Refused_End,Jijibo,19,지지보,"알겠어. 억지로 붙잡진 않을게. 하지만 그 모듈을 보게 되면... 네가 먼저 내 방송을 떠올릴지도 몰라.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_MusicMemory_AcceptFlag,Jijibo,20,지지보,"노래는 사라져도, 함께 들은 존재들의 반응은 오래 남아. 그래서 나는 그 잔향을 기억이라고 부르고 있어.",,-1,0,"그 기억을 다시 들려줘. 내가 찾을게.",,,18,0,0,SetWorldFlag,Dialogue.Jijibo.AcceptedRequest,1,0,,,None,,0,None,,,True
+Jijibo_MusicMemory_AcceptQuest,Jijibo,20,지지보,"노래는 사라져도, 함께 들은 존재들의 반응은 오래 남아. 그래서 나는 그 잔향을 기억이라고 부르고 있어.",,-1,0,"그 기억을 다시 들려줘. 내가 찾을게.",,,18,1,0,SetWorldFlag,Quest.Jijibo.SpeakerModule,1,0,,,None,,0,None,,,True
+Jijibo_MusicMemory_Warn,Jijibo,20,지지보,"노래는 사라져도, 함께 들은 존재들의 반응은 오래 남아. 그래서 나는 그 잔향을 기억이라고 부르고 있어.",,-1,1,"기억을 붙잡는 건 위험할 수도 있어.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_MusicMemory_Explain,Jijibo,20,지지보,"노래는 사라져도, 함께 들은 존재들의 반응은 오래 남아. 그래서 나는 그 잔향을 기억이라고 부르고 있어.",,-1,2,"계속 말해봐.",,,15,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_SearchHint_End,Jijibo,21,지지보,"전자 폐기 더미, 오래된 방송 캐비닛, 그리고 전력이 한번 나갔던 구역을 먼저 봐. 멀쩡한 부품은 아니니 금속 울림이 다른 놈을 찾으면 돼.",,-1,-1,,,,,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_ShareSong_End,Jijibo,22,지지보,"좋아, 잠깐만. 치직... 지금 들리는 이 흔들림이 마지막 합주의 첫 박자야. 네가 가져온 모듈이 그 틈을 다시 이어 줬어.",,-1,-1,,,,,0,0,SetWorldFlag,Dialogue.Jijibo.SharedSong,1,0,,,None,,0,None,,,True
+Jijibo_PostSong_MemoryArchive,Jijibo,23,지지보,"조금은 기억나. 곡 자체보다, 그걸 함께 들으며 멈춰 섰던 존재들의 호흡이 더 선명해. 누군가는 이걸 기록으로 남겨야 해.",,-1,0,"네 기억을 기록으로 남겨둘까?",,,24,0,0,SetWorldFlag,Branch.Jijibo.Memory,1,0,,,PersonaAtLeast,,50,Persona,> 50,,True
+Jijibo_PostSong_Leave,Jijibo,23,지지보,"조금은 기억나. 곡 자체보다, 그걸 함께 들으며 멈춰 섰던 존재들의 호흡이 더 선명해. 누군가는 이걸 기록으로 남겨야 해.",,-1,1,"다음 운행 때 또 들으러 올게.",,,12,0,0,None,,0,0,,,None,,0,None,,,True
+Jijibo_MemoryArchive_End,Jijibo,24,지지보,"좋아. 그럼 내 방송은 더 이상 잔향만은 아니겠네. 네가 기록한다면, 이번엔 누군가가 정말로 기억해 줄 테니까.",,-1,-1,,,,,0,0,AdjustPersona,,0,6,,,None,,0,None,,,True

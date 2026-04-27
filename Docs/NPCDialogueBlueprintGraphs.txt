@@ -1,0 +1,2 @@
+Blueprint: /Game/Pickpacker/Core/UI/WBP_NPCDialogue
+Blueprint: /Game/Pickpacker/Core/UI/WBP_NPCDialogueChoice

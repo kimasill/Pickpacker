@@ -206,6 +206,9 @@ Content/Textures/**
 # Content/Maps/**  # Re-enabled: maps are now tracked
 !Content/Maps/
 !Content/Maps/**
+# Re-ignore generated map artifacts after re-including map content
+Content/Maps/*_BuiltData.uasset
+Content/Maps/*_HLOD*_Instancing.uasset
 # Exclude reference asset packs inside Assets
 Content/Assets/Ref/**
 
@@ -226,6 +229,7 @@ Guides/
 
 # IDE / Editor settings
 .cursor/
+DawnStar_local/
 
 # Stray asset export (should not be in VCS)
 DA_ParcelData.T3D
