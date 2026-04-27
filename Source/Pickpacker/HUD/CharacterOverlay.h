@@ -61,6 +61,6 @@ public:
 	UWidgetAnimation* HighPingAnimation;
 
 	/** Inventory widget (bottom horizontal UI) */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	class UInventoryWidget* InventoryWidget;
 };

@@ -6,6 +6,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Engine/World.h"
 #include "GameplayTagContainer.h"
+#include "PickpackerTypes/CoreLoopTypes.h"
 #include "AnchorRuntimeSubsystem.generated.h"
 
 class UDA_LevelVariant;
@@ -52,6 +53,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Anchor System")
 	void ScanAndRandomizeAnchors();
 
+	UFUNCTION(BlueprintCallable, Category = "Anchor System")
+	void ApplyRouteSelectionResult(const FRouteSelectionResult& InRouteSelectionResult);
+
 	/**
 	 * Get all actors with specific anchor tags
 	 * @param AnchorTag - Gameplay tag to search for
@@ -71,6 +75,9 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Anchor System")
 	int32 GetCurrentSeed() const { return CurrentSeed; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Anchor System")
+	const FRouteSelectionResult& GetCurrentRouteSelectionResult() const { return CurrentRouteSelectionResult; }
 
 protected:
 	/**
@@ -116,4 +123,7 @@ private:
 	/** Randomization results */
 	UPROPERTY()
 	TMap<TObjectPtr<AActor>, TObjectPtr<AActor>> ReplacementResults;
+
+	UPROPERTY()
+	FRouteSelectionResult CurrentRouteSelectionResult;
 };

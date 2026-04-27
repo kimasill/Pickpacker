@@ -92,6 +92,21 @@ void UAnchorRuntimeSubsystem::ScanAndRandomizeAnchors()
 	UE_LOG(LogTemp, Log, TEXT("[AnchorRuntimeSubsystem] Anchor randomization complete. Found %d anchors, %d activated, %d replaced"), 
 		AllAnchorActors.Num(), ActivationResults.Num(), ReplacementResults.Num());
 }
+
+void UAnchorRuntimeSubsystem::ApplyRouteSelectionResult(const FRouteSelectionResult& InRouteSelectionResult)
+{
+	CurrentRouteSelectionResult = InRouteSelectionResult;
+
+	if (CurrentRouteSelectionResult.RouteSeed > 0)
+	{
+		CurrentSeed = CurrentRouteSelectionResult.RouteSeed;
+	}
+
+	if (bInitialized && LevelVariantData)
+	{
+		ScanAndRandomizeAnchors();
+	}
+}
 void UAnchorRuntimeSubsystem::ScanLevelForAnchors()
 {
 	UWorld* World = GetWorld();

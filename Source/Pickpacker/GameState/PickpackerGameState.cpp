@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Subsystem/AnchorRuntimeSubsystem.h"
+#include "Subsystem/CoreLoopSubsystem.h"
 #include "GameMode/PickpackerGameMode.h"
 
 APickpackerGameState::APickpackerGameState()
@@ -40,6 +41,12 @@ void APickpackerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(APickpackerGameState, OrderTimesPayloads);
 	DOREPLIFETIME(APickpackerGameState, CoreLoopPhase);
 	DOREPLIFETIME(APickpackerGameState, CompletedTrips);
+	DOREPLIFETIME(APickpackerGameState, RunStage);
+	DOREPLIFETIME(APickpackerGameState, CurrentMissionDefinition);
+	DOREPLIFETIME(APickpackerGameState, SessionStorageRecords);
+	DOREPLIFETIME(APickpackerGameState, RunPersonaStats);
+	DOREPLIFETIME(APickpackerGameState, EndingFlagStates);
+	DOREPLIFETIME(APickpackerGameState, CurrentRouteSelectionResult);
 }
 
 void APickpackerGameState::BeginPlay()
@@ -57,6 +64,8 @@ void APickpackerGameState::BeginPlay()
 
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] BeginPlay - Anchor subsystem: %s, GameStartTime: %.2f"), 
 		AnchorSubsystem ? TEXT("Found") : TEXT("Not Found"), GameStartTime);
+
+	TryApplyRouteRuntime();
 }
 
 void APickpackerGameState::SetLevelVariant(UDA_LevelVariant* NewLevelVariant)
@@ -71,6 +80,8 @@ void APickpackerGameState::SetLevelVariant(UDA_LevelVariant* NewLevelVariant)
 	
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Level variant set: %s"), 
 		LevelVariant ? *LevelVariant->LevelName : TEXT("None"));
+
+	TryApplyRouteRuntime();
 }
 
 void APickpackerGameState::SetRandomSeed(int32 NewSeed)
@@ -84,6 +95,8 @@ void APickpackerGameState::SetRandomSeed(int32 NewSeed)
 	RandomSeed = NewSeed;
 	
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Random seed set: %d"), RandomSeed);
+
+	TryApplyRouteRuntime();
 }
 
 void APickpackerGameState::AddTeamSuspicion(float SuspicionPoints)
@@ -100,7 +113,42 @@ void APickpackerGameState::AddTeamSuspicion(float SuspicionPoints)
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameState] Team suspicion: %.2f -> %.2f (+%.2f)"), 
 		OldSuspicion, TeamSuspicion, SuspicionPoints);
 
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetTeamSuspicion(TeamSuspicion);
+		}
+	}
+
 	// Broadcast suspicion change
+	OnSuspicionChanged.Broadcast(GetSuspicionLevel());
+}
+
+void APickpackerGameState::SetTeamSuspicionValue(float NewSuspicion)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PickpackerGameState] SetTeamSuspicionValue called without authority"));
+		return;
+	}
+
+	const float ClampedSuspicion = FMath::Clamp(NewSuspicion, 0.0f, MaxSuspicion);
+	if (FMath::IsNearlyEqual(TeamSuspicion, ClampedSuspicion))
+	{
+		return;
+	}
+
+	TeamSuspicion = ClampedSuspicion;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetTeamSuspicion(TeamSuspicion);
+		}
+	}
+
 	OnSuspicionChanged.Broadcast(GetSuspicionLevel());
 }
 
@@ -166,6 +214,14 @@ void APickpackerGameState::SetTeamCredits(int32 NewCredits)
 
 	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
 
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetTeamCredits(TeamCredits);
+		}
+	}
+
 	if (TeamCredits <= 0 && OldCredits > 0)
 	{
 		if (APickpackerGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<APickpackerGameMode>() : nullptr)
@@ -206,6 +262,14 @@ void APickpackerGameState::ApplyCreditDelta(int32 Delta, const FString& Reason)
 	}
 
 	OnCreditsChanged.Broadcast(TeamCredits, TeamCredits - OldCredits);
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetTeamCredits(TeamCredits);
+		}
+	}
 
 	if (TeamCredits <= 0 && OldCredits > 0)
 	{
@@ -275,6 +339,8 @@ void APickpackerGameState::OnRep_TeamCredits()
 void APickpackerGameState::OnRep_OrderTimesPayloads()
 {
 	OnOrderTimesUpdated.Broadcast(OrderTimesPayloads);
+	const float CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	OnGlobalTimerCall.Broadcast(CurrentTime);
 }
 
 float APickpackerGameState::GetCurrentGameHour() const
@@ -363,9 +429,106 @@ void APickpackerGameState::SetCompletedTrips(int32 NewTrips)
 	CompletedTrips = FMath::Max(0, NewTrips);
 }
 
+void APickpackerGameState::SetRunStage(ERunProgressStage NewStage)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (RunStage == NewStage)
+	{
+		return;
+	}
+
+	const ERunProgressStage OldStage = RunStage;
+	RunStage = NewStage;
+	OnRunStageUpdated.Broadcast(OldStage, NewStage);
+}
+
+void APickpackerGameState::SetCurrentMissionDefinition(const FMissionDefinition& NewMissionDefinition)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	CurrentMissionDefinition = NewMissionDefinition;
+	OnMissionDefinitionUpdated.Broadcast(CurrentMissionDefinition);
+}
+
+void APickpackerGameState::SetCurrentRouteSelectionResult(const FRouteSelectionResult& NewRouteSelectionResult)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	CurrentRouteSelectionResult = NewRouteSelectionResult;
+	TryApplyRouteRuntime();
+}
+
+void APickpackerGameState::SetSessionStorageRecords(const TArray<FStorageRecord>& NewStorageRecords)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	SessionStorageRecords = NewStorageRecords;
+	OnStorageRecordsChanged.Broadcast(SessionStorageRecords);
+}
+
+void APickpackerGameState::SetRunPersonaStats(const FPersonaStats& NewPersonaStats)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	RunPersonaStats = NewPersonaStats;
+}
+
+void APickpackerGameState::SetEndingFlagStates(const TArray<FEndingFlagState>& NewEndingFlagStates)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	EndingFlagStates = NewEndingFlagStates;
+}
+
 void APickpackerGameState::OnRep_CoreLoopPhase(ECoreLoopPhase OldPhase)
 {
 	OnCoreLoopPhaseChanged.Broadcast(OldPhase, CoreLoopPhase);
+}
+
+void APickpackerGameState::OnRep_RunStage(ERunProgressStage OldStage)
+{
+	OnRunStageUpdated.Broadcast(OldStage, RunStage);
+}
+
+void APickpackerGameState::OnRep_CurrentMissionDefinition()
+{
+	OnMissionDefinitionUpdated.Broadcast(CurrentMissionDefinition);
+}
+
+void APickpackerGameState::OnRep_SessionStorageRecords()
+{
+	OnStorageRecordsChanged.Broadcast(SessionStorageRecords);
+}
+
+void APickpackerGameState::OnRep_RunPersonaStats()
+{
+}
+
+void APickpackerGameState::OnRep_EndingFlagStates()
+{
+}
+
+void APickpackerGameState::OnRep_CurrentRouteSelectionResult()
+{
 }
 
 void APickpackerGameState::EnsureOrderTimesUpdateTimer()
@@ -426,4 +589,30 @@ void APickpackerGameState::BroadcastOrderRemainingTimes()
 		StopOrderTimesUpdateTimer();
 	}
 	OnOrderTimesUpdated.Broadcast(OrderTimesPayloads);
+	OnGlobalTimerCall.Broadcast(Now);
+}
+
+void APickpackerGameState::TryApplyRouteRuntime()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UAnchorRuntimeSubsystem* LocalAnchorSubsystem = GetAnchorSubsystem();
+	if (!LocalAnchorSubsystem || !LevelVariant)
+	{
+		return;
+	}
+
+	const int32 EffectiveSeed = CurrentRouteSelectionResult.RouteSeed > 0
+		? CurrentRouteSelectionResult.RouteSeed
+		: RandomSeed;
+	if (EffectiveSeed <= 0)
+	{
+		return;
+	}
+
+	LocalAnchorSubsystem->InitializeAnchors(LevelVariant, EffectiveSeed);
+	LocalAnchorSubsystem->ApplyRouteSelectionResult(CurrentRouteSelectionResult);
 }

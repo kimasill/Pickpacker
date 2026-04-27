@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
+#include "Components/NPCModuleComponent.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
 #include "NPCLootTradeComponent.generated.h"
 
@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTradeClosed);
  * Entries can be conditioned on world flags.
  */
 UCLASS(ClassGroup = (NPC), meta = (BlueprintSpawnableComponent))
-class PICKPACKER_API UNPCLootTradeComponent : public UActorComponent
+class PICKPACKER_API UNPCLootTradeComponent : public UNPCModuleComponent
 {
 	GENERATED_BODY()
 

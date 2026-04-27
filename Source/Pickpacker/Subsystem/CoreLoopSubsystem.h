@@ -11,10 +11,13 @@
 class APickpackerGameState;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCoreLoopPhaseChanged, ECoreLoopPhase, OldPhase, ECoreLoopPhase, NewPhase);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRunStageChanged, ERunProgressStage, OldStage, ERunProgressStage, NewStage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunStarted, const FRunState&, RunState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunEnded, const FRunState&, FinalRunState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTripCompleted, int32, TripCount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainDestinationSelected, const FTrainDestination&, Destination);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionAssigned, const FMissionDefinition&, MissionDefinition);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStorageRecordsUpdated, const TArray<FStorageRecord>&, StorageRecords);
 
 /**
  * Core Loop Subsystem – orchestrates the run-based game loop.
@@ -50,6 +53,9 @@ public:
 	/** Start a new run (server only) */
 	UFUNCTION(BlueprintCallable, Category = "CoreLoop")
 	void StartRun(int32 InitialCredits = 30);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop")
+	bool RestoreRunState(const FRunState& SavedRunState, const FTrainDestination& SavedDestination);
 
 	/** End the current run (server only) */
 	UFUNCTION(BlueprintCallable, Category = "CoreLoop")
@@ -91,10 +97,45 @@ public:
 	ECoreLoopPhase GetCurrentPhase() const { return RunState.CurrentPhase; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CoreLoop")
+	ERunProgressStage GetCurrentStage() const { return RunState.CurrentStage; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CoreLoop")
 	const FRunState& GetRunState() const { return RunState; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CoreLoop|Train")
+	const FTrainDestination& GetCurrentDestination() const { return CurrentDestination; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CoreLoop")
 	int32 GetCompletedTrips() const { return RunState.CompletedTrips; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CoreLoop")
+	const TArray<FStorageRecord>& GetStorageRecords() const { return RunState.StorageRecords; }
+
+	// --- Run detail state -----------------------------------------------
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop")
+	void SetRunStage(ERunProgressStage NewStage);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop")
+	void AssignMissionDefinition(const FMissionDefinition& MissionDefinition);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Storage")
+	void DepositStorageItem(const FGameplayTag& ItemTag, int32 Quantity, FName SlotId = NAME_None);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Storage")
+	bool ConsumeStorageItem(const FGameplayTag& ItemTag, int32 Quantity, FName SlotId = NAME_None);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Meta")
+	void SetPersonaStats(const FPersonaStats& NewPersonaStats);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Meta")
+	void SetEndingFlagState(const FEndingFlagState& EndingFlagState);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Meta")
+	void SetTeamCredits(int32 NewCredits);
+
+	UFUNCTION(BlueprintCallable, Category = "CoreLoop|Meta")
+	void SetTeamSuspicion(float NewSuspicion);
 
 	// --- Destination management ------------------------------------------
 
@@ -116,6 +157,9 @@ public:
 	FOnCoreLoopPhaseChanged OnPhaseChanged;
 
 	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
+	FOnRunStageChanged OnRunStageChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
 	FOnRunStarted OnRunStarted;
 
 	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
@@ -126,6 +170,12 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
 	FOnTrainDestinationSelected OnTrainDestinationSelected;
+
+	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
+	FOnMissionAssigned OnMissionAssigned;
+
+	UPROPERTY(BlueprintAssignable, Category = "CoreLoop|Events")
+	FOnStorageRecordsUpdated OnStorageRecordsUpdated;
 
 protected:
 	/** Set phase and broadcast */

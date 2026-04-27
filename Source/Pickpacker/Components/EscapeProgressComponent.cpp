@@ -5,6 +5,7 @@
 #include "GameState/PickpackerGameState.h"
 #include "GameMode/PickpackerGameMode.h"
 #include "PlayerController/BlasterPlayerController.h"
+#include "Subsystem/CoreLoopSubsystem.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -95,6 +96,18 @@ void UEscapeProgressComponent::SetWorldFlag(const FGameplayTag& Flag, int32 Valu
 		WorldFlags.Add(MoveTemp(NewEntry));
 	}
 
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			FEndingFlagState EndingFlagState;
+			EndingFlagState.FlagId = Flag.GetTagName();
+			EndingFlagState.bUnlocked = Value > 0;
+			EndingFlagState.bLocked = Value < 0;
+			CoreLoop->SetEndingFlagState(EndingFlagState);
+		}
+	}
+
 	// 월드 플래그 변경 시 즉시 엔딩 조건 재평가
 	EvaluateEndings();
 }
@@ -111,6 +124,21 @@ int32 UEscapeProgressComponent::GetWorldFlag(const FGameplayTag& Flag) const
 bool UEscapeProgressComponent::IsWorldFlagAtLeast(const FGameplayTag& Flag, int32 MinValue) const
 {
 	return GetWorldFlag(Flag) >= MinValue;
+}
+
+void UEscapeProgressComponent::RestoreWorldFlags(const TArray<FWorldFlagEntry>& InWorldFlags, bool bReevaluateEndings)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	WorldFlags = InWorldFlags;
+
+	if (bReevaluateEndings)
+	{
+		EvaluateEndings();
+	}
 }
 
 bool UEscapeProgressComponent::IsWorldFlagInRange(const FGameplayTag& Flag, int32 MinValue, int32 MaxValue) const
@@ -236,6 +264,18 @@ void UEscapeProgressComponent::StartEnding(const UDA_EndingData* EndingData)
 	}
 
 	CurrentEndingId = EndingData->EndingId;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			FEndingFlagState EndingFlagState;
+			EndingFlagState.FlagId = CurrentEndingId;
+			EndingFlagState.bUnlocked = true;
+			EndingFlagState.bLocked = false;
+			CoreLoop->SetEndingFlagState(EndingFlagState);
+		}
+	}
 
 	// 탈출 시퀀스 시작 시 오더 웨이브 제거 (탈출 과정 방해 방지)
 	if (UWorld* World = GetWorld())
@@ -493,8 +533,6 @@ void UEscapeProgressComponent::OnRep_CurrentEndingId()
 		BroadcastInputBlock(true);
 	}
 }
-
-
 
 
 

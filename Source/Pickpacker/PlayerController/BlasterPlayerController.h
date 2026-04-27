@@ -5,10 +5,14 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
+#include "UI/NPCDialogueUIData.h"
 
 class ULevelSequence;
 class UUserWidget;
 class UInputAction;
+class UTrainDestinationSelectionWidget;
+class UTrainTravelComponent;
+class UNPCDialogueWidget;
 
 #include "BlasterPlayerController.generated.h"
 
@@ -141,12 +145,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Loading")
 	void SetLoadingTextKey(FName TextKey);
 
+	UFUNCTION(Client, Reliable, Category = "Dialogue")
+	void ClientShowNPCDialogue(AActor* DialogueActor, const FDialogueUIState& DialogueState);
+
+	UFUNCTION(Client, Reliable, Category = "Dialogue")
+	void ClientCloseNPCDialogue(AActor* DialogueActor);
+
+	UFUNCTION(Server, Reliable, Category = "Dialogue")
+	void ServerSelectNPCDialogueChoice(AActor* DialogueActor, int32 ChoiceIndex);
+
+	UFUNCTION(Server, Reliable, Category = "Dialogue")
+	void ServerAdvanceNPCDialogue(AActor* DialogueActor);
+
+	UFUNCTION(Server, Reliable, Category = "Dialogue")
+	void ServerCloseNPCDialogue(AActor* DialogueActor);
+
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	void SetHUDTime();
 	void PollInit(); // Polls for the BlasterHUD and CharacterOverlay widgets
 	virtual void SetupInputComponent() override;
+	void EnsureDefaultAssetReferences();
+	void EnsureGameplayHUD();
+	bool EnsurePickpackerHUDWidget();
 
 	/** 로비 설정 패널 토글 (키 바인딩 필요: "LobbyPanel") */
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
@@ -154,6 +177,10 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
 	void TogglePanel();
+
+	/** 레거시 블루프린트 호환용 로비 UI 열기 엔트리 포인트 */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void OnOpenLobbyUI();
 
 	/** 시맨틱 트래블 후 블루프린트 HUD 재생성용. BP_BlasterPlayerController에서 이벤트 구현 시 WBP_PickPackerHUD Create Widget + Add to Viewport 호출 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
@@ -221,6 +248,24 @@ private:
 	UPROPERTY()
 	UUserWidget* LoadingScreenWidget;
 
+	UPROPERTY(EditAnywhere, Category = "Train|UI")
+	TSubclassOf<UTrainDestinationSelectionWidget> TrainDestinationSelectionWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UTrainDestinationSelectionWidget> TrainDestinationSelectionWidget;
+
+	UPROPERTY()
+	TObjectPtr<UTrainTravelComponent> BoundTrainTravelComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Dialogue|UI")
+	TSubclassOf<UNPCDialogueWidget> NPCDialogueWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UNPCDialogueWidget> NPCDialogueWidget;
+
+	UPROPERTY()
+	TObjectPtr<AActor> ActiveDialogueActor;
+
 	/** 로딩 화면에 표시할 텍스트 맵 */
 	UPROPERTY(EditAnywhere, Category = "Loading")
 	TMap<FName, FString> LoadingTextMap;
@@ -241,6 +286,33 @@ private:
 
 	void HandlePostLoadMap(UWorld* LoadedWorld);
 	void UpdateLoadingScreenText();
+	void EnsureTrainDestinationSelectionBinding();
+	void EnsureTrainDestinationSelectionWidget();
+	void RefreshTrainDestinationSelectionWidget();
+	void SetTrainDestinationSelectionVisible(bool bVisible);
+	void SetGameplayHUDVisible(bool bVisible);
+	void UpdateGameplayHUDVisibility();
+	UTrainTravelComponent* GetTrainTravelComponent() const;
+	void EnsureNPCDialogueWidget();
+	void SetNPCDialogueVisible(bool bVisible);
+
+	UFUNCTION()
+	void HandleNPCDialogueChoiceSelected(int32 ChoiceIndex);
+
+	UFUNCTION()
+	void HandleNPCDialogueAdvanceRequested();
+
+	UFUNCTION()
+	void HandleNPCDialogueClosedRequested();
+
+	UFUNCTION()
+	void HandleTrainSelectionContextUpdated(const FTrainSelectionContext& SelectionContext);
+
+	UFUNCTION()
+	void HandleTrainDestinationVotesUpdated(const TArray<FTrainDestinationVoteState>& VoteStates);
+
+	UFUNCTION()
+	void HandleTrainRouteSelectionResultUpdated(const FRouteSelectionResult& RouteSelectionResult);
 
 	/**
 	* Return to Main Menu

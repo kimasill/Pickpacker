@@ -226,6 +226,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
 	bool GetParcelConfigByName(const FName& RowName, FParcelConfig& OutConfig) const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
+	bool GetPackageRecipeByName(const FName& RowName, FParcelPackageRecipe& OutRecipe) const;
+
 	/** Parcel row 옵션 제공 (에디터 드롭다운용) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
 	TArray<FName> GetParcelRowOptions() const;
@@ -235,4 +238,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel Data")
 	float GetGlobalParameter(const FString& ParameterName, float DefaultValue = 0.0f) const;
+
+private:
+	bool IsPlaceholderDataset() const;
 };

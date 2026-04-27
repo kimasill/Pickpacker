@@ -5,6 +5,7 @@
 #include "UObject/SoftObjectPtr.h"
 #include "LevelSequence.h"
 #include "LevelSequencePlayer.h"
+#include "PickpackerAssetPaths.h"
 #include "TimerManager.h"
 #include "EndingGameMode.generated.h"
 
@@ -66,7 +67,7 @@ protected:
 	float EndingLevelReadyWaitTime = 2.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ending")
-	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+	FString LobbyTravelPath = PickpackerAssetPaths::Maps::EntryMap;
 
 	UPROPERTY()
 	ULevelSequencePlayer* SequencePlayer;
@@ -97,4 +98,3 @@ private:
 	TSet<TWeakObjectPtr<ABlasterPlayerController>> EndingLevelReadyPCs;
 	FTimerHandle EndingReadyTimerHandle;
 };
-

@@ -540,6 +540,10 @@ bool AParcelActor::UpdateMeshForCurrentPackagingState()
 	if (bIsPackaged)
 	{
 		TargetMesh = PackageMeshAsset.IsNull() ? nullptr : PackageMeshAsset.LoadSynchronous();
+		if (!TargetMesh && MeshComponent)
+		{
+			TargetMesh = MeshComponent->GetStaticMesh();
+		}
 		bIsPackaged = TargetMesh != nullptr;
 	}
 	else
@@ -1593,6 +1597,39 @@ int32 AParcelActor::GetContentUnitTotal() const
 	return GetPackagingSpaceUnits();
 }
 
+void AParcelActor::GetContentUnitsByTag(TMap<FGameplayTag, int32>& OutUnitsByTag) const
+{
+	OutUnitsByTag.Reset();
+
+	if (bIsPackaged && PackageContents.Num() > 0)
+	{
+		UDA_ParcelData* DataAsset = PackageParcelDataAsset ? PackageParcelDataAsset.Get() : ParcelDataAsset;
+		if (DataAsset)
+		{
+			for (const FParcelPackageContent& Entry : PackageContents)
+			{
+				if (Entry.Count <= 0 || Entry.ParcelRowName == NAME_None)
+				{
+					continue;
+				}
+
+				FParcelConfig ContentConfig;
+				if (!DataAsset->GetParcelConfigByName(Entry.ParcelRowName, ContentConfig) || !ContentConfig.ParcelTag.IsValid())
+				{
+					continue;
+				}
+
+				OutUnitsByTag.FindOrAdd(ContentConfig.ParcelTag) += FMath::Max(1, ContentConfig.PackagingSpaceUnits) * Entry.Count;
+			}
+		}
+	}
+
+	if (OutUnitsByTag.Num() == 0 && ParcelConfig.ParcelTag.IsValid())
+	{
+		OutUnitsByTag.Add(ParcelConfig.ParcelTag, GetPackagingSpaceUnits());
+	}
+}
+
 int32 AParcelActor::GetContentValueTotal() const
 {
 	if (bIsPackaged && PackageContents.Num() > 0)
@@ -1901,4 +1938,3 @@ void AParcelActor::EndLeakLoop()
 		UE_LOG(LogTemp, Log, TEXT("[ParcelActor] Leak loop ended"));
 	}
 }
-

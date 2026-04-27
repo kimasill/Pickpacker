@@ -5,10 +5,13 @@
 #include "Components/EscapeProgressComponent.h"
 #include "Escape/EscapeZoneActor.h"
 #include "Subsystem/CoreLoopSubsystem.h"
+#include "Subsystem/RunPersistenceSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Engine/LevelStreaming.h"
 #include "DataAssets/DA_LevelVariant.h"
 #include "DataAssets/DA_OrderWaveData.h"
+#include "DataAssets/DA_TrainDestinationData.h"
 #include "Parcel/ParcelActor.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -31,6 +34,83 @@ namespace
 	{
 		const FString LogDir = FPaths::Combine(FPaths::ProjectDir(), TEXT(".cursor"), TEXT("debug.log"));
 		FFileHelper::SaveStringToFile(JsonLine + LINE_TERMINATOR, *LogDir, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM, &IFileManager::Get(), FILEWRITE_Append);
+	}
+
+	static void ConsumeGenericUnitsFromMap(TMap<FGameplayTag, int32>& UnitsByTag, int32 UnitsToConsume)
+	{
+		if (UnitsToConsume <= 0 || UnitsByTag.Num() == 0)
+		{
+			return;
+		}
+
+		TArray<FGameplayTag> SortedTags;
+		UnitsByTag.GetKeys(SortedTags);
+		SortedTags.Sort([](const FGameplayTag& A, const FGameplayTag& B)
+		{
+			return A.ToString() < B.ToString();
+		});
+
+		for (const FGameplayTag& Tag : SortedTags)
+		{
+			int32* Units = UnitsByTag.Find(Tag);
+			if (!Units || *Units <= 0)
+			{
+				continue;
+			}
+
+			const int32 ConsumedUnits = FMath::Min(*Units, UnitsToConsume);
+			*Units -= ConsumedUnits;
+			UnitsToConsume -= ConsumedUnits;
+
+			if (*Units <= 0)
+			{
+				UnitsByTag.Remove(Tag);
+			}
+
+			if (UnitsToConsume <= 0)
+			{
+				break;
+			}
+		}
+	}
+
+	static void DepositParcelRemainderToStorage(UWorld* World, const AParcelActor* Parcel, const TMap<FGameplayTag, int32>& ConsumedUnitsByTag, int32 GenericConsumedUnits)
+	{
+		if (!World || !Parcel)
+		{
+			return;
+		}
+
+		UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>();
+		if (!CoreLoop || !CoreLoop->IsRunActive())
+		{
+			return;
+		}
+
+		TMap<FGameplayTag, int32> RemainingUnitsByTag;
+		Parcel->GetContentUnitsByTag(RemainingUnitsByTag);
+
+		for (const TPair<FGameplayTag, int32>& Pair : ConsumedUnitsByTag)
+		{
+			if (int32* RemainingUnits = RemainingUnitsByTag.Find(Pair.Key))
+			{
+				*RemainingUnits = FMath::Max(0, *RemainingUnits - Pair.Value);
+				if (*RemainingUnits == 0)
+				{
+					RemainingUnitsByTag.Remove(Pair.Key);
+				}
+			}
+		}
+
+		ConsumeGenericUnitsFromMap(RemainingUnitsByTag, GenericConsumedUnits);
+
+		for (const TPair<FGameplayTag, int32>& Pair : RemainingUnitsByTag)
+		{
+			if (Pair.Key.IsValid() && Pair.Value > 0)
+			{
+				CoreLoop->DepositStorageItem(Pair.Key, Pair.Value);
+			}
+		}
 	}
 }
 
@@ -121,6 +201,7 @@ void APickpackerGameMode::SetMissionConfig(const FString& MissionId, int32 Custo
 	if (!HasAuthority()) return;
 	CurrentMissionConfig.MissionId = MissionId;
 	CurrentMissionConfig.Seed = CustomSeed > 0 ? CustomSeed : FMath::RandRange(1, 999999);
+	RefreshMissionDefinitionFromOrders();
 
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Mission config set - MissionId: %s, Seed: %d"),
 		*CurrentMissionConfig.MissionId, CurrentMissionConfig.Seed);
@@ -143,17 +224,28 @@ void APickpackerGameMode::StartGameplay()
 	// Start checking game end conditions periodically
 	if (HasAuthority())
 	{
-		if (PickpackerGameState)
-		{
-			PickpackerGameState->SetTeamCredits(StartingTeamCredits);
-		}
+		RegisterTrainDestinations();
+		bTrainBoardingTriggered = false;
+		const bool bRestoredTravelSnapshot = TryRestoreTravelSnapshot();
 
-		// Start core loop subsystem
-		if (UWorld* World = GetWorld())
+		if (!bRestoredTravelSnapshot)
 		{
-			if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+			if (PickpackerGameState)
 			{
-				CoreLoop->StartRun(StartingTeamCredits);
+				PickpackerGameState->SetTeamCredits(StartingTeamCredits);
+				PickpackerGameState->SetTeamSuspicionValue(0.0f);
+			}
+
+			RefreshMissionDefinitionFromOrders();
+
+			// Start core loop subsystem
+			if (UWorld* World = GetWorld())
+			{
+				if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+				{
+					CoreLoop->StartRun(StartingTeamCredits);
+					CoreLoop->AssignMissionDefinition(CurrentMissionDefinition);
+				}
 			}
 		}
 
@@ -165,10 +257,108 @@ void APickpackerGameMode::StartGameplay()
 			true
 		);
 
-		if (bAutoStartOrders)
+		bool bShouldStartOrders = bAutoStartOrders && !bRestoredTravelSnapshot;
+		if (bRestoredTravelSnapshot)
+		{
+			if (UWorld* World = GetWorld())
+			{
+				if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+				{
+					bShouldStartOrders = bAutoStartOrders && CoreLoop->GetCurrentPhase() == ECoreLoopPhase::Base;
+				}
+			}
+		}
+
+		if (bShouldStartOrders)
 		{
 			StartOrderSystem();
 		}
+	}
+}
+
+bool APickpackerGameMode::TryRestoreTravelSnapshot()
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	UWorld* World = GetWorld();
+	if (!GameInstance || !World || !PickpackerGameState)
+	{
+		return false;
+	}
+
+	URunPersistenceSubsystem* RunPersistence = GameInstance->GetSubsystem<URunPersistenceSubsystem>();
+	if (!RunPersistence || !RunPersistence->HasSnapshot())
+	{
+		return false;
+	}
+
+	FPickpackerTravelSnapshot Snapshot;
+	if (!RunPersistence->ConsumeSnapshot(Snapshot) || !Snapshot.bValid)
+	{
+		return false;
+	}
+
+	if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+	{
+		CoreLoop->RestoreRunState(Snapshot.RunState, Snapshot.CurrentDestination);
+	}
+
+	CurrentMissionDefinition = Snapshot.RunState.ActiveMission;
+	PickpackerGameState->SetTeamCredits(Snapshot.RunState.TeamCredits);
+	PickpackerGameState->SetTeamSuspicionValue(Snapshot.RunState.TeamSuspicion);
+	PickpackerGameState->SetCurrentMissionDefinition(Snapshot.RunState.ActiveMission);
+	PickpackerGameState->SetSessionStorageRecords(Snapshot.RunState.StorageRecords);
+	PickpackerGameState->SetRunPersonaStats(Snapshot.RunState.PersonaStats);
+	PickpackerGameState->SetEndingFlagStates(Snapshot.RunState.EndingFlags);
+	PickpackerGameState->SetCurrentRouteSelectionResult(Snapshot.RouteSelectionResult);
+	if (UTrainTravelComponent* TrainTravel = PickpackerGameState->GetTrainTravelComponent())
+	{
+		TrainTravel->SetCargoRecords(Snapshot.CargoRecords);
+	}
+
+	if (UEscapeProgressComponent* EscapeProgress = PickpackerGameState->GetEscapeProgressComponent())
+	{
+		EscapeProgress->RestoreWorldFlags(Snapshot.WorldFlags, false);
+	}
+
+	if (Snapshot.RunState.CurrentPhase == ECoreLoopPhase::Base && Snapshot.CargoRecords.Num() > 0)
+	{
+		UnloadTrainCargoToStorage(Snapshot.CargoRecords);
+		if (UTrainTravelComponent* TrainTravel = PickpackerGameState->GetTrainTravelComponent())
+		{
+			TrainTravel->ClearCargoRecords();
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Restored travel snapshot. Phase=%d Stage=%d Trips=%d"),
+		static_cast<int32>(Snapshot.RunState.CurrentPhase),
+		static_cast<int32>(Snapshot.RunState.CurrentStage),
+		Snapshot.RunState.CompletedTrips);
+
+	return true;
+}
+
+void APickpackerGameMode::UnloadTrainCargoToStorage(const TArray<FStorageRecord>& CargoRecords)
+{
+	UWorld* World = GetWorld();
+	if (!World || CargoRecords.Num() == 0)
+	{
+		return;
+	}
+
+	UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>();
+	if (!CoreLoop || !CoreLoop->IsRunActive())
+	{
+		return;
+	}
+
+	for (const FStorageRecord& CargoRecord : CargoRecords)
+	{
+		if (!CargoRecord.ItemTag.IsValid() || CargoRecord.Quantity <= 0)
+		{
+			continue;
+		}
+
+		CoreLoop->DepositStorageItem(CargoRecord.ItemTag, CargoRecord.Quantity, CargoRecord.SlotId);
 	}
 }
 
@@ -529,6 +719,7 @@ void APickpackerGameMode::EndWarehouseSimulation()
 		GS->SetSimulationRunning(false);
 	}
 	bSimulationRunning = false;
+	bTrainBoardingTriggered = false;
 	UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Simulation ended"));
 
 	if (GetWorld())
@@ -553,6 +744,7 @@ void APickpackerGameMode::StopOrderWaves()
 	CurrentWaveRepeatIndex = 0;
 	PendingWaveIndex = INDEX_NONE;
 	PendingWaveRepeatIndex = 0;
+	bTrainBoardingTriggered = false;
 
 	SyncOrdersToGameState();
 
@@ -660,6 +852,15 @@ void APickpackerGameMode::StartOrderSystem()
 	CurrentWaveRepeatIndex = 0;
 	PendingWaveIndex = INDEX_NONE;
 	PendingWaveRepeatIndex = 0;
+	bTrainBoardingTriggered = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetRunStage(ERunProgressStage::Work);
+		}
+	}
 
 	if (CanSpawnNewOrders())
 	{
@@ -836,9 +1037,14 @@ void APickpackerGameMode::HandleNextOrderWaveTimer()
 	}
 
 	// 스케줄된 웨이브 실행 (repeat은 의도적으로 예약된 것이므로 CanSpawnNewOrders 무시)
-	if (PendingWaveIndex != INDEX_NONE)
+	const int32 WaveIndex = PendingWaveIndex;
+	const int32 RepeatIndex = PendingWaveRepeatIndex;
+	PendingWaveIndex = INDEX_NONE;
+	PendingWaveRepeatIndex = 0;
+
+	if (WaveIndex != INDEX_NONE)
 	{
-		BeginOrderWave(PendingWaveIndex, PendingWaveRepeatIndex);
+		BeginOrderWave(WaveIndex, RepeatIndex);
 	}
 }
 
@@ -869,6 +1075,7 @@ void APickpackerGameMode::TickOrderSystem()
 	}
 
 	CleanupResolvedOrders();
+	TryAdvanceCoreLoopFromOrders();
 	// 다음 웨이브 스케줄링은 BeginOrderWave에서 주문 생성 시점 기준으로 처리됨 (주문 종료와 무관)
 }
 
@@ -940,6 +1147,7 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 
 	// 태그별 이미 적용한 unit 수 (동일 태그를 요구하는 여러 주문에 분배 시 중복 적용 방지)
 	TMap<FGameplayTag, int32> ConsumedUnitsByTag;
+	int32 GenericConsumedUnits = 0;
 	bool bAppliedToAnyOrder = false;
 
 	for (FActiveOrderState& Order : ActiveOrders)
@@ -979,6 +1187,10 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 		{
 			ConsumedUnitsByTag.FindOrAdd(TagToMatch, 0) += UnitsToApply;
 		}
+		else
+		{
+			GenericConsumedUnits += UnitsToApply;
+		}
 		bAppliedToAnyOrder = true;
 
 		// 크레딧: 매칭된 콘텐츠 가치에 비례
@@ -1011,7 +1223,9 @@ bool APickpackerGameMode::TryFulfillOrders(AParcelActor* Parcel)
 
 	if (bAppliedToAnyOrder)
 	{
+		DepositParcelRemainderToStorage(GetWorld(), Parcel, ConsumedUnitsByTag, GenericConsumedUnits);
 		SyncOrdersToGameState();
+		TryAdvanceCoreLoopFromOrders();
 		return true;
 	}
 
@@ -1039,6 +1253,8 @@ void APickpackerGameMode::HandleOrderFailure(FActiveOrderState& Order, const FSt
 			ApplyCreditDelta(-PenaltyAmount, FString::Printf(TEXT("%s failed"), *Order.OrderName.ToString()));
 		}
 	}
+
+	TryAdvanceCoreLoopFromOrders();
 }
 
 void APickpackerGameMode::HandleOrderSuccess(FActiveOrderState& Order)
@@ -1049,6 +1265,8 @@ void APickpackerGameMode::HandleOrderSuccess(FActiveOrderState& Order)
 	{
 		ApplyCreditDelta(Order.CreditReward, FString::Printf(TEXT("%s completed"), *Order.OrderName.ToString()));
 	}
+
+	TryAdvanceCoreLoopFromOrders();
 }
 
 void APickpackerGameMode::SyncOrdersToGameState()
@@ -1074,4 +1292,121 @@ bool APickpackerGameMode::CanSpawnNewOrders() const
 		return true;
 	}
 	return ActiveOrders.Num() < MaxActiveOrders;
+}
+
+void APickpackerGameMode::RegisterTrainDestinations()
+{
+	if (!HasAuthority() || !TrainDestinationData)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+	{
+		for (const FTrainDestination& Destination : TrainDestinationData->Destinations)
+		{
+			CoreLoop->RegisterDestination(Destination);
+		}
+	}
+}
+
+void APickpackerGameMode::RefreshMissionDefinitionFromOrders()
+{
+	CurrentMissionDefinition = FMissionDefinition();
+	CurrentMissionDefinition.MissionId = CurrentMissionConfig.MissionId.IsEmpty()
+		? FName(TEXT("Mission_Default"))
+		: FName(*CurrentMissionConfig.MissionId);
+
+	if (!OrderWaveData)
+	{
+		return;
+	}
+
+	TMap<FGameplayTag, int32> TargetCounts;
+	for (const FParcelOrderWave& Wave : OrderWaveData->OrderWaves)
+	{
+		for (const FParcelOrderDefinition& Order : Wave.Orders)
+		{
+			const FGameplayTag TargetTag = Order.RequiredParcelTag.IsValid() ? Order.RequiredParcelTag : Order.RequiredItemTag;
+			if (TargetTag.IsValid())
+			{
+				TargetCounts.FindOrAdd(TargetTag) += FMath::Max(1, Order.RequiredQuantity);
+			}
+
+			CurrentMissionDefinition.TimeLimitSeconds = FMath::Max(CurrentMissionDefinition.TimeLimitSeconds, Order.TimeLimitSeconds);
+			CurrentMissionDefinition.Reward += Order.CreditReward;
+			CurrentMissionDefinition.FailPenalty += FMath::Max(0, Order.CreditPenalty) * FMath::Max(1, Order.RequiredQuantity);
+		}
+	}
+
+	for (const TPair<FGameplayTag, int32>& Pair : TargetCounts)
+	{
+		FMissionItemTarget Target;
+		Target.ItemTag = Pair.Key;
+		Target.Quantity = Pair.Value;
+		CurrentMissionDefinition.ItemTargets.Add(Target);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->AssignMissionDefinition(CurrentMissionDefinition);
+		}
+	}
+}
+
+void APickpackerGameMode::TryAdvanceCoreLoopFromOrders()
+{
+	if (!HasAuthority() || !bOrderSystemInitialized || bGameOverInProgress || bTrainBoardingTriggered)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || !PickpackerGameState)
+	{
+		return;
+	}
+
+	if (PendingWaveIndex != INDEX_NONE || World->GetTimerManager().IsTimerActive(NextWaveTimerHandle))
+	{
+		return;
+	}
+
+	if (!AreAllOrdersResolved())
+	{
+		return;
+	}
+
+	if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+	{
+		if (CoreLoop->GetCurrentPhase() != ECoreLoopPhase::Base)
+		{
+			return;
+		}
+	}
+
+	if (UTrainTravelComponent* TrainTravel = PickpackerGameState->GetTrainTravelComponent())
+	{
+		if (TrainTravel->GetTrainState() != ETrainState::Idle)
+		{
+			return;
+		}
+
+		if (UCoreLoopSubsystem* CoreLoop = World->GetSubsystem<UCoreLoopSubsystem>())
+		{
+			CoreLoop->SetRunStage(ERunProgressStage::Submit);
+		}
+
+		bTrainBoardingTriggered = true;
+		TrainTravel->BeginBoarding();
+		UE_LOG(LogTemp, Log, TEXT("[PickpackerGameMode] Work loop resolved. Advancing to train boarding."));
+	}
 }

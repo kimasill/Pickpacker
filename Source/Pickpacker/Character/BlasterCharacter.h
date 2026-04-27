@@ -22,6 +22,7 @@
 #include "BlasterCharacter.generated.h"
 
 class UInputAction;
+class UInputMappingContext;
 class UPrimitiveComponent;
 class ALadderActor;
 class AActor;
@@ -187,6 +188,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_Controller() override;
 	
 	// Legacy input functions (deprecated, kept for compatibility)
 	void MoveForward(float Value);
@@ -233,6 +236,7 @@ protected:
 	void OnInventorySlotSeven(const FInputActionValue& Value);
 	void OnInventorySlotEight(const FInputActionValue& Value);
 	void OnInventorySlotNine(const FInputActionValue& Value);
+	void ApplyDefaultInputMappingContext();
 
 public:
 	// Ladder
@@ -324,6 +328,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InventorySlotNineAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputMappingContext> DefaultInputMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	int32 DefaultInputMappingPriority = 0;
+
+	UPROPERTY(Transient)
+	bool bDefaultInputMappingContextApplied = false;
 
 	// Ladder settings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ladder")
@@ -835,6 +848,7 @@ public:
 	FORCEINLINE class UInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	FORCEINLINE class UCarryIKComponent* GetCarryIKComponent() const { return CarryIKComponent; }
 	FORCEINLINE class UPlayerInventoryComponent* GetPlayerInventoryComponent() const { return PlayerInventoryComponent; }
+	FORCEINLINE class UPersonaComponent* GetPersonaComponent() const { return PersonaComponent; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
 	FORCEINLINE bool IsElimmed() const { return bElimmed; }

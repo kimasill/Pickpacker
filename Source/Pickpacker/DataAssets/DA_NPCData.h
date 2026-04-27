@@ -6,7 +6,12 @@
 #include "Engine/DataAsset.h"
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimInstance.h"
+#include "BehaviorTree/BehaviorTree.h"
+#include "BehaviorTree/BlackboardData.h"
+#include "Engine/DataTable.h"
+#include "Engine/EngineTypes.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
+#include "DataAssets/NPCDataTableRows.h"
 #include "DA_NPCData.generated.h"
 
 /**
@@ -33,15 +38,66 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
 	TSoftClassPtr<UAnimInstance> AnimClassOverride;
 
+	/** Animation asset bundle used by ABP_NPC_Base style animation blueprints. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
+	TSoftObjectPtr<class UNPCAnimationSet> AnimationSetOverride;
+
 	/** Optional behaviour tree for combat AI */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|AI")
-	TSoftObjectPtr<UObject> CombatBehaviorTree;
+	TSoftObjectPtr<UBehaviorTree> CombatBehaviorTree;
+
+	/** Optional blackboard override for combat AI */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|AI")
+	TSoftObjectPtr<UBlackboardData> CombatBlackboard;
+
+	/** Optional behaviour tree for non-hostile ambient movement/patrol */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|AI")
+	TSoftObjectPtr<UBehaviorTree> AmbientBehaviorTree;
+
+	/** Optional blackboard override for ambient AI */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|AI")
+	TSoftObjectPtr<UBlackboardData> AmbientBlackboard;
+
+	/** Optional config table imported from CSV/Excel */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Import")
+	TSoftObjectPtr<UDataTable> ConfigDataTable;
+
+	/** Optional CSV source path used when ConfigDataTable is empty or unavailable */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Import")
+	FFilePath ConfigCsvFile;
+
+	/** Row name to read from ConfigDataTable */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Import")
+	FName ConfigRowName = NAME_None;
+
+	/** Optional dialogue script table imported from CSV/Excel */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Import")
+	TSoftObjectPtr<UDataTable> DialogueScriptDataTable;
+
+	/** Optional table that maps dialogue requirement tags/types to badge icons. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Dialogue|Indicators")
+	TSoftObjectPtr<UDataTable> DialogueIndicatorIconDataTable;
+
+	/** Optional CSV source path used when DialogueScriptDataTable is empty or unavailable */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Import")
+	FFilePath DialogueCsvFile;
 
 	// --- Helpers --------------------------------------------------------
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
-	FName GetNPCId() const { return Profile.NPCId; }
+	FName GetNPCId() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
-	FText GetDisplayName() const { return Profile.DisplayName; }
+	FText GetDisplayName() const;
+
+	bool TryGetConfigRow(FNPCConfigTableRow& OutRow) const;
+	void BuildResolvedProfile(FNPCProfile& OutProfile) const;
+	void BuildResolvedDialogueNodes(const FName& EffectiveNPCId, TArray<FDialogueNode>& OutDialogueNodes) const;
+	TSoftObjectPtr<USkeletalMesh> GetResolvedMeshOverride() const;
+	TSoftClassPtr<UAnimInstance> GetResolvedAnimClassOverride() const;
+	TSoftObjectPtr<class UNPCAnimationSet> GetResolvedAnimationSet() const;
+	TSoftObjectPtr<UBehaviorTree> GetResolvedCombatBehaviorTree() const;
+	TSoftObjectPtr<UBlackboardData> GetResolvedCombatBlackboard() const;
+	TSoftObjectPtr<UBehaviorTree> GetResolvedAmbientBehaviorTree() const;
+	TSoftObjectPtr<UBlackboardData> GetResolvedAmbientBlackboard() const;
 };

@@ -136,7 +136,7 @@ private:
 
 	/** Starting persona value */
 	UPROPERTY(EditAnywhere, Category = "Persona|Config", meta = (ClampMin = "0.0", ClampMax = "100.0"))
-	float InitialPersonaValue = 50.0f;
+	float InitialPersonaValue = 0.0f;
 
 	/** Maximum persona value */
 	UPROPERTY(EditAnywhere, Category = "Persona|Config")

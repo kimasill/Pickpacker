@@ -275,6 +275,105 @@ struct PICKPACKER_API FSeedSet
 };
 
 /**
+ * Mission target entry aggregated from order definitions
+ */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FMissionItemTarget
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	FGameplayTag ItemTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission", meta = (ClampMin = "1"))
+	int32 Quantity = 1;
+};
+
+/**
+ * High-level mission definition for the current run
+ */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FMissionDefinition
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	FName MissionId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	TArray<FMissionItemTarget> ItemTargets;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	float TimeLimitSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	int32 Reward = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Mission")
+	int32 FailPenalty = 0;
+};
+
+/**
+ * Persistent or run-scoped storage slot record
+ */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FStorageRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Storage")
+	FName SlotId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Storage")
+	FGameplayTag ItemTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Storage")
+	int32 Quantity = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Storage")
+	FName SessionScope = NAME_None;
+};
+
+/**
+ * Persona stat bundle used for long-term progression and ending logic
+ */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FPersonaStats
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Persona")
+	float Obedience = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Persona")
+	float Curiosity = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Persona")
+	float Aggression = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Persona")
+	float Empathy = 0.0f;
+};
+
+/**
+ * Ending flag state stored outside moment-to-moment run data
+ */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FEndingFlagState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Ending")
+	FName FlagId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Ending")
+	bool bUnlocked = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickpacker|Ending")
+	bool bLocked = false;
+};
+
+/**
  * Definition of an order that players must fulfill
  */
 USTRUCT(BlueprintType)
@@ -455,7 +554,6 @@ enum class ESuspiciousBehavior : uint8
 	InteractingRestrictedSystem UMETA(DisplayName = "Interacting Restricted System"),
 	OtherViolation			UMETA(DisplayName = "Other Violation")
 };
-
 
 
 

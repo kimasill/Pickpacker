@@ -33,6 +33,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "PP|AI")
 	void StopBehaviorTreeIfRunning();
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PP|AI")
+	bool IsBehaviorTreeRunning() const { return bPPBehaviorTreeRunning; }
+
 protected:
 	bool bPPBehaviorTreeRunning = false;
 };

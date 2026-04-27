@@ -31,49 +31,16 @@ void APackedParcelActor::BeginPlay()
 	// Base BeginPlay에서 ItemData가 갱신되므로 레시피 GripType을 다시 반영
 	if (HasAuthority() && ParcelDataAsset && PackageRecipeRowName != NAME_None)
 	{
-		const FParcelPackageRecipe* FoundRecipe = nullptr;
-		const FString RequestedRecipeName = PackageRecipeRowName.ToString();
-		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+		FParcelPackageRecipe FoundRecipe;
+		if (ParcelDataAsset->GetPackageRecipeByName(PackageRecipeRowName, FoundRecipe))
 		{
-			bool bMatchesTargetRowList = false;
-			for (const FName& RowName : Recipe.TargetParcelRowNames)
-			{
-				if (RowName == PackageRecipeRowName)
-				{
-					bMatchesTargetRowList = true;
-					break;
-				}
-			}
-
-			bool bMatchesTargetTagList = false;
-			for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
-			{
-				if (Tag.GetTagName() == PackageRecipeRowName)
-				{
-					bMatchesTargetTagList = true;
-					break;
-				}
-			}
-
-			const bool bMatchesRecipeName =
-				!RequestedRecipeName.IsEmpty() &&
-				Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
-			if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
-			{
-				FoundRecipe = &Recipe;
-				break;
-			}
-		}
-
-		if (FoundRecipe)
-		{
-			if (FoundRecipe->GripType != EGripType::None)
+			if (FoundRecipe.GripType != EGripType::None)
 			{
 				FItemData UpdatedItemData = ItemData;
-				UpdatedItemData.GripType = FoundRecipe->GripType;
+				UpdatedItemData.GripType = FoundRecipe.GripType;
 				SetItemData(UpdatedItemData);
 			}
-			bIsItem = FoundRecipe->bCanBePutInInventory;
+			bIsItem = FoundRecipe.bCanBePutInInventory;
 		}
 	}
 }
@@ -98,48 +65,29 @@ void APackedParcelActor::InitializeFromPackageRecipe()
 
 	// PackageRecipe 찾기
 	const FParcelPackageRecipe* FoundRecipe = nullptr;
+	FParcelPackageRecipe FallbackRecipe;
 	if (PackageRecipeIndex != INDEX_NONE && ParcelDataAsset->PackageRecipes.IsValidIndex(PackageRecipeIndex))
 	{
 		FoundRecipe = &ParcelDataAsset->PackageRecipes[PackageRecipeIndex];
 	}
-	if (!FoundRecipe && PackageRecipeRowName != NAME_None)
+	if (!FoundRecipe)
 	{
-		const FString RequestedRecipeName = PackageRecipeRowName.ToString();
-		for (const FParcelPackageRecipe& Recipe : ParcelDataAsset->PackageRecipes)
+		if (PackageRecipeRowName != NAME_None)
 		{
-			bool bMatchesTargetRowList = false;
-			for (const FName& RowName : Recipe.TargetParcelRowNames)
+			if (ParcelDataAsset->GetPackageRecipeByName(PackageRecipeRowName, FallbackRecipe))
 			{
-				if (RowName == PackageRecipeRowName)
-				{
-					bMatchesTargetRowList = true;
-					break;
-				}
-			}
-
-			bool bMatchesTargetTagList = false;
-			for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
-			{
-				if (Tag.GetTagName() == PackageRecipeRowName)
-				{
-					bMatchesTargetTagList = true;
-					break;
-				}
-			}
-
-			const bool bMatchesRecipeName =
-				!RequestedRecipeName.IsEmpty() &&
-				Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
-			if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
-			{
-				FoundRecipe = &Recipe;
-				break;
+				FoundRecipe = &FallbackRecipe;
 			}
 		}
 	}
 
 	if (!FoundRecipe)
 	{
+		if (PackageRecipeRowName == NAME_None && PackageRecipeIndex == INDEX_NONE)
+		{
+			return;
+		}
+
 		if (bEnableDebugLogging)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("[PackedParcelActor] Failed to find PackageRecipe for RowName: %s"), *PackageRecipeRowName.ToString());
@@ -485,4 +433,3 @@ TArray<FName> APackedParcelActor::GetPackageRecipeRowOptions() const
 
 	return Options;
 }
-

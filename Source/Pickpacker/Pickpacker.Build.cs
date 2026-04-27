@@ -10,7 +10,7 @@ public class Pickpacker : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PrivatePCHHeaderFile = "Pickpacker.h";
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemUtils", "GameplayTags", "AIModule", "NavigationSystem", "DeveloperSettings", "LevelSequence", "MovieScene", "Sockets" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "Niagara", "MultiplayerSessions", "OnlineSubsystem", "OnlineSubsystemUtils", "GameplayTags", "AIModule", "NavigationSystem", "DeveloperSettings", "LevelSequence", "MovieScene", "Sockets", "BlueprintFileUtils", "JsonBlueprintUtilities" });
         DynamicallyLoadedModuleNames.Add("OnlineSubsystemSteam");
 
 
@@ -22,7 +22,8 @@ public class Pickpacker : ModuleRules
 				"Blutility",
 				"UnrealEd",
 				"UMGEditor",
-                "GameplayTags"
+                "GameplayTags",
+				"JsonBlueprintGraph"
             });
 		}
 

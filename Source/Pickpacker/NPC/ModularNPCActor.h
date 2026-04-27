@@ -7,14 +7,20 @@
 #include "GameFramework/Character.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
 #include "Interfaces/InteractableInterface.h"
+#include "UI/NPCDialogueUIData.h"
 #include "ModularNPCActor.generated.h"
 
 class UNPCDialogueComponent;
 class UNPCCombatComponent;
 class UNPCLootTradeComponent;
+class UNPCModuleComponent;
 class UDA_NPCData;
 class UWidgetComponent;
 class UEscapeProgressComponent;
+class AAIController;
+class UBlackboardComponent;
+class UBehaviorTree;
+class UBlackboardData;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnNPCDispositionChanged, ENPCDisposition, OldDisposition, ENPCDisposition, NewDisposition);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnNPCRoleChanged, ENPCRole, OldRole, ENPCRole, NewRole);
@@ -120,6 +126,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
 	FName GetEffectiveNPCId() const;
 
+	bool StartDialogueForInteractor(class ACharacter* Interactor);
+	bool SelectDialogueChoiceForInteractor(class ACharacter* Interactor, int32 ChoiceIndex);
+	bool AdvanceDialogueForInteractor(class ACharacter* Interactor);
+	void EndDialogueForInteractor(class ACharacter* Interactor);
+	bool BuildDialogueUIState(FDialogueUIState& OutDialogueState) const;
+
 	// --- Events ----------------------------------------------------------
 
 	UPROPERTY(BlueprintAssignable, Category = "NPC|Events")
@@ -137,9 +149,44 @@ protected:
 
 	/** Initialize from NPCData */
 	void InitializeFromData();
+	void EnsureDialogueDataInitialized();
 
 	/** Activate/deactivate modules based on current disposition */
 	void UpdateModuleStates();
+
+	/** Ensure CharacterMovement is in a valid runtime mode. */
+	void EnsureMovementModeInitialized();
+
+	/** Refresh and notify all attached module components */
+	void RefreshModuleComponents();
+	void NotifyModulesOwnerReady();
+	void NotifyModulesDispositionChanged(ENPCDisposition OldDisposition, ENPCDisposition NewDisposition);
+	void NotifyModulesRoleChanged(ENPCRole OldRole, ENPCRole NewRole);
+	void NotifyModulesNarrativeStateEvaluated();
+	void NotifyModulesUpdated();
+
+	/** Start or refresh combat AI when the NPC becomes hostile */
+	void StartCombatAI();
+
+	/** Start or refresh ambient AI for non-hostile mobile NPCs */
+	void StartAmbientAI();
+
+	/** Stop combat AI when leaving hostile state */
+	void StopCombatAI();
+
+	/** Ensure the NPC has an AI controller for combat */
+	AAIController* EnsureCombatAIController();
+
+	/** Keep combat-related blackboard keys in sync */
+	void SyncCombatBlackboard();
+
+	/** Clear combat-related blackboard keys */
+	void ClearCombatBlackboard();
+
+	UBehaviorTree* ResolveCombatBehaviorTree() const;
+	UBlackboardData* ResolveCombatBlackboard() const;
+	UBehaviorTree* ResolveAmbientBehaviorTree() const;
+	UBlackboardData* ResolveAmbientBlackboard() const;
 
 	/** Get EscapeProgressComponent for world flag queries */
 	UEscapeProgressComponent* GetEscapeProgress() const;
@@ -147,6 +194,18 @@ protected:
 	/** Dialogue choice handler – listens for outcomes that affect the NPC */
 	UFUNCTION()
 	void OnDialogueChoiceMade(ACharacter* Interactor, int32 NodeIndex, int32 ChoiceIndex);
+
+	UFUNCTION()
+	void OnDialogueEnded();
+
+	UFUNCTION()
+	void OnCombatTargetAcquired(AActor* NewTarget);
+
+	UFUNCTION()
+	void OnCombatTargetLost();
+
+	UFUNCTION()
+	void OnCombatDied();
 
 private:
 	/** Timer for periodic narrative state evaluation */
@@ -159,4 +218,13 @@ private:
 	/** Cached profile from data asset */
 	FNPCProfile CachedProfile;
 	bool bProfileCached = false;
+
+	/** Cached home location for hostile BTs that need return logic */
+	FVector HomeLocation = FVector::ZeroVector;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UNPCModuleComponent>> RegisteredModules;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class ACharacter> ActiveDialogueInteractor;
 };

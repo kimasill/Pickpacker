@@ -88,6 +88,70 @@ bool UDA_ParcelData::GetParcelConfigByName(const FName& RowName, FParcelConfig& 
 		}
 	}
 
+	if (IsPlaceholderDataset())
+	{
+		OutConfig = FParcelConfig();
+		OutConfig.ParcelName = RowNameString;
+		OutConfig.ClassificationTag = FGameplayTag::RequestGameplayTag(TEXT("Parcel-Classification.Standard"), false);
+		return true;
+	}
+
+	return false;
+}
+
+bool UDA_ParcelData::GetPackageRecipeByName(const FName& RowName, FParcelPackageRecipe& OutRecipe) const
+{
+	if (RowName == NAME_None)
+	{
+		return false;
+	}
+
+	const FString RequestedRecipeName = RowName.ToString();
+	for (const FParcelPackageRecipe& Recipe : PackageRecipes)
+	{
+		bool bMatchesTargetRowList = false;
+		for (const FName& TargetRow : Recipe.TargetParcelRowNames)
+		{
+			if (TargetRow == RowName)
+			{
+				bMatchesTargetRowList = true;
+				break;
+			}
+		}
+
+		bool bMatchesTargetTagList = false;
+		for (const FGameplayTag& Tag : Recipe.TargetParcelTags)
+		{
+			if (Tag.GetTagName() == RowName)
+			{
+				bMatchesTargetTagList = true;
+				break;
+			}
+		}
+
+		const bool bMatchesRecipeName =
+			!RequestedRecipeName.IsEmpty() &&
+			Recipe.RecipeName.Equals(RequestedRecipeName, ESearchCase::IgnoreCase);
+
+		if (bMatchesRecipeName || bMatchesTargetRowList || bMatchesTargetTagList)
+		{
+			OutRecipe = Recipe;
+			return true;
+		}
+	}
+
+	if (IsPlaceholderDataset())
+	{
+		OutRecipe = FParcelPackageRecipe();
+		OutRecipe.RecipeName = RequestedRecipeName;
+		OutRecipe.TargetParcelRowNames.Add(RowName);
+		OutRecipe.MinRequiredCount = 1;
+		OutRecipe.MinContentCount = 1;
+		OutRecipe.MaxRequiredCount = 1;
+		OutRecipe.RequiredCount = 1;
+		return true;
+	}
+
 	return false;
 }
 
@@ -120,4 +184,9 @@ float UDA_ParcelData::GetGlobalParameter(const FString& ParameterName, float Def
 		return *Value;
 	}
 	return DefaultValue;
+}
+
+bool UDA_ParcelData::IsPlaceholderDataset() const
+{
+	return PackageRecipes.Num() == 0 && ParcelConfigs.Num() <= 3;
 }

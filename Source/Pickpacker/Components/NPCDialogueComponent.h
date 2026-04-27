@@ -3,8 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
+#include "Components/NPCModuleComponent.h"
+#include "Interfaces/InteractableInterface.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
+#include "UI/NPCDialogueUIData.h"
 #include "NPCDialogueComponent.generated.h"
 
 class UEscapeProgressComponent;
@@ -19,12 +21,19 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnDialogueChoiceSelected, class 
  * to drive branching narratives.
  */
 UCLASS(ClassGroup = (NPC), meta = (BlueprintSpawnableComponent))
-class PICKPACKER_API UNPCDialogueComponent : public UActorComponent
+class PICKPACKER_API UNPCDialogueComponent : public UNPCModuleComponent, public IInteractableInterface
 {
 	GENERATED_BODY()
 
 public:
 	UNPCDialogueComponent();
+
+	virtual void OnInteract_Implementation(class ACharacter* Interactor) override;
+	virtual bool CanInteract_Implementation(class ACharacter* Interactor) override;
+	virtual FText GetInteractText_Implementation() override;
+	virtual void GetInteractionUIData_Implementation(FInteractionUIData& OutData) override;
+	virtual bool RequestShowInteractionUI_Implementation(class ACharacter* Interactor) override;
+	virtual void GetCreditUnlockInfo_Implementation(bool& bRequiresUnlock, int32& UnlockCost, FText& LockedMessage, FText& UnlockedMessage) override;
 
 	// --- Configuration --------------------------------------------------
 
@@ -39,11 +48,11 @@ public:
 	// --- Runtime State ---------------------------------------------------
 
 	/** Whether a conversation is currently in progress */
-	UPROPERTY(BlueprintReadOnly, Category = "Dialogue")
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Dialogue")
 	bool bInConversation = false;
 
 	/** Current dialogue node index */
-	UPROPERTY(BlueprintReadOnly, Category = "Dialogue")
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Dialogue")
 	int32 CurrentNodeIndex = -1;
 
 	// --- API -------------------------------------------------------------
@@ -52,9 +61,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Dialogue")
 	bool StartDialogue(class ACharacter* Interactor);
 
+	bool StartDialogueForInteractor(class ACharacter* Interactor);
+	bool SelectChoiceForInteractor(class ACharacter* Interactor, int32 ChoiceIndex);
+	bool AdvanceDialogueForInteractor(class ACharacter* Interactor);
+	void EndDialogueForInteractor(class ACharacter* Interactor);
+	bool BuildDialogueUIState(FDialogueUIState& OutDialogueState) const;
+
 	/** Select a choice in the current node */
 	UFUNCTION(BlueprintCallable, Category = "Dialogue")
 	void SelectChoice(class ACharacter* Interactor, int32 ChoiceIndex);
+
+	/** Advance dialogue when the current node has no player choices */
+	UFUNCTION(BlueprintCallable, Category = "Dialogue")
+	void AdvanceDialogue(class ACharacter* Interactor);
 
 	/** End the dialogue early */
 	UFUNCTION(BlueprintCallable, Category = "Dialogue")
@@ -81,6 +100,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
 	/** Navigate to a node index, resolving conditional skips */
@@ -94,4 +114,20 @@ private:
 
 	/** Check if a world flag is non-zero */
 	bool IsWorldFlagSet(const FGameplayTag& Flag) const;
+
+	int32 GetWorldFlagValue(const FGameplayTag& Flag) const;
+	float GetInteractorPersonaValue(class ACharacter* Interactor) const;
+	bool DoesInteractorHaveItemTag(class ACharacter* Interactor, const FGameplayTag& ItemTag, bool bSpecialItemOnly) const;
+	bool DoesChoiceRequirementPass(const FDialogueChoiceRequirement& Requirement, class ACharacter* Interactor) const;
+	bool DoesChoicePassRequirements(const FDialogueChoice& Choice, class ACharacter* Interactor) const;
+	bool BuildChoiceUIData(const FDialogueChoice& Choice, int32 ChoiceIndex, class ACharacter* Interactor, FDialogueChoiceUIData& OutChoiceUIData) const;
+	bool DoesRequirementHaveIndicator(const FDialogueChoiceRequirement& Requirement) const;
+	FText BuildRequirementIndicatorText(const FDialogueChoiceRequirement& Requirement) const;
+	FText GetGameplayTagDisplayText(const FGameplayTag& Tag) const;
+	bool ConsumeInteractorItemTag(class ACharacter* Interactor, const FGameplayTag& ItemTag) const;
+
+	void PushDialogueStateToInteractor(class ACharacter* Interactor);
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class ACharacter> ActiveInteractor;
 };

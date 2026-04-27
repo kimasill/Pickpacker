@@ -9,6 +9,8 @@
 #include "TrainTravelComponent.generated.h"
 
 class UCoreLoopSubsystem;
+class APlayerState;
+class AParcelActor;
 
 /** 열차 이동 상태 */
 UENUM(BlueprintType)
@@ -22,11 +24,23 @@ enum class ETrainState : uint8
 	Arrived		UMETA(DisplayName = "Arrived")
 };
 
+UENUM(BlueprintType)
+enum class ETrainJourneyType : uint8
+{
+	None			UMETA(DisplayName = "None"),
+	OutboundMission	UMETA(DisplayName = "Outbound Mission"),
+	ReturnToBase	UMETA(DisplayName = "Return To Base"),
+	Escape			UMETA(DisplayName = "Escape")
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTrainStateChanged, ETrainState, OldState, ETrainState, NewState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainTravelProgress, float, NormalizedProgress);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainArrived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTrainDeparted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDestinationSelectionOpened);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainSelectionContextUpdated, const FTrainSelectionContext&, SelectionContext);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrainDestinationVotesUpdated, const TArray<FTrainDestinationVoteState>&, VoteStates);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRouteSelectionResultUpdated, const FRouteSelectionResult&, RouteSelectionResult);
 
 /**
  * Train Travel Component
@@ -63,9 +77,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void Depart();
 
+	/** 귀환 열차 탑승 시작 — 수동 출발 전까지 Boarding 상태 유지 */
+	UFUNCTION(BlueprintCallable, Category = "Train")
+	void BeginReturnBoarding();
+
 	/** 목적지 선택 확정 — 이동 시작 */
 	UFUNCTION(BlueprintCallable, Category = "Train")
 	void SelectDestination(const FTrainDestination& Destination);
+
+	/** 플레이어의 목적지 투표를 집계한다 (서버 전용) */
+	UFUNCTION(BlueprintCallable, Category = "Train")
+	void SubmitDestinationVote(APlayerState* PlayerState, FName DestinationId);
 
 	/** 강제 도착 (디버그/테스트용) */
 	UFUNCTION(BlueprintCallable, Category = "Train")
@@ -92,6 +114,30 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train")
 	const FTrainDestination& GetSelectedDestination() const { return SelectedDestination; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train")
+	const FTrainSelectionContext& GetSelectionContext() const { return SelectionContext; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train")
+	const TArray<FTrainDestinationVoteState>& GetDestinationVotes() const { return DestinationVotes; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train")
+	const FRouteSelectionResult& GetRouteSelectionResult() const { return RouteSelectionResult; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train")
+	ETrainJourneyType GetJourneyType() const { return JourneyType; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Train|Cargo")
+	const TArray<FStorageRecord>& GetCargoRecords() const { return CargoRecords; }
+
+	UFUNCTION(BlueprintCallable, Category = "Train|Cargo")
+	void SetCargoRecords(const TArray<FStorageRecord>& NewCargoRecords);
+
+	UFUNCTION(BlueprintCallable, Category = "Train|Cargo")
+	void ClearCargoRecords();
+
+	UFUNCTION(BlueprintCallable, Category = "Train|Cargo")
+	bool LoadParcelIntoCargo(AParcelActor* Parcel);
+
 	// --- 이벤트 ----------------------------------------------------------
 
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
@@ -110,15 +156,24 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
 	FOnDestinationSelectionOpened OnDestinationSelectionOpened;
 
+	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
+	FOnTrainSelectionContextUpdated OnSelectionContextUpdated;
+
+	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
+	FOnTrainDestinationVotesUpdated OnDestinationVotesUpdated;
+
+	UPROPERTY(BlueprintAssignable, Category = "Train|Events")
+	FOnRouteSelectionResultUpdated OnRouteSelectionResultUpdated;
+
 	// --- 설정 ------------------------------------------------------------
 
 	/** 탑승 대기 시간 (초) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config", meta = (ClampMin = "0.0"))
-	float BoardingDuration = 10.0f;
+	float BoardingDuration = 15.0f;
 
 	/** 출발 연출 시간 (초) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config", meta = (ClampMin = "0.0"))
-	float DepartureDuration = 3.0f;
+	float DepartureDuration = 5.0f;
 
 	/** 이동 시간 (초) — 목적지 선택 후 도착까지 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config", meta = (ClampMin = "1.0"))
@@ -126,11 +181,23 @@ public:
 
 	/** 도착 연출 시간 (초) — 도착 후 레벨 전환까지 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config", meta = (ClampMin = "0.0"))
-	float ArrivalDuration = 3.0f;
+	float ArrivalDuration = 5.0f;
 
 	/** 목적지 미선택 시 자동 선택까지 대기 시간 (0 = 무제한 대기) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config", meta = (ClampMin = "0.0"))
-	float AutoSelectTimeout = 0.0f;
+	float AutoSelectTimeout = 30.0f;
+
+	/** 다수결 동률 시 적용할 정책 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	ETrainVoteResolutionPolicy VoteResolutionPolicy = ETrainVoteResolutionPolicy::MajorityThenHost;
+
+	/** 귀환 열차가 도착할 베이스 레벨 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	TSoftObjectPtr<UWorld> ReturnBaseLevel;
+
+	/** 귀환 여정은 열차 조작 전까지 자동 출발하지 않는다 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Config")
+	bool bRequireManualDepartureForReturnJourney = true;
 
 protected:
 	UFUNCTION()
@@ -139,12 +206,36 @@ protected:
 	UFUNCTION()
 	void OnRep_SelectedDestination();
 
+	UFUNCTION()
+	void OnRep_SelectionContext();
+
+	UFUNCTION()
+	void OnRep_DestinationVotes();
+
+	UFUNCTION()
+	void OnRep_RouteSelectionResult();
+
 	void SetTrainState(ETrainState NewState);
 	void HandleBoardingComplete();
 	void HandleDepartureComplete();
 	void HandleTravelComplete();
 	void HandleArrivalComplete();
 	void ExecuteLevelTravel();
+	void OpenDestinationSelection();
+	bool TryAutoSelectDestination();
+	void StartTraveling();
+	void RefreshSelectionContext();
+	void RefreshSelectionVotes();
+	void EvaluateDestinationVotes();
+	bool TryResolveVoteWinner(FTrainDestination& OutDestination) const;
+	bool TryResolveHostPreferredDestination(FTrainDestination& OutDestination, const TArray<FTrainDestination>& CandidateDestinations) const;
+	int32 GetEligibleVoterCount() const;
+	FRouteSelectionResult BuildRouteSelectionResult(const FTrainDestination& Destination) const;
+	FTrainDestination BuildReturnBaseDestination() const;
+	const FTrainDestination* FindAvailableDestinationById(FName DestinationId) const;
+	void ClearDestinationVotes();
+	bool ShouldOpenDestinationSelection() const;
+	bool ShouldAutoDepartFromBoarding() const;
 
 	bool HasAuthority() const;
 	UCoreLoopSubsystem* GetCoreLoopSubsystem() const;
@@ -159,10 +250,28 @@ private:
 	UPROPERTY(Replicated)
 	bool bDestinationSelected = false;
 
+	UPROPERTY(ReplicatedUsing = OnRep_SelectionContext)
+	FTrainSelectionContext SelectionContext;
+
+	UPROPERTY(ReplicatedUsing = OnRep_DestinationVotes)
+	TArray<FTrainDestinationVoteState> DestinationVotes;
+
+	UPROPERTY(ReplicatedUsing = OnRep_RouteSelectionResult)
+	FRouteSelectionResult RouteSelectionResult;
+
 	/** 현재 페이즈 경과 시간 */
 	float PhaseElapsedTime = 0.0f;
 
 	/** 이동 경과 시간 (Traveling 상태에서만 증가) */
 	UPROPERTY(Replicated)
 	float TravelElapsedTime = 0.0f;
+
+	/** 출발 연출이 끝나고 목적지 선택만 대기 중인지 */
+	bool bWaitingForDestinationAfterDeparture = false;
+
+	UPROPERTY(Replicated)
+	ETrainJourneyType JourneyType = ETrainJourneyType::None;
+
+	UPROPERTY(Replicated)
+	TArray<FStorageRecord> CargoRecords;
 };

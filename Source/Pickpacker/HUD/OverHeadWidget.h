@@ -17,10 +17,10 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* DisplayText;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	class UTextBlock* PlayerNameText;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	class UTextBlock* ReadyStatusText;
 
 	void SetDisplayText(FString TextToDisplay);
