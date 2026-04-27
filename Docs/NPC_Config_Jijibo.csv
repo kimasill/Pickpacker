@@ -1,0 +1,2 @@
+Name,NPCId,DisplayName,DefaultDisposition,DefaultRole,HomeZone,bEnableDialogue,bEnableCombat,bEnableLootTrade,DisappearFlag,HostileFlag,MeshOverride,AnimClassOverride,CombatBehaviorTree,CombatBlackboard,AmbientBehaviorTree,AmbientBlackboard
+Jijibo,Jijibo,지지보,Friendly,QuestGiver,Low,True,False,False,,,,,,,,

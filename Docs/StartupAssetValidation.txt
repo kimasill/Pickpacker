@@ -1,0 +1,6 @@
+/Game/Pickpacker/Core/GameModes/BP_PickPackerGameMode | class=Blueprint | inspect_error=Blueprint: Failed to find property 'generated_class' for attribute 'generated_class' on 'Blueprint'
+/Game/Pickpacker/Core/PlayerController/BP_PickpackerPlayerController | class=Blueprint | inspect_error=Blueprint: Failed to find property 'generated_class' for attribute 'generated_class' on 'Blueprint'
+/Game/Pickpacker/Core/PlayerState/BP_PickpackerPlayerState | class=Blueprint | inspect_error=Blueprint: Failed to find property 'generated_class' for attribute 'generated_class' on 'Blueprint'
+/Game/Pickpacker/Characters/Blueprints/BP_Robot | class=Blueprint | inspect_error=Blueprint: Failed to find property 'generated_class' for attribute 'generated_class' on 'Blueprint'
+/Game/Pickpacker/Core/Input/IA_Jump | class=InputAction | inspect_error=InputAction: Failed to find property 'generated_class' for attribute 'generated_class' on 'InputAction'
+/Game/Pickpacker/Core/Input/IMC_MainGameInputs | class=InputMappingContext | inspect_error=InputMappingContext: Failed to find property 'generated_class' for attribute 'generated_class' on 'InputMappingContext'

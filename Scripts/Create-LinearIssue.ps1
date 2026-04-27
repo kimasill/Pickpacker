@@ -83,8 +83,9 @@ function Invoke-LinearGraphQL {
         throw "Linear API request failed: $message"
     }
 
-    if ($response.errors) {
-        $errors = $response.errors | ConvertTo-Json -Depth 20 -Compress
+    $errorsProperty = $response.PSObject.Properties["errors"]
+    if ($errorsProperty -and $errorsProperty.Value) {
+        $errors = $errorsProperty.Value | ConvertTo-Json -Depth 20 -Compress
         throw "Linear API returned GraphQL errors: $errors"
     }
 
