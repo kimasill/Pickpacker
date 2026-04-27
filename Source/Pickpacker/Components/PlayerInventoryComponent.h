@@ -65,6 +65,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool HasItemType(EItemType ItemType) const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	bool HasItemTag(const FGameplayTag& ItemTag) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	bool HasSpecialItemTag(const FGameplayTag& ItemTag) const;
+
 	/**
 	 * Get all items of a specific type
 	 */
@@ -194,4 +200,3 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bEnableDebugLogging = true;
 };
-

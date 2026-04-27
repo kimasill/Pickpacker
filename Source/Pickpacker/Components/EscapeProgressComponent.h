@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "PickpackerAssetPaths.h"
 #include "EscapeProgressComponent.generated.h"
 
 class UDA_EndingData;
@@ -58,9 +59,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
 	int32 GetWorldFlag(const FGameplayTag& Flag) const;
 
+	const TArray<FWorldFlagEntry>& GetWorldFlags() const { return WorldFlags; }
+
 	/** 월드 플래그 존재 여부 및 최소값 확인 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
 	bool IsWorldFlagAtLeast(const FGameplayTag& Flag, int32 MinValue) const;
+
+	UFUNCTION(BlueprintCallable, Category = "EscapeProgress")
+	void RestoreWorldFlags(const TArray<FWorldFlagEntry>& InWorldFlags, bool bReevaluateEndings = false);
 
 	/** 월드 플래그가 범위 내인지 확인 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "EscapeProgress")
@@ -117,7 +123,7 @@ protected:
 	float PostEndingDelay = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category = "EscapeProgress|Ending")
-	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+	FString LobbyTravelPath = PickpackerAssetPaths::Maps::EntryMap;
 
 	/** 월드 상태 플래그 */
 	UPROPERTY(Replicated)
@@ -152,9 +158,6 @@ private:
 	FTimerHandle ReturnToLobbyTimerHandle;
 	bool bReturnScheduled = false;
 };
-
-
-
 
 
 

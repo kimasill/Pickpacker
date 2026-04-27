@@ -99,7 +99,9 @@ private:
 	UFUNCTION()
 	void HandleCloseClicked();
 
+	void BindAuxiliaryButtons();
 	void BuildFallbackWidgetTree();
 	void RebuildChoices();
 	void UpdateAuxiliaryButtons();
+	void ReleaseChoiceWidgets();
 };

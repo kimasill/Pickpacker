@@ -22,6 +22,7 @@
 #include "BlasterTypes/Announcement.h"
 #include "UI/InventoryWidget.h"
 #include "UI/TrainDestinationSelectionWidget.h"
+#include "UI/InteractionPromptWidget.h"
 #include "Parcel/ParcelActor.h"
 #include "LevelSequence.h"
 #include "Blueprint/UserWidget.h"
@@ -282,6 +283,7 @@ void ABlasterPlayerController::BeginPlay()
 	BlasterHUD = Cast<ABlasterHUD>(GetHUD());
 	ServerCheckMatchState();
 	EnsureGameplayHUD();
+	UpdateGameplayHUDVisibility();
 
 	// 패키징 빌드 클라이언트: BeginPlay 시점에 IsLocalController 준비 안 됐을 수 있음 → 0.5초 후 블루프린트 HUD 재생성 시도
 	if (IsLocalController() && GetWorld())
@@ -290,6 +292,34 @@ void ABlasterPlayerController::BeginPlay()
 		GetWorld()->GetTimerManager().SetTimer(DeferredHUDTimer, this, &ABlasterPlayerController::TriggerDeferredHUDCreation, 0.5f, false);
 		EnsureTrainDestinationSelectionBinding();
 	}
+}
+
+void ABlasterPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (NPCDialogueWidget)
+	{
+		NPCDialogueWidget->OnChoiceSelected.RemoveDynamic(this, &ABlasterPlayerController::HandleNPCDialogueChoiceSelected);
+		NPCDialogueWidget->OnAdvanceRequested.RemoveDynamic(this, &ABlasterPlayerController::HandleNPCDialogueAdvanceRequested);
+		NPCDialogueWidget->OnClosedRequested.RemoveDynamic(this, &ABlasterPlayerController::HandleNPCDialogueClosedRequested);
+		NPCDialogueWidget->RemoveFromParent();
+		NPCDialogueWidget = nullptr;
+	}
+
+	if (TrainDestinationSelectionWidget)
+	{
+		TrainDestinationSelectionWidget->RemoveFromParent();
+		TrainDestinationSelectionWidget = nullptr;
+	}
+
+	if (LoadingScreenWidget)
+	{
+		LoadingScreenWidget->RemoveFromParent();
+		LoadingScreenWidget = nullptr;
+	}
+
+	ActiveDialogueActor = nullptr;
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ABlasterPlayerController::EnsureGameplayHUD()
@@ -367,6 +397,71 @@ bool ABlasterPlayerController::EnsurePickpackerHUDWidget()
 	return false;
 }
 
+void ABlasterPlayerController::SetGameplayHUDVisible(bool bVisible)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	BlasterHUD = BlasterHUD == nullptr ? Cast<ABlasterHUD>(GetHUD()) : BlasterHUD;
+	if (BlasterHUD)
+	{
+		BlasterHUD->bShowHUD = bVisible;
+
+		if (BlasterHUD->CharacterOverlay)
+		{
+			BlasterHUD->CharacterOverlay->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		}
+
+		if (BlasterHUD->Announcement)
+		{
+			if (!bVisible)
+			{
+				BlasterHUD->Announcement->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+	}
+
+	if (UClass* PickpackerHUDClass = LoadClass<UUserWidget>(nullptr, PickpackerAssetPaths::Blueprints::WidgetPickpackerHUDClass))
+	{
+		TArray<UUserWidget*> PickpackerHUDWidgets;
+		UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this, PickpackerHUDWidgets, PickpackerHUDClass, false);
+		for (UUserWidget* Widget : PickpackerHUDWidgets)
+		{
+			if (IsValid(Widget))
+			{
+				Widget->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+			}
+		}
+	}
+
+	TArray<UUserWidget*> InteractionWidgets;
+	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this, InteractionWidgets, UInteractionPromptWidget::StaticClass(), false);
+	for (UUserWidget* Widget : InteractionWidgets)
+	{
+		if (IsValid(Widget))
+		{
+			Widget->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+void ABlasterPlayerController::UpdateGameplayHUDVisibility()
+{
+	const bool bHasBlockingModalUI =
+		(LoadingScreenWidget && LoadingScreenWidget->IsInViewport()) ||
+		(NPCDialogueWidget && NPCDialogueWidget->IsInViewport()) ||
+		(TrainDestinationSelectionWidget && TrainDestinationSelectionWidget->IsInViewport());
+
+	if (!bHasBlockingModalUI)
+	{
+		EnsureGameplayHUD();
+	}
+
+	SetGameplayHUDVisible(!bHasBlockingModalUI);
+}
+
 void ABlasterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -383,6 +478,7 @@ void ABlasterPlayerController::TriggerDeferredHUDCreation()
 	}
 
 	EnsureGameplayHUD();
+	UpdateGameplayHUDVisibility();
 }
 
 void ABlasterPlayerController::HideTeamScores()
@@ -1461,6 +1557,8 @@ void ABlasterPlayerController::ShowLoadingScreen()
 		LoadingScreenWidget->AddToViewport(1000);
 	}
 
+	UpdateGameplayHUDVisibility();
+
 	if (LoadingText.IsEmpty())
 	{
 		SetLoadingTextKey(DefaultLoadingTextKey);
@@ -1499,6 +1597,8 @@ void ABlasterPlayerController::HideLoadingScreen()
 	{
 		LoadingScreenWidget->RemoveFromParent();
 	}
+
+	UpdateGameplayHUDVisibility();
 
 	if (NPCDialogueWidget && NPCDialogueWidget->IsInViewport())
 	{
@@ -1642,6 +1742,9 @@ void ABlasterPlayerController::EnsureNPCDialogueWidget()
 		return;
 	}
 
+	NPCDialogueWidget->ClearFlags(RF_Transactional);
+	NPCDialogueWidget->SetFlags(RF_Transient);
+
 	NPCDialogueWidget->OnChoiceSelected.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueChoiceSelected);
 	NPCDialogueWidget->OnAdvanceRequested.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueAdvanceRequested);
 	NPCDialogueWidget->OnClosedRequested.AddDynamic(this, &ABlasterPlayerController::HandleNPCDialogueClosedRequested);
@@ -1660,15 +1763,18 @@ void ABlasterPlayerController::SetNPCDialogueVisible(bool bVisible)
 		return;
 	}
 
+	const bool bWasVisible = NPCDialogueWidget->IsInViewport();
+
 	if (bVisible)
 	{
-		if (!NPCDialogueWidget->IsInViewport())
+		if (!bWasVisible)
 		{
 			NPCDialogueWidget->AddToViewport(300);
+			SetIgnoreMoveInput(true);
+			SetIgnoreLookInput(true);
 		}
 
-		SetIgnoreMoveInput(true);
-		SetIgnoreLookInput(true);
+		NPCDialogueWidget->SetVisibility(ESlateVisibility::Visible);
 
 		FInputModeUIOnly InputMode;
 		InputMode.SetWidgetToFocus(NPCDialogueWidget->TakeWidget());
@@ -1676,16 +1782,20 @@ void ABlasterPlayerController::SetNPCDialogueVisible(bool bVisible)
 		bShowMouseCursor = true;
 		bEnableClickEvents = true;
 		bEnableMouseOverEvents = true;
+		UpdateGameplayHUDVisibility();
 		NPCDialogueWidget->FocusPreferredWidget();
 		return;
 	}
 
-	if (NPCDialogueWidget->IsInViewport())
+	if (bWasVisible)
 	{
 		NPCDialogueWidget->RemoveFromParent();
 	}
 
-	if (!LoadingScreenWidget || !LoadingScreenWidget->IsInViewport())
+	NPCDialogueWidget->SetVisibility(ESlateVisibility::Collapsed);
+	UpdateGameplayHUDVisibility();
+
+	if (bWasVisible && (!LoadingScreenWidget || !LoadingScreenWidget->IsInViewport()))
 	{
 		SetIgnoreMoveInput(false);
 		SetIgnoreLookInput(false);
@@ -1730,9 +1840,14 @@ void ABlasterPlayerController::HandleNPCDialogueAdvanceRequested()
 
 void ABlasterPlayerController::HandleNPCDialogueClosedRequested()
 {
-	if (ActiveDialogueActor)
+	AActor* DialogueActorToClose = ActiveDialogueActor.Get();
+
+	ActiveDialogueActor = nullptr;
+	SetNPCDialogueVisible(false);
+
+	if (DialogueActorToClose)
 	{
-		ServerCloseNPCDialogue(ActiveDialogueActor);
+		ServerCloseNPCDialogue(DialogueActorToClose);
 	}
 }
 
@@ -1826,6 +1941,7 @@ void ABlasterPlayerController::SetTrainDestinationSelectionVisible(bool bVisible
 		bShowMouseCursor = true;
 		bEnableClickEvents = true;
 		bEnableMouseOverEvents = true;
+		UpdateGameplayHUDVisibility();
 		return;
 	}
 
@@ -1833,6 +1949,8 @@ void ABlasterPlayerController::SetTrainDestinationSelectionVisible(bool bVisible
 	{
 		TrainDestinationSelectionWidget->RemoveFromParent();
 	}
+
+	UpdateGameplayHUDVisibility();
 
 	if (NPCDialogueWidget && NPCDialogueWidget->IsInViewport())
 	{

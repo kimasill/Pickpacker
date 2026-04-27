@@ -1,14 +1,27 @@
 // ModularNPCActor.cpp
 
 #include "ModularNPCActor.h"
+#include "AI/ModularNPCAIController.h"
+#include "AI/PPBlackboardKeys.h"
+#include "AI/PPAIControllerBase.h"
+#include "AIController.h"
+#include "BehaviorTree/BehaviorTree.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "BehaviorTree/BlackboardData.h"
 #include "Components/NPCDialogueComponent.h"
 #include "Components/NPCCombatComponent.h"
+#include "Components/NPCModuleComponent.h"
 #include "Components/NPCLootTradeComponent.h"
 #include "Components/EscapeProgressComponent.h"
 #include "Components/WidgetComponent.h"
 #include "DataAssets/DA_NPCData.h"
 #include "GameState/PickpackerGameState.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -16,11 +29,18 @@ AModularNPCActor::AModularNPCActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	AutoPossessAI = EAutoPossessAI::Disabled;
+	AIControllerClass = AModularNPCAIController::StaticClass();
 
 	// Create modular components
 	DialogueComponent = CreateDefaultSubobject<UNPCDialogueComponent>(TEXT("DialogueComponent"));
 	CombatComponent = CreateDefaultSubobject<UNPCCombatComponent>(TEXT("CombatComponent"));
 	LootTradeComponent = CreateDefaultSubobject<UNPCLootTradeComponent>(TEXT("LootTradeComponent"));
+
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionResponseToChannel(ECC_GameTraceChannel3, ECR_Block);
+	}
 
 	// Name widget
 	NameWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("NameWidget"));
@@ -36,15 +56,27 @@ void AModularNPCActor::BeginPlay()
 
 	// Initialize from data asset
 	InitializeFromData();
+	EnsureMovementModeInitialized();
+	HomeLocation = GetActorLocation();
+	RefreshModuleComponents();
 
 	// Listen for dialogue outcomes
 	if (DialogueComponent)
 	{
 		DialogueComponent->OnDialogueChoiceSelected.AddDynamic(this, &AModularNPCActor::OnDialogueChoiceMade);
+		DialogueComponent->OnDialogueEnded.AddDynamic(this, &AModularNPCActor::OnDialogueEnded);
+	}
+
+	if (CombatComponent)
+	{
+		CombatComponent->OnTargetAcquired.AddDynamic(this, &AModularNPCActor::OnCombatTargetAcquired);
+		CombatComponent->OnTargetLost.AddDynamic(this, &AModularNPCActor::OnCombatTargetLost);
+		CombatComponent->OnDied.AddDynamic(this, &AModularNPCActor::OnCombatDied);
 	}
 
 	// Set initial module states
 	UpdateModuleStates();
+	NotifyModulesOwnerReady();
 
 	// Start periodic narrative evaluation on server
 	if (HasAuthority() && NarrativeEvalInterval > 0.0f)
@@ -63,6 +95,11 @@ void AModularNPCActor::BeginPlay()
 void AModularNPCActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (HasAuthority())
+	{
+		SyncCombatBlackboard();
+	}
 }
 
 void AModularNPCActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -83,13 +120,12 @@ void AModularNPCActor::OnInteract_Implementation(ACharacter* Interactor)
 		return;
 	}
 
+	EnsureDialogueDataInitialized();
+
 	// Priority: Dialogue first, then Trade
 	if (DialogueComponent && DialogueComponent->DialogueNodes.Num() > 0 && Disposition != ENPCDisposition::Hostile)
 	{
-		if (!DialogueComponent->bInConversation)
-		{
-			DialogueComponent->StartDialogue(Interactor);
-		}
+		StartDialogueForInteractor(Interactor);
 		return;
 	}
 
@@ -115,14 +151,21 @@ bool AModularNPCActor::CanInteract_Implementation(ACharacter* Interactor)
 		return false;
 	}
 
+	EnsureDialogueDataInitialized();
 	return true;
 }
 
 FText AModularNPCActor::GetInteractText_Implementation()
 {
-	if (Disposition == ENPCDisposition::Friendly && DialogueComponent && DialogueComponent->DialogueNodes.Num() > 0)
+	EnsureDialogueDataInitialized();
+
+	if (DialogueComponent && DialogueComponent->DialogueNodes.Num() > 0 && Disposition != ENPCDisposition::Hostile)
 	{
 		return FText::Format(NSLOCTEXT("NPC", "TalkTo", "Talk to {0}"), DisplayName);
+	}
+	if (Disposition == ENPCDisposition::Friendly && LootTradeComponent && LootTradeComponent->TradeInventory.Num() > 0)
+	{
+		return FText::Format(NSLOCTEXT("NPC", "TradeWith", "Trade with {0}"), DisplayName);
 	}
 	if (Disposition == ENPCDisposition::Neutral)
 	{
@@ -150,7 +193,7 @@ void AModularNPCActor::EndHighlight_Implementation()
 
 bool AModularNPCActor::RequestShowInteractionUI_Implementation(ACharacter* Interactor)
 {
-	return CanInteract_Implementation(Interactor);
+	return false;
 }
 
 void AModularNPCActor::GetCreditUnlockInfo_Implementation(bool& bRequiresUnlock, int32& UnlockCost, FText& LockedMessage, FText& UnlockedMessage)
@@ -174,6 +217,7 @@ void AModularNPCActor::SetDisposition(ENPCDisposition NewDisposition)
 	Disposition = NewDisposition;
 
 	UpdateModuleStates();
+	NotifyModulesDispositionChanged(OldDisposition, NewDisposition);
 
 	if (NewDisposition == ENPCDisposition::Missing)
 	{
@@ -196,6 +240,7 @@ void AModularNPCActor::SetNPCRole(ENPCRole NewRole)
 
 	const ENPCRole OldRole = NPCRole;
 	NPCRole = NewRole;
+	NotifyModulesRoleChanged(OldRole, NewRole);
 	OnRoleChanged.Broadcast(OldRole, NewRole);
 }
 
@@ -254,6 +299,8 @@ void AModularNPCActor::EvaluateNarrativeState()
 			SetDisposition(CachedProfile.DefaultDisposition);
 		}
 	}
+
+	NotifyModulesNarrativeStateEvaluated();
 }
 
 void AModularNPCActor::Disappear()
@@ -281,6 +328,7 @@ void AModularNPCActor::Reappear()
 	SetActorHiddenInGame(false);
 	SetActorEnableCollision(true);
 	SetActorTickEnabled(true);
+	EnsureMovementModeInitialized();
 
 	UpdateModuleStates();
 }
@@ -296,6 +344,145 @@ FName AModularNPCActor::GetEffectiveNPCId() const
 		return NPCData->GetNPCId();
 	}
 	return NAME_None;
+}
+
+bool AModularNPCActor::StartDialogueForInteractor(ACharacter* Interactor)
+{
+	if (!DialogueComponent || !Interactor || Disposition == ENPCDisposition::Missing || Disposition == ENPCDisposition::Hostile)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ModularNPCActor] StartDialogueForInteractor rejected for actor '%s'. DialogueComponent=%s Interactor=%s Disposition=%d"),
+			*GetName(),
+			DialogueComponent ? TEXT("true") : TEXT("false"),
+			Interactor ? TEXT("true") : TEXT("false"),
+			static_cast<int32>(Disposition));
+		return false;
+	}
+
+	if (DialogueComponent->bInConversation)
+	{
+		if (ActiveDialogueInteractor.Get() == Interactor)
+		{
+			if (ABlasterPlayerController* BlasterPC = Cast<ABlasterPlayerController>(Interactor->GetController()))
+			{
+				FDialogueUIState DialogueState;
+				if (BuildDialogueUIState(DialogueState))
+				{
+					BlasterPC->ClientShowNPCDialogue(this, DialogueState);
+				}
+			}
+		}
+		return ActiveDialogueInteractor.Get() == Interactor;
+	}
+
+	if (!DialogueComponent->StartDialogue(Interactor))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ModularNPCActor] StartDialogue failed for actor '%s'. Dialogue node count=%d"),
+			*GetName(),
+			DialogueComponent->DialogueNodes.Num());
+		return false;
+	}
+
+	ActiveDialogueInteractor = Interactor;
+
+	if (ABlasterPlayerController* BlasterPC = Cast<ABlasterPlayerController>(Interactor->GetController()))
+	{
+		FDialogueUIState DialogueState;
+		if (BuildDialogueUIState(DialogueState))
+		{
+			BlasterPC->ClientShowNPCDialogue(this, DialogueState);
+		}
+	}
+
+	return true;
+}
+
+bool AModularNPCActor::SelectDialogueChoiceForInteractor(ACharacter* Interactor, int32 ChoiceIndex)
+{
+	if (!DialogueComponent || !DialogueComponent->bInConversation || !Interactor || ActiveDialogueInteractor.Get() != Interactor)
+	{
+		return false;
+	}
+
+	DialogueComponent->SelectChoice(Interactor, ChoiceIndex);
+
+	if (ABlasterPlayerController* BlasterPC = Cast<ABlasterPlayerController>(Interactor->GetController()))
+	{
+		if (DialogueComponent->bInConversation)
+		{
+			FDialogueUIState DialogueState;
+			if (BuildDialogueUIState(DialogueState))
+			{
+				BlasterPC->ClientShowNPCDialogue(this, DialogueState);
+			}
+		}
+	}
+
+	return true;
+}
+
+bool AModularNPCActor::AdvanceDialogueForInteractor(ACharacter* Interactor)
+{
+	if (!DialogueComponent || !DialogueComponent->bInConversation || !Interactor || ActiveDialogueInteractor.Get() != Interactor)
+	{
+		return false;
+	}
+
+	DialogueComponent->AdvanceDialogue(Interactor);
+
+	if (ABlasterPlayerController* BlasterPC = Cast<ABlasterPlayerController>(Interactor->GetController()))
+	{
+		if (DialogueComponent->bInConversation)
+		{
+			FDialogueUIState DialogueState;
+			if (BuildDialogueUIState(DialogueState))
+			{
+				BlasterPC->ClientShowNPCDialogue(this, DialogueState);
+			}
+		}
+	}
+
+	return true;
+}
+
+void AModularNPCActor::EndDialogueForInteractor(ACharacter* Interactor)
+{
+	if (!DialogueComponent || !DialogueComponent->bInConversation)
+	{
+		return;
+	}
+
+	if (Interactor && ActiveDialogueInteractor.Get() != Interactor)
+	{
+		return;
+	}
+
+	DialogueComponent->EndDialogue();
+}
+
+bool AModularNPCActor::BuildDialogueUIState(FDialogueUIState& OutDialogueState) const
+{
+	if (!DialogueComponent || !DialogueComponent->bInConversation)
+	{
+		return false;
+	}
+
+	if (!DialogueComponent->BuildDialogueUIState(OutDialogueState))
+	{
+		return false;
+	}
+
+	if (!DisplayName.IsEmpty())
+	{
+		OutDialogueState.SpeakerName = DisplayName;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[ModularNPCActor] BuildDialogueUIState actor='%s' speaker='%s' text='%s' choices=%d"),
+		*GetName(),
+		*OutDialogueState.SpeakerName.ToString(),
+		*OutDialogueState.DialogueText.ToString(),
+		OutDialogueState.Choices.Num());
+
+	return true;
 }
 
 // =========================================================================
@@ -332,7 +519,7 @@ void AModularNPCActor::InitializeFromData()
 		return;
 	}
 
-	CachedProfile = NPCData->Profile;
+	NPCData->BuildResolvedProfile(CachedProfile);
 	bProfileCached = true;
 
 	// Set defaults from profile
@@ -346,8 +533,31 @@ void AModularNPCActor::InitializeFromData()
 		DisplayName = CachedProfile.DisplayName;
 	}
 
+	TArray<FDialogueNode> ResolvedDialogueNodes;
+	NPCData->BuildResolvedDialogueNodes(GetEffectiveNPCId(), ResolvedDialogueNodes);
+	if (ResolvedDialogueNodes.Num() > 0)
+	{
+		CachedProfile.DialogueNodes = MoveTemp(ResolvedDialogueNodes);
+	}
+
 	Disposition = CachedProfile.DefaultDisposition;
 	NPCRole = CachedProfile.DefaultRole;
+
+	if (GetMesh())
+	{
+		if (USkeletalMesh* MeshOverride = NPCData->GetResolvedMeshOverride().LoadSynchronous())
+		{
+			GetMesh()->SetSkeletalMesh(MeshOverride);
+		}
+
+		if (UClass* AnimClass = NPCData->GetResolvedAnimClassOverride().LoadSynchronous())
+		{
+			if (AnimClass->IsChildOf(UAnimInstance::StaticClass()))
+			{
+				GetMesh()->SetAnimInstanceClass(AnimClass);
+			}
+		}
+	}
 
 	// Populate dialogue
 	if (DialogueComponent && CachedProfile.bEnableDialogue)
@@ -363,14 +573,79 @@ void AModularNPCActor::InitializeFromData()
 	}
 }
 
+void AModularNPCActor::EnsureDialogueDataInitialized()
+{
+	if (!NPCData || !DialogueComponent || DialogueComponent->DialogueNodes.Num() > 0)
+	{
+		return;
+	}
+
+	if (!bProfileCached)
+	{
+		NPCData->BuildResolvedProfile(CachedProfile);
+		bProfileCached = true;
+	}
+
+	if (NPCId.IsNone())
+	{
+		NPCId = CachedProfile.NPCId;
+	}
+
+	if (DisplayName.IsEmpty())
+	{
+		DisplayName = CachedProfile.DisplayName;
+	}
+
+	if (!CachedProfile.bEnableDialogue)
+	{
+		return;
+	}
+
+	TArray<FDialogueNode> ResolvedDialogueNodes;
+	NPCData->BuildResolvedDialogueNodes(GetEffectiveNPCId(), ResolvedDialogueNodes);
+	if (ResolvedDialogueNodes.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ModularNPCActor] Dialogue lookup returned no rows for NPC '%s' on actor '%s'. ConfigRowName/NPCId/DialogueScriptDataTable should match."),
+			*GetEffectiveNPCId().ToString(),
+			*GetName());
+		return;
+	}
+
+	DialogueComponent->DialogueNodes = MoveTemp(ResolvedDialogueNodes);
+	DialogueComponent->DefaultSpeakerName = CachedProfile.DisplayName;
+	UE_LOG(LogTemp, Log, TEXT("[ModularNPCActor] Loaded %d dialogue nodes for NPC '%s' on actor '%s'."),
+		DialogueComponent->DialogueNodes.Num(),
+		*GetEffectiveNPCId().ToString(),
+		*GetName());
+}
+
 void AModularNPCActor::UpdateModuleStates()
 {
+	RefreshModuleComponents();
+
 	// Combat: active only when hostile
+	const bool bShouldCombat = (Disposition == ENPCDisposition::Hostile) &&
+		(bProfileCached ? CachedProfile.bEnableCombat : true);
+
 	if (CombatComponent)
 	{
-		const bool bShouldCombat = (Disposition == ENPCDisposition::Hostile) &&
-			(bProfileCached ? CachedProfile.bEnableCombat : true);
 		CombatComponent->SetCombatActive(bShouldCombat);
+	}
+
+	if (HasAuthority())
+	{
+		if (bShouldCombat)
+		{
+			StartCombatAI();
+		}
+		else if (ResolveAmbientBehaviorTree())
+		{
+			StartAmbientAI();
+		}
+		else
+		{
+			StopCombatAI();
+		}
 	}
 
 	// Dialogue: available when not hostile and not missing
@@ -378,6 +653,296 @@ void AModularNPCActor::UpdateModuleStates()
 
 	// LootTrade: available when friendly
 	// (component stays created but won't be interactable)
+
+	NotifyModulesUpdated();
+}
+
+void AModularNPCActor::EnsureMovementModeInitialized()
+{
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->Activate(true);
+
+		if (Movement->MovementMode == MOVE_None)
+		{
+			Movement->SetMovementMode(MOVE_Walking);
+		}
+	}
+}
+
+void AModularNPCActor::RefreshModuleComponents()
+{
+	TArray<UNPCModuleComponent*> Modules;
+	GetComponents<UNPCModuleComponent>(Modules);
+
+	RegisteredModules.Reset();
+	for (UNPCModuleComponent* Module : Modules)
+	{
+		if (Module)
+		{
+			RegisteredModules.Add(Module);
+		}
+	}
+}
+
+void AModularNPCActor::NotifyModulesOwnerReady()
+{
+	for (UNPCModuleComponent* Module : RegisteredModules)
+	{
+		if (Module)
+		{
+			Module->HandleOwnerReady(this);
+		}
+	}
+}
+
+void AModularNPCActor::NotifyModulesDispositionChanged(ENPCDisposition OldDisposition, ENPCDisposition NewDisposition)
+{
+	for (UNPCModuleComponent* Module : RegisteredModules)
+	{
+		if (Module)
+		{
+			Module->HandleDispositionChanged(OldDisposition, NewDisposition);
+		}
+	}
+}
+
+void AModularNPCActor::NotifyModulesRoleChanged(ENPCRole OldRole, ENPCRole NewRole)
+{
+	for (UNPCModuleComponent* Module : RegisteredModules)
+	{
+		if (Module)
+		{
+			Module->HandleRoleChanged(OldRole, NewRole);
+		}
+	}
+}
+
+void AModularNPCActor::NotifyModulesNarrativeStateEvaluated()
+{
+	for (UNPCModuleComponent* Module : RegisteredModules)
+	{
+		if (Module)
+		{
+			Module->HandleNarrativeStateEvaluated();
+		}
+	}
+}
+
+void AModularNPCActor::NotifyModulesUpdated()
+{
+	for (UNPCModuleComponent* Module : RegisteredModules)
+	{
+		if (Module)
+		{
+			Module->HandleModulesUpdated();
+		}
+	}
+}
+
+void AModularNPCActor::StartCombatAI()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	AAIController* AIController = EnsureCombatAIController();
+	if (!AIController)
+	{
+		return;
+	}
+
+	if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+	{
+		PPController->StopBehaviorTreeIfRunning();
+	}
+
+	if (UBehaviorTree* CombatBT = ResolveCombatBehaviorTree())
+	{
+		if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+		{
+			PPController->RunBehaviorTreeWithBlackboard(CombatBT, ResolveCombatBlackboard());
+		}
+	}
+	else if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+	{
+		PPController->StopBehaviorTreeIfRunning();
+	}
+
+	SyncCombatBlackboard();
+
+	if (CombatComponent && CombatComponent->CurrentTarget.IsValid())
+	{
+		AIController->SetFocus(CombatComponent->CurrentTarget.Get());
+	}
+}
+
+void AModularNPCActor::StopCombatAI()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+		{
+			PPController->StopBehaviorTreeIfRunning();
+		}
+
+		AIController->StopMovement();
+		AIController->ClearFocus(EAIFocusPriority::Gameplay);
+	}
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+	}
+
+	ClearCombatBlackboard();
+}
+
+void AModularNPCActor::StartAmbientAI()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	AAIController* AIController = EnsureCombatAIController();
+	if (!AIController)
+	{
+		return;
+	}
+
+	if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+	{
+		PPController->StopBehaviorTreeIfRunning();
+	}
+
+	if (UBehaviorTree* AmbientBT = ResolveAmbientBehaviorTree())
+	{
+		if (APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+		{
+			PPController->RunBehaviorTreeWithBlackboard(AmbientBT, ResolveAmbientBlackboard());
+		}
+	}
+}
+
+AAIController* AModularNPCActor::EnsureCombatAIController()
+{
+	if (!HasAuthority())
+	{
+		return nullptr;
+	}
+
+	if (AAIController* ExistingAI = Cast<AAIController>(GetController()))
+	{
+		return ExistingAI;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	UClass* ControllerClass = AIControllerClass.Get();
+	if (!ControllerClass)
+	{
+		ControllerClass = AModularNPCAIController::StaticClass();
+	}
+
+	if (!ControllerClass->IsChildOf(AAIController::StaticClass()))
+	{
+		return nullptr;
+	}
+
+	AAIController* SpawnedAI = World->SpawnActor<AAIController>(ControllerClass, GetActorLocation(), GetActorRotation());
+	if (!SpawnedAI)
+	{
+		return nullptr;
+	}
+
+	SpawnedAI->Possess(this);
+	return SpawnedAI;
+}
+
+void AModularNPCActor::SyncCombatBlackboard()
+{
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (!AIController)
+	{
+		return;
+	}
+
+	UBlackboardComponent* BlackboardComp = AIController->FindComponentByClass<UBlackboardComponent>();
+	if (!BlackboardComp)
+	{
+		return;
+	}
+
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CombatActive, CombatComponent && CombatComponent->bCombatActive);
+	BlackboardComp->SetValueAsVector(PPBlackboardKeys::HomeLocation, HomeLocation);
+
+	AActor* TargetActor = CombatComponent ? CombatComponent->CurrentTarget.Get() : nullptr;
+	if (TargetActor)
+	{
+		BlackboardComp->SetValueAsObject(PPBlackboardKeys::TargetActor, TargetActor);
+		BlackboardComp->SetValueAsObject(PPBlackboardKeys::DetectedPlayer, TargetActor);
+		BlackboardComp->SetValueAsVector(PPBlackboardKeys::TargetLocation, TargetActor->GetActorLocation());
+		BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, CombatComponent->IsActorInAttackRange(TargetActor));
+	}
+	else
+	{
+		BlackboardComp->ClearValue(PPBlackboardKeys::TargetActor);
+		BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
+		BlackboardComp->ClearValue(PPBlackboardKeys::TargetLocation);
+		BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, false);
+	}
+}
+
+void AModularNPCActor::ClearCombatBlackboard()
+{
+	AAIController* AIController = Cast<AAIController>(GetController());
+	if (!AIController)
+	{
+		return;
+	}
+
+	UBlackboardComponent* BlackboardComp = AIController->FindComponentByClass<UBlackboardComponent>();
+	if (!BlackboardComp)
+	{
+		return;
+	}
+
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CombatActive, false);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, false);
+	BlackboardComp->ClearValue(PPBlackboardKeys::TargetActor);
+	BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
+	BlackboardComp->ClearValue(PPBlackboardKeys::TargetLocation);
+}
+
+UBehaviorTree* AModularNPCActor::ResolveCombatBehaviorTree() const
+{
+	return NPCData ? NPCData->GetResolvedCombatBehaviorTree().LoadSynchronous() : nullptr;
+}
+
+UBlackboardData* AModularNPCActor::ResolveCombatBlackboard() const
+{
+	return NPCData ? NPCData->GetResolvedCombatBlackboard().LoadSynchronous() : nullptr;
+}
+
+UBehaviorTree* AModularNPCActor::ResolveAmbientBehaviorTree() const
+{
+	return NPCData ? NPCData->GetResolvedAmbientBehaviorTree().LoadSynchronous() : nullptr;
+}
+
+UBlackboardData* AModularNPCActor::ResolveAmbientBlackboard() const
+{
+	return NPCData ? NPCData->GetResolvedAmbientBlackboard().LoadSynchronous() : nullptr;
 }
 
 UEscapeProgressComponent* AModularNPCActor::GetEscapeProgress() const
@@ -411,16 +976,12 @@ void AModularNPCActor::OnDialogueChoiceMade(ACharacter* Interactor, int32 NodeIn
 
 	const FDialogueNode& Node = DialogueComponent->DialogueNodes[NodeIndex];
 
-	// Get the actual available choices (filtered) and resolve the original
-	TArray<FDialogueChoice> Available = DialogueComponent->GetAvailableChoices();
-	// ChoiceIndex is for the available list
-	// We need to search through all outcomes
-	if (!Available.IsValidIndex(ChoiceIndex))
+	if (!Node.Choices.IsValidIndex(ChoiceIndex))
 	{
 		return;
 	}
 
-	const FDialogueChoice& Choice = Available[ChoiceIndex];
+	const FDialogueChoice& Choice = Node.Choices[ChoiceIndex];
 
 	for (const FDialogueOutcome& Outcome : Choice.Outcomes)
 	{
@@ -457,4 +1018,51 @@ void AModularNPCActor::OnDialogueChoiceMade(ACharacter* Interactor, int32 NodeIn
 			break;
 		}
 	}
+}
+
+void AModularNPCActor::OnDialogueEnded()
+{
+	ActiveDialogueInteractor = nullptr;
+}
+
+void AModularNPCActor::OnCombatTargetAcquired(AActor* NewTarget)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	StartCombatAI();
+
+	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		AIController->SetFocus(NewTarget);
+	}
+
+	SyncCombatBlackboard();
+}
+
+void AModularNPCActor::OnCombatTargetLost()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		AIController->ClearFocus(EAIFocusPriority::Gameplay);
+	}
+
+	SyncCombatBlackboard();
+}
+
+void AModularNPCActor::OnCombatDied()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	StopCombatAI();
 }

@@ -41,6 +41,7 @@
 #include "HAL/PlatformFilemanager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "InputMappingContext.h"
 #include "InputActionValue.h"
 #include "InputAction.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -53,6 +54,8 @@
 #include "AI/MotherAIActor.h"
 #include "Environment/ConveyorBeltActor.h"
 #include "Environment/LadderActor.h"
+#include "PickpackerAssetPaths.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
@@ -68,6 +71,13 @@ namespace
 ABlasterCharacter::ABlasterCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
+
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext> DefaultInputMappingContextRef(
+		PickpackerAssetPaths::Blueprints::InputMainGameMappingContext);
+	if (DefaultInputMappingContextRef.Succeeded())
+	{
+		DefaultInputMappingContext = DefaultInputMappingContextRef.Object;
+	}
 
 	// 1인칭 카메라 Capsule에 직접 부착 (SpringArm 제거)
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -544,6 +554,7 @@ void ABlasterCharacter::ReportSuspiciousBehavior(ESuspiciousBehavior Behavior)
 void ABlasterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplyDefaultInputMappingContext();
 	SpawnDefaultWeapon();
 	UpdateHUDAmmo();
 	UpdateHUDHealth();
@@ -599,6 +610,57 @@ void ABlasterCharacter::BeginPlay()
 		0.1f,
 		false
 	);
+}
+
+void ABlasterCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	bDefaultInputMappingContextApplied = false;
+	ApplyDefaultInputMappingContext();
+}
+
+void ABlasterCharacter::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+	bDefaultInputMappingContextApplied = false;
+	ApplyDefaultInputMappingContext();
+}
+
+void ABlasterCharacter::ApplyDefaultInputMappingContext()
+{
+	if (bDefaultInputMappingContextApplied || !IsLocallyControlled())
+	{
+		return;
+	}
+
+	if (!DefaultInputMappingContext)
+	{
+		DefaultInputMappingContext = LoadObject<UInputMappingContext>(
+			nullptr,
+			PickpackerAssetPaths::Blueprints::InputMainGameMappingContext);
+	}
+	if (!DefaultInputMappingContext)
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = Cast<APlayerController>(Controller);
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	if (UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+	{
+		InputSubsystem->AddMappingContext(DefaultInputMappingContext, DefaultInputMappingPriority);
+		bDefaultInputMappingContextApplied = true;
+	}
 }
 
 void ABlasterCharacter::UpdateOverheadWidget()

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
+#include "PickpackerAssetPaths.h"
 #include "LobbyGameMode.generated.h"
 
 enum class ESessionVisibility : uint8;
@@ -56,7 +57,7 @@ public:
 protected:
 	// EntryMap 경로 (시퀀스 재생 후 메인 레벨로 이동)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
-	FString EntryMapPath = TEXT("/Game/Maps/EntryMap");
+	FString EntryMapPath = PickpackerAssetPaths::Maps::EntryMap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
 	bool bAutoCreateSessionOnBeginPlay = true;
@@ -68,7 +69,7 @@ protected:
 	FString DefaultMatchType = TEXT("Industral");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
-	FString DefaultLobbyMap = TEXT("/Game/Maps/IndustralMap");
+	FString DefaultLobbyMap = PickpackerAssetPaths::Maps::IndustralMap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Settings")
 	ESessionVisibility DefaultLobbyVisibility;

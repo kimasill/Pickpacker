@@ -15,7 +15,6 @@ void UInteractionPromptWidget::NativeConstruct()
 
 	// Initially hidden
 	SetPromptVisibility(false);
-
 }
 
 void UInteractionPromptWidget::NativeDestruct()
@@ -38,8 +37,8 @@ void UInteractionPromptWidget::SetPromptVisibility(bool bVisible)
 
 void UInteractionPromptWidget::SetPromptPosition(const FVector2D& Position)
 {
-	// Position can be set via slot or anchor
-	// This is typically handled in the widget designer
+	SetAlignmentInViewport(FVector2D(0.5f, 1.0f));
+	SetPositionInViewport(Position, false);
 }
 
 void UInteractionPromptWidget::UpdateCreditInfo(bool bRequiresUnlock, int32 UnlockCost, const FText& LockedMessage, const FText& UnlockedMessage, int32 CurrentCredits)
@@ -107,7 +106,31 @@ void UInteractionPromptWidget::UpdateFromInteractionData(const FInteractionUIDat
 	// 프롬프트는 데이터가 오면 표시
 	SetPromptVisibility(true);
 
-	UpdateInteractionText(Data.ActionText);
+	FText DisplayActionText = Data.ActionText;
+	if (InputKeyText.IsEmpty() == false && DataKey == nullptr && KeyName == nullptr && InformationText == nullptr)
+	{
+		DisplayActionText = FText::Format(NSLOCTEXT("InteractionPrompt", "InlinePrompt", "[{0}] {1}"), InputKeyText, Data.ActionText);
+	}
+
+	UpdateInteractionText(DisplayActionText);
+
+	if (DataKey)
+	{
+		DataKey->SetText(InputKeyText);
+		DataKey->SetVisibility(InputKeyText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+
+	if (KeyName)
+	{
+		KeyName->SetText(InputKeyText);
+		KeyName->SetVisibility(InputKeyText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+
+	if (InformationText)
+	{
+		InformationText->SetText(InputKeyText);
+		InformationText->SetVisibility(InputKeyText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
 
 	// 크레딧/잠금 표시
 	if (Data.bRequiresUnlock && Data.UnlockCost > 0)
@@ -133,7 +156,22 @@ void UInteractionPromptWidget::ClearInteractionData()
 {
 	ClearCreditInfo();
 	UpdateInteractionText(FText());
+	if (DataKey)
+	{
+		DataKey->SetText(FText());
+		DataKey->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (KeyName)
+	{
+		KeyName->SetText(FText());
+		KeyName->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (InformationText)
+	{
+		InformationText->SetText(FText());
+		InformationText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	SetPromptVisibility(false);
 	OnInteractionWidgetCleared.Broadcast();
 }
-

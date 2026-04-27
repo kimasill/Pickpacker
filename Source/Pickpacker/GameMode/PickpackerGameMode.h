@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
+#include "PickpackerAssetPaths.h"
 #include "PickpackerTypes/PickpackerTypes.h"
 #include "PickpackerGameMode.generated.h"
 
@@ -12,6 +13,7 @@ class APlayerState;
 class APickpackerGameState;
 class UPCGDungeonSubSystem; // forward declaration
 class UDA_OrderWaveData;
+class UDA_TrainDestinationData;
 class AParcelActor;
 
 /**
@@ -111,6 +113,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Gameplay")
 	void SetMissionConfig(const FString& MissionId, int32 CustomSeed = 0);
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Gameplay")
+	FMissionDefinition GetCurrentMissionDefinition() const { return CurrentMissionDefinition; }
+
 	/**
 	 * Called when a parcel enters the submission belt
 	 */
@@ -145,6 +150,10 @@ public:
 	/** Starting team credits */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Credits")
 	int32 StartingTeamCredits = 30;
+
+	/** Available train destinations registered at runtime */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Train")
+	UDA_TrainDestinationData* TrainDestinationData = nullptr;
 
 	/** 게임 시작 시 로드할 스트리밍 레벨 이름 (예: controlroom). 패키징 빌드에서 텔레포트/참조 실패 방지 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|Level")
@@ -215,6 +224,9 @@ protected:
 	UPROPERTY()
 	FSeedSet CurrentMissionConfig;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickpacker|Gameplay", meta = (AllowPrivateAccess = "true"))
+	FMissionDefinition CurrentMissionDefinition;
+
 	// PCG subsystem (not reflected)
 	UPCGDungeonSubSystem* PCGDungeonSubsystem = nullptr;
 
@@ -240,7 +252,7 @@ protected:
 	float GameOverReturnDelay = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickpacker|GameOver")
-	FString LobbyTravelPath = TEXT("/Game/Maps/EntryMap");
+	FString LobbyTravelPath = PickpackerAssetPaths::Maps::EntryMap;
 
 	FTimerHandle ReturnToLobbyTimerHandle;
 	bool bGameOverInProgress = false;
@@ -267,6 +279,11 @@ protected:
 	void ApplyOrderPenalty(const FActiveOrderState& Order) const;
 	void HandleNextOrderWaveTimer();
 	bool CanSpawnNewOrders() const;
+	void RegisterTrainDestinations();
+	void RefreshMissionDefinitionFromOrders();
+	void TryAdvanceCoreLoopFromOrders();
+	bool TryRestoreTravelSnapshot();
+	void UnloadTrainCargoToStorage(const TArray<FStorageRecord>& CargoRecords);
 
 protected:
 	/** Current orders tracked on the server */
@@ -289,4 +306,7 @@ protected:
 	/** Order system timers */
 	FTimerHandle OrderSystemTimerHandle;
 	FTimerHandle NextWaveTimerHandle;
+
+	/** Prevent duplicate train boarding triggers once the work loop is complete */
+	bool bTrainBoardingTriggered = false;
 };

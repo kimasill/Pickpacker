@@ -3,60 +3,38 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Animation/AnimInstance.h"
 #include "AI/MotherAIActor.h"
+#include "AI/PPAIAnimInstanceBase.h"
 #include "MotherAnimInstance.generated.h"
+
+class AMotherAIActor;
 
 /**
  * 
  */
 UCLASS()
-class PICKPACKER_API UMotherAnimInstance : public UAnimInstance
+class PICKPACKER_API UMotherAnimInstance : public UPPAIAnimInstanceBase
 {
 	GENERATED_BODY()
-public:
-	virtual void NativeInitializeAnimation() override;
-	virtual void NativeUpdateAnimation(float DeltaTime) override;
+
+protected:
+	virtual void CacheCharacterOwner() override;
+	virtual void UpdateCharacterSpecificData(float DeltaTime) override;
 
 private:
 	/** Cached reference to Mother AI Actor */
 	UPROPERTY(BlueprintReadOnly, Category = "Character", meta = (AllowPrivateAccess = "true"))
-	AMotherAIActor* MotherAI;
-
-	/** Movement Variables */
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	float Speed;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	bool bIsInAir;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	bool bIsAccelerating;
+	TObjectPtr<AMotherAIActor> MotherAI = nullptr;
 
 	/** AI State */
 	UPROPERTY(BlueprintReadOnly, Category = "AI State", meta = (AllowPrivateAccess = "true"))
-	EMotherAIState CurrentAIState;
-
-	/** Movement Direction */
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	float Direction;
-
-	/** Yaw Offset for movement blending */
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	float YawOffset;
-
-	/** Lean value for turning */
-	UPROPERTY(BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	float Lean;
+	EMotherAIState CurrentAIState = EMotherAIState::Normal;
 
 	/** 처벌 몽타주 재생 중 여부 (스레드 안전) */
 	UPROPERTY(BlueprintReadOnly, Category = "Animation", meta = (AllowPrivateAccess = "true"))
-	bool bIsPlayingPunishmentMontage;
+	bool bIsPlayingPunishmentMontage = false;
 
 	/** 점검 몽타주 재생 중 여부 (스레드 안전) */
 	UPROPERTY(BlueprintReadOnly, Category = "Animation", meta = (AllowPrivateAccess = "true"))
-	bool bIsPlayingInspectionMontage;
-
-	FRotator CharacterRotationLastFrame;
-	FRotator CharacterRotation;
+	bool bIsPlayingInspectionMontage = false;
 };

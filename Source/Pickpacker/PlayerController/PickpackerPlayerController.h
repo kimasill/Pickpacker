@@ -3,14 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
+#include "PlayerController/BlasterPlayerController.h"
 #include "PickpackerPlayerController.generated.h"
 
 class APickpackerGameMode;
 class APickpackerGameState;
 
 UCLASS()
-class PICKPACKER_API APickpackerPlayerController : public APlayerController
+class PICKPACKER_API APickpackerPlayerController : public ABlasterPlayerController
 {
 	GENERATED_BODY()
 

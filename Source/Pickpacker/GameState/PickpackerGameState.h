@@ -79,6 +79,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Suspicion")
 	void AddTeamSuspicion(float SuspicionPoints);
 
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Suspicion")
+	void SetTeamSuspicionValue(float NewSuspicion);
+
 	/**
 	 * Get current team suspicion level
 	 */
@@ -204,6 +207,42 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|CoreLoop")
 	int32 GetCompletedTrips() const { return CompletedTrips; }
 
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|CoreLoop")
+	void SetRunStage(ERunProgressStage NewStage);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|CoreLoop")
+	ERunProgressStage GetRunStage() const { return RunStage; }
+
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Mission")
+	void SetCurrentMissionDefinition(const FMissionDefinition& NewMissionDefinition);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Mission")
+	const FMissionDefinition& GetCurrentMissionDefinition() const { return CurrentMissionDefinition; }
+
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Travel")
+	void SetCurrentRouteSelectionResult(const FRouteSelectionResult& NewRouteSelectionResult);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Travel")
+	const FRouteSelectionResult& GetCurrentRouteSelectionResult() const { return CurrentRouteSelectionResult; }
+
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Storage")
+	void SetSessionStorageRecords(const TArray<FStorageRecord>& NewStorageRecords);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Storage")
+	const TArray<FStorageRecord>& GetSessionStorageRecords() const { return SessionStorageRecords; }
+
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Meta")
+	void SetRunPersonaStats(const FPersonaStats& NewPersonaStats);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Meta")
+	const FPersonaStats& GetRunPersonaStats() const { return RunPersonaStats; }
+
+	UFUNCTION(BlueprintCallable, Category = "Pickpacker|Meta")
+	void SetEndingFlagStates(const TArray<FEndingFlagState>& NewEndingFlagStates);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Pickpacker|Meta")
+	const TArray<FEndingFlagState>& GetEndingFlagStates() const { return EndingFlagStates; }
+
 public:
 	// Alias to allow templated type with comma in delegate macro
 	typedef TMap<FGuid, float> FOrderTimesMap;
@@ -233,6 +272,11 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
 	FOnOrderTimesUpdated OnOrderTimesUpdated;
 
+	/** Legacy compatibility dispatcher used by existing order UI blueprints. */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGlobalTimerCall, float, CurrentTime);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Orders")
+	FOnGlobalTimerCall OnGlobalTimerCall;
+
 	/** Broadcast when credits are updated */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreditsChanged, int32, NewCredits, int32, Delta);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Credits")
@@ -242,6 +286,18 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCoreLoopPhaseChanged, ECoreLoopPhase, OldPhase, ECoreLoopPhase, NewPhase);
 	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|CoreLoop")
 	FOnCoreLoopPhaseChanged OnCoreLoopPhaseChanged;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRunStageUpdated, ERunProgressStage, OldStage, ERunProgressStage, NewStage);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|CoreLoop")
+	FOnRunStageUpdated OnRunStageUpdated;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMissionDefinitionUpdated, const FMissionDefinition&, MissionDefinition);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Mission")
+	FOnMissionDefinitionUpdated OnMissionDefinitionUpdated;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStorageRecordsChanged, const TArray<FStorageRecord>&, StorageRecords);
+	UPROPERTY(BlueprintAssignable, Category = "Pickpacker|Storage")
+	FOnStorageRecordsChanged OnStorageRecordsChanged;
 
 protected:
 	/** Called when level variant is replicated to clients */
@@ -276,6 +332,24 @@ protected:
 
 	UFUNCTION()
 	void OnRep_CoreLoopPhase(ECoreLoopPhase OldPhase);
+
+	UFUNCTION()
+	void OnRep_RunStage(ERunProgressStage OldStage);
+
+	UFUNCTION()
+	void OnRep_CurrentMissionDefinition();
+
+	UFUNCTION()
+	void OnRep_SessionStorageRecords();
+
+	UFUNCTION()
+	void OnRep_RunPersonaStats();
+
+	UFUNCTION()
+	void OnRep_EndingFlagStates();
+
+	UFUNCTION()
+	void OnRep_CurrentRouteSelectionResult();
 
 private:
 	/** Replicated level variant data */
@@ -360,6 +434,30 @@ private:
 	UPROPERTY(Replicated)
 	int32 CompletedTrips = 0;
 
+	/** Replicated detailed run stage */
+	UPROPERTY(ReplicatedUsing = OnRep_RunStage)
+	ERunProgressStage RunStage = ERunProgressStage::None;
+
+	/** Replicated mission definition currently driving the run */
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentMissionDefinition)
+	FMissionDefinition CurrentMissionDefinition;
+
+	/** Replicated run-scoped storage records */
+	UPROPERTY(ReplicatedUsing = OnRep_SessionStorageRecords)
+	TArray<FStorageRecord> SessionStorageRecords;
+
+	/** Replicated meta persona stats aggregated for the current run */
+	UPROPERTY(ReplicatedUsing = OnRep_RunPersonaStats)
+	FPersonaStats RunPersonaStats;
+
+	/** Replicated ending flags accumulated during the run */
+	UPROPERTY(ReplicatedUsing = OnRep_EndingFlagStates)
+	TArray<FEndingFlagState> EndingFlagStates;
+
+	/** Replicated result of the current or last confirmed train route selection */
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentRouteSelectionResult)
+	FRouteSelectionResult CurrentRouteSelectionResult;
+
 	/** Cached last replicated credits for delta calculations */
 	UPROPERTY()
 	int32 LastReplicatedTeamCredits = 0;
@@ -379,4 +477,6 @@ private:
 
 	/** Gather remaining times and broadcast */
 	void BroadcastOrderRemainingTimes();
+
+	void TryApplyRouteRuntime();
 };

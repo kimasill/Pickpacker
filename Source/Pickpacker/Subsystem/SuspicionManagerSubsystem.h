@@ -30,6 +30,22 @@ struct FSuspicionEventData
 	UPROPERTY(BlueprintReadOnly)
 	float EventTime;
 
+	/** 이벤트 소스 식별자 */
+	UPROPERTY(BlueprintReadOnly)
+	FName Source = NAME_None;
+
+	/** 이벤트 발생 위치 */
+	UPROPERTY(BlueprintReadOnly)
+	FVector Location = FVector::ZeroVector;
+
+	/** 이벤트 가중치 */
+	UPROPERTY(BlueprintReadOnly)
+	float Weight = 0.0f;
+
+	/** 이벤트가 유효한 만료 시각 */
+	UPROPERTY(BlueprintReadOnly)
+	float ExpireTime = 0.0f;
+
 	FSuspicionEventData()
 		: Player(nullptr)
 		, Behavior(ESuspiciousBehavior::None)
@@ -37,10 +53,21 @@ struct FSuspicionEventData
 	{
 	}
 
-	FSuspicionEventData(ABlasterCharacter* InPlayer, ESuspiciousBehavior InBehavior, float InEventTime)
+	FSuspicionEventData(
+		ABlasterCharacter* InPlayer,
+		ESuspiciousBehavior InBehavior,
+		float InEventTime,
+		FName InSource,
+		const FVector& InLocation,
+		float InWeight,
+		float InExpireTime)
 		: Player(InPlayer)
 		, Behavior(InBehavior)
 		, EventTime(InEventTime)
+		, Source(InSource)
+		, Location(InLocation)
+		, Weight(InWeight)
+		, ExpireTime(InExpireTime)
 	{
 	}
 };
@@ -140,5 +167,8 @@ private:
 	/** 같은 행동의 중복 이벤트 방지 시간 (초) */
 	UPROPERTY(EditAnywhere, Category = "Suspicion Manager")
 	float DuplicateEventCooldown = 2.0f;
-};
 
+	/** 이벤트 레코드 기본 유지 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Suspicion Manager")
+	float DefaultEventLifetime = 4.0f;
+};

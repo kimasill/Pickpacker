@@ -4,7 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "PickpackerTypes/PickpackerTypes.h"
 #include "CoreLoopTypes.generated.h"
+
+class UTexture2D;
 
 // ============================================================
 // Core Loop Phase
@@ -19,6 +22,25 @@ enum class ECoreLoopPhase : uint8
 	Train			UMETA(DisplayName = "Train - Transit"),
 	Underground		UMETA(DisplayName = "Underground - Exploration"),
 	Escape			UMETA(DisplayName = "Escape - Ending Sequence")
+};
+
+// ============================================================
+// Detailed Run Stage
+// ============================================================
+
+/** Fine-grained run stage layered on top of the high-level phase */
+UENUM(BlueprintType)
+enum class ERunProgressStage : uint8
+{
+	None			UMETA(DisplayName = "None"),
+	GameStart		UMETA(DisplayName = "Game Start"),
+	Lobby			UMETA(DisplayName = "Lobby"),
+	ReceiveMission	UMETA(DisplayName = "Receive Mission"),
+	Work			UMETA(DisplayName = "Work"),
+	Submit			UMETA(DisplayName = "Submit"),
+	Underworld		UMETA(DisplayName = "Underworld"),
+	Return			UMETA(DisplayName = "Return"),
+	Result			UMETA(DisplayName = "Result")
 };
 
 // ============================================================
@@ -76,6 +98,7 @@ enum class EDialogueOutcomeType : uint8
 {
 	None				UMETA(DisplayName = "None"),
 	SetWorldFlag		UMETA(DisplayName = "Set World Flag"),
+	AdjustPersona		UMETA(DisplayName = "Adjust Persona"),
 	GiveItem			UMETA(DisplayName = "Give Item"),
 	TakeItem			UMETA(DisplayName = "Take Item"),
 	ChangeDisposition	UMETA(DisplayName = "Change Disposition"),
@@ -84,6 +107,31 @@ enum class EDialogueOutcomeType : uint8
 	AttackPlayer		UMETA(DisplayName = "Attack Player"),
 	Disappear			UMETA(DisplayName = "NPC Disappears"),
 	Custom				UMETA(DisplayName = "Custom (Blueprint)")
+};
+
+UENUM(BlueprintType)
+enum class EDialogueChoiceRequirementType : uint8
+{
+	None				UMETA(DisplayName = "None"),
+	WorldFlagAtLeast	UMETA(DisplayName = "World Flag At Least"),
+	WorldFlagAtMost		UMETA(DisplayName = "World Flag At Most"),
+	PersonaAtLeast		UMETA(DisplayName = "Persona At Least"),
+	PersonaAtMost		UMETA(DisplayName = "Persona At Most"),
+	HasItemTag			UMETA(DisplayName = "Has Item Tag"),
+	MissingItemTag		UMETA(DisplayName = "Missing Item Tag"),
+	HasSpecialItemTag	UMETA(DisplayName = "Has Special Item Tag"),
+	MissingSpecialItemTag UMETA(DisplayName = "Missing Special Item Tag")
+};
+
+UENUM(BlueprintType)
+enum class EDialogueChoiceIndicatorType : uint8
+{
+	None		UMETA(DisplayName = "None"),
+	Persona		UMETA(DisplayName = "Persona"),
+	Item		UMETA(DisplayName = "Item"),
+	Branch		UMETA(DisplayName = "Branch"),
+	Quest		UMETA(DisplayName = "Quest"),
+	Custom		UMETA(DisplayName = "Custom")
 };
 
 // ============================================================
@@ -107,6 +155,10 @@ struct PICKPACKER_API FDialogueOutcome
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	int32 IntValue = 0;
 
+	/** Float payload (persona delta, weighted scores, etc.) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	float FloatValue = 0.0f;
+
 	/** Tag payload (item tag, quest tag, etc.) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	FGameplayTag TagPayload;
@@ -114,6 +166,40 @@ struct PICKPACKER_API FDialogueOutcome
 	/** Optional string payload */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	FString StringPayload;
+};
+
+/** Additional requirement for unlocking a dialogue choice. All requirements must pass. */
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FDialogueChoiceRequirement
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	EDialogueChoiceRequirementType RequirementType = EDialogueChoiceRequirementType::None;
+
+	/** World flag / item / branch tag depending on requirement type. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FGameplayTag Tag;
+
+	/** Numeric threshold (persona or world flag threshold). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	float ThresholdValue = 0.0f;
+
+	/** Optional indicator category shown on unlocked choices. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	EDialogueChoiceIndicatorType IndicatorType = EDialogueChoiceIndicatorType::None;
+
+	/** Optional explicit text shown beside the indicator. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	FText IndicatorText;
+
+	/** Optional explicit icon override for the indicator. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TObjectPtr<UTexture2D> IndicatorIcon = nullptr;
+
+	/** Whether this requirement should surface an indicator when the choice is visible. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	bool bShowIndicatorWhenMet = true;
 };
 
 /** One selectable choice inside a dialogue node */
@@ -132,6 +218,10 @@ struct PICKPACKER_API FDialogueChoice
 	/** Condition: choice hidden if this flag is non-zero */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
 	FGameplayTag BlockingWorldFlag;
+
+	/** Additional unlock requirements such as persona threshold or item possession. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+	TArray<FDialogueChoiceRequirement> UnlockRequirements;
 
 	/** Outcomes triggered when this choice is selected */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
@@ -289,13 +379,22 @@ struct PICKPACKER_API FRunState
 	bool bRunActive = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	FGuid RunId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
 	ECoreLoopPhase CurrentPhase = ECoreLoopPhase::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	ERunProgressStage CurrentStage = ERunProgressStage::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
 	int32 TeamCredits = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
 	float TeamSuspicion = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	FMissionDefinition ActiveMission;
 
 	/** Currently selected underground zone tag */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
@@ -304,6 +403,18 @@ struct PICKPACKER_API FRunState
 	/** Number of completed round-trips this run */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
 	int32 CompletedTrips = 0;
+
+	/** Run-scoped storage persisted across phase changes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	TArray<FStorageRecord> StorageRecords;
+
+	/** Aggregated persona state that can drive long-term branches */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	FPersonaStats PersonaStats;
+
+	/** Ending / route flags accumulated during the run */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run")
+	TArray<FEndingFlagState> EndingFlags;
 };
 
 // ============================================================
@@ -334,5 +445,99 @@ struct PICKPACKER_API FTrainDestination
 
 	/** Level path to load for this zone (streaming or travel) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train")
+	TSoftObjectPtr<UWorld> ZoneLevel;
+};
+
+UENUM(BlueprintType)
+enum class ETrainVoteResolutionPolicy : uint8
+{
+	MajorityThenHost UMETA(DisplayName = "Majority Then Host"),
+	HostOnly UMETA(DisplayName = "Host Only")
+};
+
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FTrainDestinationVoteState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Vote")
+	int32 PlayerId = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Vote")
+	FText PlayerName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Vote")
+	FName DestinationId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Vote")
+	bool bLockedIn = false;
+};
+
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FTrainSelectionContext
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	TArray<FTrainDestination> AvailableDestinations;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	TArray<FActiveOrderState> ActiveOrders;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	FMissionDefinition MissionDefinition;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	ETrainVoteResolutionPolicy VotePolicy = ETrainVoteResolutionPolicy::MajorityThenHost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	int32 EligibleVoterCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	float BoardingDuration = 15.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	float DepartureDuration = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	float TravelDuration = 30.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	float ArrivalDuration = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	float AutoSelectTimeout = 30.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	bool bSelectionOpen = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Selection")
+	FName LockedDestinationId = NAME_None;
+};
+
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FRouteSelectionResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	FName DestinationId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	EZoneDifficulty DangerLevel = EZoneDifficulty::Low;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	FGameplayTag TargetZoneTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	FGameplayTagContainer AvailableItemTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	int32 RouteSeed = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
+	FName LevelVariantId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Train|Route")
 	TSoftObjectPtr<UWorld> ZoneLevel;
 };

@@ -26,9 +26,12 @@
 #include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/InputSettings.h"
 #include "Engine/LocalPlayer.h"
+#include "PickpackerAssetPaths.h"
+#include "UObject/ConstructorHelpers.h"
 
 // Removed EnhancedInputSubsystems include and usage due to API mismatch; use legacy InputSettings instead.
 
@@ -41,6 +44,17 @@ UInteractionComponent::UInteractionComponent()
     bRequireInteractableInterface = true;
     bDrawDebugTrace = false;
     SetIsReplicatedByDefault(true);
+
+    static ConstructorHelpers::FClassFinder<UUserWidget> InteractionWidgetClassRef(
+        PickpackerAssetPaths::Blueprints::WidgetInteraction);
+    if (InteractionWidgetClassRef.Succeeded())
+    {
+        InteractionWidget = InteractionWidgetClassRef.Class;
+    }
+    else
+    {
+        InteractionWidget = UInteractionPromptWidget::StaticClass();
+    }
 }
 
 void UInteractionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -59,6 +73,10 @@ void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!OwnerCharacter || !OwnerCharacter->IsLocallyControlled()) return;
+    OverlappingActors.RemoveAll([](const TWeakObjectPtr<AActor>& ActorPtr)
+    {
+        return !ActorPtr.IsValid();
+    });
     UpdateTarget();
 }
 
@@ -70,68 +88,58 @@ void UInteractionComponent::ShowInteractionWidget(AActor* TargetActor)
         return;
     }
 
-    // Destroy previous widget component if we switched targets.
-    if (ActiveInteractionWidgetComponent.IsValid() && ActiveInteractionWidgetComponent->GetOwner() != TargetActor)
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    APlayerController* PlayerController = OwnerCharacter ? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+    if (!OwnerCharacter || !PlayerController || !PlayerController->IsLocalController())
+    {
+        HideInteractionWidget();
+        return;
+    }
+
+    if (ActiveInteractionWidget && ActiveInteractionWidget->GetClass() != InteractionWidget)
     {
         HideInteractionWidget();
     }
 
-    UWidgetComponent* WidgetComp = ActiveInteractionWidgetComponent.Get();
-    if (!WidgetComp)
+    if (!ActiveInteractionWidget)
     {
-        WidgetComp = NewObject<UWidgetComponent>(TargetActor, TEXT("InteractionWidgetComponent"));
-        if (!WidgetComp)
+        ActiveInteractionWidget = CreateWidget<UUserWidget>(PlayerController, InteractionWidget);
+        if (!ActiveInteractionWidget)
         {
             return;
         }
-
-        // Screen space keeps the widget camera-facing without manual rotation.
-        WidgetComp->SetWidgetSpace(EWidgetSpace::Screen);
-        WidgetComp->SetDrawAtDesiredSize(true);
-        WidgetComp->SetTwoSided(true);
-        WidgetComp->SetWidgetClass(InteractionWidget);
-
-        UWidgetComponent* AnchorComponent = FindInteractionWidgetAnchor(TargetActor);
-        if (AnchorComponent)
-        {
-            WidgetComp->AttachToComponent(AnchorComponent, FAttachmentTransformRules::KeepRelativeTransform);
-            WidgetComp->SetRelativeTransform(FTransform::Identity);
-        }
-        else if (USceneComponent* Root = TargetActor->GetRootComponent())
-        {
-            WidgetComp->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
-        }
-        WidgetComp->RegisterComponent();
+        ActiveInteractionWidget->AddToViewport(50);
     }
-    else if (WidgetComp->GetWidgetClass() != InteractionWidget)
+    else if (!ActiveInteractionWidget->IsInViewport())
     {
-        WidgetComp->SetWidgetClass(InteractionWidget);
+        ActiveInteractionWidget->AddToViewport(50);
     }
 
-    // Anchor above the actor using bounds height + configurable offset when no explicit anchor component.
-    if (!WidgetComp->GetAttachParent() || !WidgetComp->GetAttachParent()->IsA<UWidgetComponent>())
+    if (ActiveInteractionWidgetComponent.IsValid())
     {
-        FVector Origin, Extent;
-        TargetActor->GetActorBounds(true, Origin, Extent);
-        float AnchorHeight = Extent.Z * WidgetAnchorHeightFactor;
-        if (bClampWidgetAnchorHeight)
-        {
-            AnchorHeight = FMath::Min(AnchorHeight, MaxWidgetAnchorHeight);
-        }
-        WidgetComp->SetRelativeLocation(FVector(0.f, 0.f, AnchorHeight) + WidgetWorldOffset);
+        ActiveInteractionWidgetComponent->DestroyComponent();
+        ActiveInteractionWidgetComponent = nullptr;
     }
 
-    WidgetComp->SetVisibility(true);
-    WidgetComp->SetHiddenInGame(false);
+    ActiveInteractionWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-    ActiveInteractionWidgetComponent = WidgetComp;
-
-    // Update UI on the current widget instance (only meaningful for prompt-derived widgets).
-    UpdateInteractionWidgetUI(TargetActor, WidgetComp->GetUserWidgetObject());
+    UpdateInteractionWidgetUI(TargetActor, ActiveInteractionWidget);
+    UpdateInteractionWidgetScreenPosition(TargetActor);
 }
 
 void UInteractionComponent::HideInteractionWidget()
 {
+    if (UInteractionPromptWidget* PromptWidget = Cast<UInteractionPromptWidget>(ActiveInteractionWidget))
+    {
+        PromptWidget->ClearInteractionData();
+    }
+
+    if (ActiveInteractionWidget)
+    {
+        ActiveInteractionWidget->RemoveFromParent();
+        ActiveInteractionWidget = nullptr;
+    }
+
     if (ActiveInteractionWidgetComponent.IsValid())
     {
         ActiveInteractionWidgetComponent->DestroyComponent();
@@ -222,12 +230,11 @@ static UUserWidget* GetWidgetFromComponent(TWeakObjectPtr<UWidgetComponent> Widg
 
 void UInteractionComponent::UpdateInteractionWidgetCreditInfo(AActor* TargetActor)
 {
-    if (!ActiveInteractionWidgetComponent.IsValid())
+    UUserWidget* WidgetToUse = ActiveInteractionWidget;
+    if (!WidgetToUse && ActiveInteractionWidgetComponent.IsValid())
     {
-        return;
+        WidgetToUse = GetWidgetFromComponent(ActiveInteractionWidgetComponent);
     }
-
-    UUserWidget* WidgetToUse = GetWidgetFromComponent(ActiveInteractionWidgetComponent);
     if (!WidgetToUse)
     {
         return;
@@ -488,12 +495,33 @@ void UInteractionComponent::UpdateTarget()
         NewTarget = PrimaryTaggedTarget;
     }
 
+    TArray<AActor*> ValidOverlappingActors;
+    ValidOverlappingActors.Reserve(OverlappingActors.Num());
+    for (const TWeakObjectPtr<AActor>& ActorPtr : OverlappingActors)
+    {
+        AActor* OverlapActor = ActorPtr.Get();
+        if (!OverlapActor || !IsActorInteractable(OverlapActor))
+        {
+            continue;
+        }
+        if (IsValid(CarriedParcel) && OverlapActor->IsA(AParcelActor::StaticClass()))
+        {
+            continue;
+        }
+        ValidOverlappingActors.Add(OverlapActor);
+    }
+
     // When carrying a parcel, shelf trace (ECC_GameTraceChannel4) can detect shelves
     // that the interaction channel (ECC_GameTraceChannel3) may miss.
     // Multi-trace + hysteresis prevents flickering when shelves are stacked.
     if (!NewTarget && BestShelfFromTrace)
     {
         NewTarget = BestShelfFromTrace;
+    }
+
+    if (!NewTarget && ValidOverlappingActors.Num() > 0)
+    {
+        NewTarget = SelectBestOverlapTarget(ValidOverlappingActors, Start, Direction);
     }
 
     PreviousTarget = CurrentTarget;
@@ -577,10 +605,7 @@ void UInteractionComponent::UpdateTarget()
         if (!bHandled)
         {
             ShowInteractionWidget(CurrentTarget.Get());
-            if (ActiveInteractionWidgetComponent.IsValid())
-            {
-                UpdateInteractionWidgetUI(CurrentTarget.Get(), ActiveInteractionWidgetComponent->GetUserWidgetObject());
-            }
+            UpdateInteractionWidgetUI(CurrentTarget.Get(), ActiveInteractionWidget);
         }
         else
         {
@@ -606,6 +631,99 @@ void UInteractionComponent::UpdateTarget()
         ClearShelfSlotFocus();
         ClearShelfPlacementPreview();
     }
+}
+
+AActor* UInteractionComponent::SelectBestOverlapTarget(const TArray<AActor*>& InActors, const FVector& ViewOrigin, const FVector& ViewDirection) const
+{
+    if (InActors.Num() == 0)
+    {
+        return nullptr;
+    }
+
+    AActor* BestTarget = nullptr;
+    float BestScore = TNumericLimits<float>::Max();
+    const FVector SafeViewDirection = ViewDirection.GetSafeNormal();
+    const float MaxDistance = FMath::Max(InteractionDistance, 1.0f);
+
+    for (AActor* Actor : InActors)
+    {
+        if (!Actor)
+        {
+            continue;
+        }
+
+        const FVector ToActor = Actor->GetActorLocation() - ViewOrigin;
+        const float Distance = ToActor.Size();
+        if (Distance > InteractionDistance)
+        {
+            continue;
+        }
+
+        const FVector ToActorDir = Distance > KINDA_SMALL_NUMBER ? ToActor / Distance : SafeViewDirection;
+        const float AngleCos = FVector::DotProduct(SafeViewDirection, ToActorDir);
+        if (AngleCos <= 0.25f)
+        {
+            continue;
+        }
+
+        const float AngleScore = 1.0f - AngleCos;
+        const float DistanceScore = Distance / MaxDistance;
+        const float FinalScore = (AngleScore * 0.7f) + (DistanceScore * 0.3f);
+        if (FinalScore < BestScore)
+        {
+            BestScore = FinalScore;
+            BestTarget = Actor;
+        }
+    }
+
+    return BestTarget ? BestTarget : InActors[0];
+}
+
+void UInteractionComponent::AddOverlappingActor(AActor* Actor)
+{
+    if (!Actor || !IsValid(Actor))
+    {
+        return;
+    }
+
+    if (OverlappingActors.Contains(Actor))
+    {
+        return;
+    }
+
+    OverlappingActors.Add(Actor);
+
+    if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); OwnerCharacter && OwnerCharacter->IsLocallyControlled())
+    {
+        UpdateTarget();
+    }
+}
+
+void UInteractionComponent::RemoveOverlappingActor(AActor* Actor)
+{
+    OverlappingActors.RemoveAllSwap([Actor](const TWeakObjectPtr<AActor>& ActorPtr)
+    {
+        return !ActorPtr.IsValid() || ActorPtr.Get() == Actor;
+    });
+
+    if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()); OwnerCharacter && OwnerCharacter->IsLocallyControlled())
+    {
+        UpdateTarget();
+    }
+}
+
+TArray<AActor*> UInteractionComponent::GetOverlappingActors() const
+{
+    TArray<AActor*> Result;
+    Result.Reserve(OverlappingActors.Num());
+    for (const TWeakObjectPtr<AActor>& ActorPtr : OverlappingActors)
+    {
+        if (AActor* Actor = ActorPtr.Get())
+        {
+            Result.Add(Actor);
+        }
+    }
+    return Result;
 }
 
 void UInteractionComponent::Interact()
@@ -1077,6 +1195,10 @@ void UInteractionComponent::UpdateInteractionWidgetUI(AActor* TargetActor, UUser
     }
 
     UUserWidget* WidgetToUse = WidgetInstance;
+    if (!WidgetToUse && ActiveInteractionWidget)
+    {
+        WidgetToUse = ActiveInteractionWidget;
+    }
     if (!WidgetToUse && ActiveInteractionWidgetComponent.IsValid())
     {
         WidgetToUse = ActiveInteractionWidgetComponent->GetUserWidgetObject();
@@ -1118,6 +1240,62 @@ void UInteractionComponent::UpdateInteractionWidgetUI(AActor* TargetActor, UUser
         // 마지막 수단: 크레딧 정보만 전달
         InvokeWidgetCreditUpdate(WidgetToUse, UIData.bRequiresUnlock, UIData.UnlockCost, UIData.LockedMessage, UIData.UnlockedMessage, UIData.CurrentCredits);
     }
+}
+
+void UInteractionComponent::UpdateInteractionWidgetScreenPosition(AActor* TargetActor)
+{
+    if (!TargetActor || !ActiveInteractionWidget)
+    {
+        return;
+    }
+
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    APlayerController* PlayerController = OwnerCharacter ? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+    if (!OwnerCharacter || !PlayerController || !PlayerController->IsLocalController())
+    {
+        return;
+    }
+
+    FVector WorldLocation = GetInteractionWidgetWorldLocation(TargetActor);
+    FVector2D ScreenPosition = FVector2D::ZeroVector;
+    bool bProjected = PlayerController->ProjectWorldLocationToScreen(WorldLocation, ScreenPosition, true);
+
+    if (!bProjected && bMoveOffscreenWidgetToCenter)
+    {
+        if (APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager)
+        {
+            WorldLocation = CameraManager->GetCameraLocation()
+                + CameraManager->GetActorForwardVector() * OffscreenFallbackDistance
+                + OffscreenFallbackOffset;
+            bProjected = PlayerController->ProjectWorldLocationToScreen(WorldLocation, ScreenPosition, true);
+        }
+    }
+
+    if (!bProjected)
+    {
+        return;
+    }
+
+    if (bScreenClampWidget)
+    {
+        const FVector2D ViewportSize = UWidgetLayoutLibrary::GetViewportSize(this);
+        if (ViewportSize.X > 0.f && ViewportSize.Y > 0.f)
+        {
+            ScreenPosition.X = FMath::Clamp(ScreenPosition.X, ScreenEdgePadding.X, ViewportSize.X - ScreenEdgePadding.X);
+            ScreenPosition.Y = FMath::Clamp(ScreenPosition.Y, ScreenEdgePadding.Y, ViewportSize.Y - ScreenEdgePadding.Y);
+        }
+    }
+
+    if (UInteractionPromptWidget* PromptWidget = Cast<UInteractionPromptWidget>(ActiveInteractionWidget))
+    {
+        PromptWidget->SetPromptPosition(ScreenPosition);
+        PromptWidget->SetPromptVisibility(true);
+        return;
+    }
+
+    ActiveInteractionWidget->SetAlignmentInViewport(FVector2D(0.5f, 1.0f));
+    ActiveInteractionWidget->SetPositionInViewport(ScreenPosition, false);
+    ActiveInteractionWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 bool UInteractionComponent::GatherInteractionUIData(AActor* TargetActor, FInteractionUIData& OutData) const
@@ -1216,6 +1394,31 @@ bool UInteractionComponent::GatherInteractionUIData(AActor* TargetActor, FIntera
     }
 
     return true;
+}
+
+FVector UInteractionComponent::GetInteractionWidgetWorldLocation(AActor* TargetActor) const
+{
+    if (!TargetActor)
+    {
+        return FVector::ZeroVector;
+    }
+
+    if (UWidgetComponent* AnchorComponent = FindInteractionWidgetAnchor(TargetActor))
+    {
+        return AnchorComponent->GetComponentLocation() + WidgetWorldOffset;
+    }
+
+    FVector Origin = FVector::ZeroVector;
+    FVector Extent = FVector::ZeroVector;
+    TargetActor->GetActorBounds(true, Origin, Extent);
+
+    float AnchorHeight = Extent.Z * WidgetAnchorHeightFactor;
+    if (bClampWidgetAnchorHeight)
+    {
+        AnchorHeight = FMath::Min(AnchorHeight, MaxWidgetAnchorHeight);
+    }
+
+    return Origin + FVector(0.f, 0.f, AnchorHeight) + WidgetWorldOffset;
 }
 
 FText UInteractionComponent::BuildInputPromptText(const FText& /*ActionText*/) const

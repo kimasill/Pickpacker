@@ -7,11 +7,45 @@
 #include "Components/Button.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/Widget.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Input/Reply.h"
 #include "PickpackerAssetPaths.h"
 #include "UI/NPCDialogueChoiceWidget.h"
+
+namespace
+{
+	void SanitizeRuntimeWidgetObject(UObject* Object)
+	{
+		if (!Object)
+		{
+			return;
+		}
+
+		Object->ClearFlags(RF_Transactional);
+		Object->SetFlags(RF_Transient);
+	}
+
+	void SanitizeRuntimeWidgetTree(UUserWidget* UserWidget)
+	{
+		if (!UserWidget)
+		{
+			return;
+		}
+
+		SanitizeRuntimeWidgetObject(UserWidget);
+
+		if (UWidgetTree* LocalWidgetTree = UserWidget->WidgetTree)
+		{
+			SanitizeRuntimeWidgetObject(LocalWidgetTree);
+			LocalWidgetTree->ForEachWidget([](UWidget* Widget)
+			{
+				SanitizeRuntimeWidgetObject(Widget);
+			});
+		}
+	}
+}
 
 void UNPCDialogueWidget::NativeOnInitialized()
 {
@@ -22,19 +56,8 @@ void UNPCDialogueWidget::NativeOnInitialized()
 		BuildFallbackWidgetTree();
 	}
 
-	if (ContinueButton)
-	{
-		ContinueButton->SetClickMethod(EButtonClickMethod::MouseDown);
-		ContinueButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleContinueClicked);
-		ContinueButton->OnClicked.AddDynamic(this, &UNPCDialogueWidget::HandleContinueClicked);
-	}
-
-	if (CloseButton)
-	{
-		CloseButton->SetClickMethod(EButtonClickMethod::MouseDown);
-		CloseButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleCloseClicked);
-		CloseButton->OnClicked.AddDynamic(this, &UNPCDialogueWidget::HandleCloseClicked);
-	}
+	SanitizeRuntimeWidgetTree(this);
+	BindAuxiliaryButtons();
 
 	UpdateAuxiliaryButtons();
 	BP_OnDialogueInitialized();
@@ -44,6 +67,7 @@ void UNPCDialogueWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	BindAuxiliaryButtons();
 	SetIsFocusable(true);
 	FocusPreferredWidget();
 	BP_OnDialogueConstructed();
@@ -51,6 +75,18 @@ void UNPCDialogueWidget::NativeConstruct()
 
 void UNPCDialogueWidget::NativeDestruct()
 {
+	ReleaseChoiceWidgets();
+
+	if (ContinueButton)
+	{
+		ContinueButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleContinueClicked);
+	}
+
+	if (CloseButton)
+	{
+		CloseButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleCloseClicked);
+	}
+
 	BP_OnDialogueDestructed();
 
 	Super::NativeDestruct();
@@ -128,6 +164,23 @@ void UNPCDialogueWidget::HandleContinueClicked()
 void UNPCDialogueWidget::HandleCloseClicked()
 {
 	OnClosedRequested.Broadcast();
+}
+
+void UNPCDialogueWidget::BindAuxiliaryButtons()
+{
+	if (ContinueButton)
+	{
+		ContinueButton->SetClickMethod(EButtonClickMethod::MouseDown);
+		ContinueButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleContinueClicked);
+		ContinueButton->OnClicked.AddDynamic(this, &UNPCDialogueWidget::HandleContinueClicked);
+	}
+
+	if (CloseButton)
+	{
+		CloseButton->SetClickMethod(EButtonClickMethod::MouseDown);
+		CloseButton->OnClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleCloseClicked);
+		CloseButton->OnClicked.AddDynamic(this, &UNPCDialogueWidget::HandleCloseClicked);
+	}
 }
 
 void UNPCDialogueWidget::BuildFallbackWidgetTree()
@@ -225,8 +278,7 @@ void UNPCDialogueWidget::RebuildChoices()
 		return;
 	}
 
-	ChoicesPanel->ClearChildren();
-	SpawnedChoiceWidgets.Reset();
+	ReleaseChoiceWidgets();
 
 	TSubclassOf<UNPCDialogueChoiceWidget> EntryWidgetClass = ChoiceWidgetClass;
 	if (!EntryWidgetClass)
@@ -246,6 +298,7 @@ void UNPCDialogueWidget::RebuildChoices()
 			continue;
 		}
 
+		SanitizeRuntimeWidgetTree(ChoiceWidget);
 		ChoiceWidget->ApplyChoiceData(Choice);
 		ChoiceWidget->OnChoiceClicked.AddDynamic(this, &UNPCDialogueWidget::HandleChoiceSelected);
 		ChoicesPanel->AddChild(ChoiceWidget);
@@ -277,5 +330,24 @@ void UNPCDialogueWidget::UpdateAuxiliaryButtons()
 	if (CloseButtonTextBlock)
 	{
 		CloseButtonTextBlock->SetText(NSLOCTEXT("NPCDialogue", "CloseFallback", "Close"));
+	}
+}
+
+void UNPCDialogueWidget::ReleaseChoiceWidgets()
+{
+	for (UNPCDialogueChoiceWidget* ChoiceWidget : SpawnedChoiceWidgets)
+	{
+		if (ChoiceWidget)
+		{
+			ChoiceWidget->OnChoiceClicked.RemoveDynamic(this, &UNPCDialogueWidget::HandleChoiceSelected);
+			ChoiceWidget->RemoveFromParent();
+		}
+	}
+
+	SpawnedChoiceWidgets.Reset();
+
+	if (ChoicesPanel)
+	{
+		ChoicesPanel->ClearChildren();
 	}
 }

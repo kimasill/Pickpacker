@@ -47,15 +47,67 @@ void UCoreLoopSubsystem::StartRun(int32 InitialCredits)
 
 	RunState = FRunState();
 	RunState.bRunActive = true;
+	RunState.RunId = FGuid::NewGuid();
 	RunState.TeamCredits = InitialCredits;
+	RunState.TeamSuspicion = 0.0f;
 	RunState.CurrentPhase = ECoreLoopPhase::Base;
+	RunState.CurrentStage = ERunProgressStage::GameStart;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (APickpackerGameState* GS = Cast<APickpackerGameState>(World->GetGameState()))
+		{
+			if (UEscapeProgressComponent* EscapeProgress = GS->GetEscapeProgressComponent())
+			{
+				for (const FWorldFlagEntry& WorldFlag : EscapeProgress->GetWorldFlags())
+				{
+					if (!WorldFlag.Flag.IsValid())
+					{
+						continue;
+					}
+
+					FEndingFlagState EndingFlagState;
+					EndingFlagState.FlagId = WorldFlag.Flag.GetTagName();
+					EndingFlagState.bUnlocked = WorldFlag.Value > 0;
+					EndingFlagState.bLocked = WorldFlag.Value < 0;
+					RunState.EndingFlags.Add(EndingFlagState);
+				}
+			}
+		}
+	}
 
 	SyncToGameState();
 
 	OnRunStarted.Broadcast(RunState);
 	OnPhaseChanged.Broadcast(ECoreLoopPhase::None, ECoreLoopPhase::Base);
+	SetRunStage(ERunProgressStage::Lobby);
 
 	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Run started. Credits=%d"), InitialCredits);
+}
+
+bool UCoreLoopSubsystem::RestoreRunState(const FRunState& SavedRunState, const FTrainDestination& SavedDestination)
+{
+	if (!HasAuthority() || !SavedRunState.bRunActive)
+	{
+		return false;
+	}
+
+	RunState = SavedRunState;
+	CurrentDestination = SavedDestination;
+
+	SyncToGameState();
+
+	if (!CurrentDestination.DestinationId.IsNone())
+	{
+		OnTrainDestinationSelected.Broadcast(CurrentDestination);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Restored run. Phase=%d Stage=%d Trips=%d"),
+		static_cast<int32>(RunState.CurrentPhase),
+		static_cast<int32>(RunState.CurrentStage),
+		RunState.CompletedTrips);
+
+	return true;
 }
 
 void UCoreLoopSubsystem::EndRun(const FString& Reason)
@@ -67,6 +119,7 @@ void UCoreLoopSubsystem::EndRun(const FString& Reason)
 
 	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Run ended: %s (Trips=%d)"), *Reason, RunState.CompletedTrips);
 
+	SetRunStage(ERunProgressStage::Result);
 	RunState.bRunActive = false;
 	OnRunEnded.Broadcast(RunState);
 
@@ -122,6 +175,7 @@ void UCoreLoopSubsystem::TransitionToUnderground()
 		return;
 	}
 
+	SetRunStage(ERunProgressStage::Underworld);
 	SetPhase(ECoreLoopPhase::Underground);
 }
 
@@ -137,6 +191,7 @@ void UCoreLoopSubsystem::ReturnToBase()
 
 	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Trip completed. Total trips=%d"), RunState.CompletedTrips);
 
+	SetRunStage(ERunProgressStage::Return);
 	SetPhase(ECoreLoopPhase::Base);
 }
 
@@ -148,6 +203,173 @@ void UCoreLoopSubsystem::TransitionToEscape()
 	}
 
 	SetPhase(ECoreLoopPhase::Escape);
+}
+
+void UCoreLoopSubsystem::SetRunStage(ERunProgressStage NewStage)
+{
+	if (!HasAuthority() || !RunState.bRunActive || RunState.CurrentStage == NewStage)
+	{
+		return;
+	}
+
+	const ERunProgressStage OldStage = RunState.CurrentStage;
+	RunState.CurrentStage = NewStage;
+
+	SyncToGameState();
+	OnRunStageChanged.Broadcast(OldStage, NewStage);
+
+	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Stage: %d -> %d"),
+		static_cast<int32>(OldStage), static_cast<int32>(NewStage));
+}
+
+void UCoreLoopSubsystem::AssignMissionDefinition(const FMissionDefinition& MissionDefinition)
+{
+	if (!HasAuthority() || !RunState.bRunActive)
+	{
+		return;
+	}
+
+	RunState.ActiveMission = MissionDefinition;
+	SetRunStage(ERunProgressStage::ReceiveMission);
+
+	SyncToGameState();
+	OnMissionAssigned.Broadcast(RunState.ActiveMission);
+
+	UE_LOG(LogTemp, Log, TEXT("[CoreLoopSubsystem] Mission assigned: %s"),
+		*RunState.ActiveMission.MissionId.ToString());
+}
+
+void UCoreLoopSubsystem::DepositStorageItem(const FGameplayTag& ItemTag, int32 Quantity, FName SlotId)
+{
+	if (!HasAuthority() || !RunState.bRunActive || !ItemTag.IsValid() || Quantity <= 0)
+	{
+		return;
+	}
+
+	const FName ResolvedSlotId = SlotId.IsNone()
+		? FName(*ItemTag.ToString())
+		: SlotId;
+	const FName SessionScope = FName(*RunState.RunId.ToString(EGuidFormats::DigitsWithHyphens));
+
+	if (FStorageRecord* ExistingRecord = RunState.StorageRecords.FindByPredicate(
+		[&ResolvedSlotId, &ItemTag](const FStorageRecord& Record)
+		{
+			return Record.SlotId == ResolvedSlotId || (!ResolvedSlotId.IsNone() && Record.ItemTag == ItemTag);
+		}))
+	{
+		ExistingRecord->Quantity += Quantity;
+		ExistingRecord->ItemTag = ItemTag;
+		ExistingRecord->SessionScope = SessionScope;
+	}
+	else
+	{
+		FStorageRecord NewRecord;
+		NewRecord.SlotId = ResolvedSlotId;
+		NewRecord.ItemTag = ItemTag;
+		NewRecord.Quantity = Quantity;
+		NewRecord.SessionScope = SessionScope;
+		RunState.StorageRecords.Add(NewRecord);
+	}
+
+	SyncToGameState();
+	OnStorageRecordsUpdated.Broadcast(RunState.StorageRecords);
+}
+
+bool UCoreLoopSubsystem::ConsumeStorageItem(const FGameplayTag& ItemTag, int32 Quantity, FName SlotId)
+{
+	if (!HasAuthority() || !RunState.bRunActive || !ItemTag.IsValid() || Quantity <= 0)
+	{
+		return false;
+	}
+
+	const int32 RecordIndex = RunState.StorageRecords.IndexOfByPredicate(
+		[&ItemTag, &SlotId](const FStorageRecord& Record)
+		{
+			const bool bSlotMatch = SlotId.IsNone() || Record.SlotId == SlotId;
+			return bSlotMatch && Record.ItemTag == ItemTag;
+		});
+
+	if (!RunState.StorageRecords.IsValidIndex(RecordIndex) || RunState.StorageRecords[RecordIndex].Quantity < Quantity)
+	{
+		return false;
+	}
+
+	FStorageRecord& Record = RunState.StorageRecords[RecordIndex];
+	Record.Quantity -= Quantity;
+	if (Record.Quantity <= 0)
+	{
+		RunState.StorageRecords.RemoveAt(RecordIndex);
+	}
+
+	SyncToGameState();
+	OnStorageRecordsUpdated.Broadcast(RunState.StorageRecords);
+	return true;
+}
+
+void UCoreLoopSubsystem::SetPersonaStats(const FPersonaStats& NewPersonaStats)
+{
+	if (!HasAuthority() || !RunState.bRunActive)
+	{
+		return;
+	}
+
+	RunState.PersonaStats = NewPersonaStats;
+	SyncToGameState();
+}
+
+void UCoreLoopSubsystem::SetEndingFlagState(const FEndingFlagState& EndingFlagState)
+{
+	if (!HasAuthority() || !RunState.bRunActive || EndingFlagState.FlagId.IsNone())
+	{
+		return;
+	}
+
+	if (FEndingFlagState* ExistingFlag = RunState.EndingFlags.FindByPredicate(
+		[&EndingFlagState](const FEndingFlagState& Existing)
+		{
+			return Existing.FlagId == EndingFlagState.FlagId;
+		}))
+	{
+		*ExistingFlag = EndingFlagState;
+	}
+	else
+	{
+		RunState.EndingFlags.Add(EndingFlagState);
+	}
+
+	SyncToGameState();
+}
+
+void UCoreLoopSubsystem::SetTeamCredits(int32 NewCredits)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const int32 ClampedCredits = FMath::Max(0, NewCredits);
+	if (RunState.TeamCredits == ClampedCredits)
+	{
+		return;
+	}
+
+	RunState.TeamCredits = ClampedCredits;
+}
+
+void UCoreLoopSubsystem::SetTeamSuspicion(float NewSuspicion)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const float ClampedSuspicion = FMath::Max(0.0f, NewSuspicion);
+	if (FMath::IsNearlyEqual(RunState.TeamSuspicion, ClampedSuspicion))
+	{
+		return;
+	}
+
+	RunState.TeamSuspicion = ClampedSuspicion;
 }
 
 // =========================================================================
@@ -221,6 +443,13 @@ void UCoreLoopSubsystem::SyncToGameState()
 	// Sync core loop phase to game state for client replication
 	GS->SetCoreLoopPhase(RunState.CurrentPhase);
 	GS->SetCompletedTrips(RunState.CompletedTrips);
+	GS->SetTeamCredits(RunState.TeamCredits);
+	GS->SetTeamSuspicionValue(RunState.TeamSuspicion);
+	GS->SetRunStage(RunState.CurrentStage);
+	GS->SetCurrentMissionDefinition(RunState.ActiveMission);
+	GS->SetSessionStorageRecords(RunState.StorageRecords);
+	GS->SetRunPersonaStats(RunState.PersonaStats);
+	GS->SetEndingFlagStates(RunState.EndingFlags);
 }
 
 bool UCoreLoopSubsystem::HasAuthority() const

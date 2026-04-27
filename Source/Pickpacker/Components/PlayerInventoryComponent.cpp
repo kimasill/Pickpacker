@@ -383,6 +383,47 @@ bool UPlayerInventoryComponent::HasItemType(EItemType ItemType) const
 	return false;
 }
 
+bool UPlayerInventoryComponent::HasItemTag(const FGameplayTag& ItemTag) const
+{
+	if (!ItemTag.IsValid())
+	{
+		return false;
+	}
+
+	for (AParcelActor* Item : CollectedItems)
+	{
+		if (!IsValid(Item))
+		{
+			continue;
+		}
+
+		if (Item->GetItemData().ItemId == ItemTag || Item->GetParcelTags().HasTag(ItemTag) || Item->GetSpecialItemTags().HasTag(ItemTag))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UPlayerInventoryComponent::HasSpecialItemTag(const FGameplayTag& ItemTag) const
+{
+	if (!ItemTag.IsValid())
+	{
+		return false;
+	}
+
+	for (AParcelActor* Item : CollectedItems)
+	{
+		if (IsValid(Item) && Item->GetSpecialItemTags().HasTag(ItemTag))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 TArray<AParcelActor*> UPlayerInventoryComponent::GetItemsByType(EItemType ItemType) const
 {
 	TArray<AParcelActor*> Result;
@@ -510,4 +551,3 @@ bool UPlayerInventoryComponent::CollectItemAndAttach(AParcelActor* Item, bool bA
     Item->RequestAttach(OwnerCharacter, FName("CarrySocket"));
     return true;
 }
-

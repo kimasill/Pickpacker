@@ -6,6 +6,8 @@
 #include "NPCDialogueChoiceWidget.generated.h"
 
 class UButton;
+class UImage;
+class UPanelWidget;
 class UTextBlock;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCDialogueChoiceClicked, int32, ChoiceIndex);
@@ -17,6 +19,8 @@ class PICKPACKER_API UNPCDialogueChoiceWidget : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Dialogue")
@@ -27,6 +31,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Dialogue")
 	bool HasFocusableChoiceButton() const;
+
+	UFUNCTION(BlueprintPure, Category = "Dialogue")
+	bool IsChoiceEnabled() const;
 
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category = "Dialogue")
 	void BP_OnChoiceDataApplied(const FDialogueChoiceUIData& InChoiceData);
@@ -44,6 +51,15 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ChoiceTextBlock;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ChoiceRequirementTextBlock;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> ChoiceRequirementIconImage;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> ChoiceRequirementContainer;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Dialogue")
 	FDialogueChoiceUIData ChoiceData;
 
@@ -52,4 +68,7 @@ private:
 	void HandleChoiceButtonClicked();
 
 	void BuildFallbackWidgetTree();
+	void EnsureRequirementWidgets();
+	void UpdateChoiceIndicators();
+	void UpdateChoiceVisualState();
 };

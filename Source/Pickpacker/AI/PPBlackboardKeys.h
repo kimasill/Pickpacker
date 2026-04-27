@@ -15,6 +15,11 @@ namespace PPBlackboardKeys
 	inline const FName IsCharging(TEXT("IsCharging"));
 	inline const FName ShouldUseWeapon(TEXT("ShouldUseWeapon"));
 	inline const FName DetectedPlayer(TEXT("DetectedPlayer"));
+	inline const FName TargetActor(TEXT("TargetActor"));
+	inline const FName TargetLocation(TEXT("TargetLocation"));
+	inline const FName CanAttackTarget(TEXT("CanAttackTarget"));
+	inline const FName CombatActive(TEXT("CombatActive"));
+	inline const FName HomeLocation(TEXT("HomeLocation"));
 	inline const FName CurrentPatrolPoint(TEXT("CurrentPatrolPoint"));
 	inline const FName PatrolPointLocation(TEXT("PatrolPointLocation"));
 	inline const FName ChargingStation(TEXT("ChargingStation"));

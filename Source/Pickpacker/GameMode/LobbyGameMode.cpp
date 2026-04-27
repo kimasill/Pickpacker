@@ -24,6 +24,7 @@
 #include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Kismet/GameplayStatics.h"
+#include "PickpackerAssetPaths.h"
 #include "SocketSubsystem.h"
 
 namespace
@@ -145,11 +146,11 @@ void ALobbyGameMode::PostSeamlessTravel()
 	{
 		return;
 	}
-	FString LobbyPath = TEXT("/Game/Maps/Lobby");
+	FString LobbyPath = PickpackerAssetPaths::Maps::Lobby;
 	const FString CurrentMapName = UGameplayStatics::GetCurrentLevelName(World, true);
 	if (!CurrentMapName.IsEmpty())
 	{
-		LobbyPath = FString::Printf(TEXT("/Game/Maps/%s"), *CurrentMapName);
+		LobbyPath = PickpackerAssetPaths::Maps::FromMapName(CurrentMapName);
 	}
 	FString HostAddress;
 	if (UNetDriver* NetDriver = World->GetNetDriver())

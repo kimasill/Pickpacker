@@ -203,6 +203,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
 	const FItemData& GetItemData() const { return ItemData; }
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Item")
+	const FGameplayTagContainer& GetSpecialItemTags() const { return SpecialItemTags; }
+
 	/** 포장 수량 계산용 공간 차지 단위 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Packaging")
 	int32 GetPackagingSpaceUnits() const;
@@ -210,6 +213,9 @@ public:
 	/** 주문 수량 계산: 박스 내용물 unit 합산 (박스 1개=1이 아님) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")
 	int32 GetContentUnitTotal() const;
+
+	/** 박스 내용물을 태그별 unit 합계로 수집 (제출 잔여분 보관 계산용) */
+	void GetContentUnitsByTag(TMap<FGameplayTag, int32>& OutUnitsByTag) const;
 
 	/** RequiredParcelTag와 일치하는 콘텐츠의 unit 수 (주문 매칭용, 포장 시 contents 기준) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Parcel|Economy")

@@ -72,11 +72,17 @@ public:
 
 public:
 	/** Interaction text */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* InteractionText;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* DataKey;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* KeyName;
+
 	/** Prompt background */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	UImage* PromptBackground;
 
 	// Key icon brush (locked state)
@@ -84,10 +90,9 @@ public:
 	FSlateBrush LockedKeyBrush;
 
 	/** Credit cost text (optional) */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* CreditCostText;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction Prompt|Icons")
+	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* InformationText;
 };
-

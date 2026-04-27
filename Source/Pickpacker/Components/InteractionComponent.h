@@ -61,6 +61,16 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
     UObject* GetCurrentInteractableObject() const;
 
+    // Legacy Blueprint compatibility: older assets manage interactables via overlap events.
+    UFUNCTION(BlueprintCallable, Category = "Interaction")
+    void AddOverlappingActor(AActor* Actor);
+
+    UFUNCTION(BlueprintCallable, Category = "Interaction")
+    void RemoveOverlappingActor(AActor* Actor);
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
+    TArray<AActor*> GetOverlappingActors() const;
+
     void SetCarriedParcel(class AParcelActor* NewParcel);
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Interaction")
@@ -158,6 +168,7 @@ public:
 protected:
     void UpdateTarget();
     bool IsActorInteractable(AActor* Actor) const;
+    AActor* SelectBestOverlapTarget(const TArray<AActor*>& InActors, const FVector& ViewOrigin, const FVector& ViewDirection) const;
 
 private:
     // Current and previous interaction targets.
@@ -171,6 +182,10 @@ private:
     UPROPERTY(ReplicatedUsing = OnRep_CarriedParcel)
     TObjectPtr<class AParcelActor> CarriedParcel = nullptr;
 
+    // Legacy overlap-driven target list used by older Blueprints such as BP_Robot.
+    UPROPERTY()
+    TArray<TWeakObjectPtr<AActor>> OverlappingActors;
+
     UFUNCTION()
     void OnRep_CarriedParcel(class AParcelActor* LastParcel);
 
@@ -182,14 +197,19 @@ private:
     void UpdateShelfPlacementPreview(AShelfActor* Shelf);
     void ClearShelfPlacementPreview(AShelfActor* ShelfToClear = nullptr);
 
-    // Target-anchored widget component created on demand when the target does not self-handle UI.
+    // Legacy target-anchored widget component path.
     UPROPERTY(Transient)
     TWeakObjectPtr<UWidgetComponent> ActiveInteractionWidgetComponent;
+
+    // Viewport interaction widget fallback used for all local interaction prompts.
+    UPROPERTY(Transient)
+    TObjectPtr<UUserWidget> ActiveInteractionWidget = nullptr;
 
     // Show/hide helpers for screen widget.
     void ShowInteractionWidget(AActor* TargetActor);
     void HideInteractionWidget();
     void UpdateInteractionWidgetUI(AActor* TargetActor, UUserWidget* WidgetInstance = nullptr);
+    void UpdateInteractionWidgetScreenPosition(AActor* TargetActor);
     UWidgetComponent* FindInteractionWidgetAnchor(AActor* TargetActor) const;
     bool InvokeWidgetCreditUpdate(UUserWidget* Widget, bool bRequiresUnlock, int32 UnlockCost, const FText& LockedMessage, const FText& UnlockedMessage, int32 CurrentCredits);
     bool GatherInteractionUIData(AActor* TargetActor, FInteractionUIData& OutData) const;
@@ -197,6 +217,7 @@ private:
     FText GetPrimaryKeyForAction(const FName& ActionName) const;
     FText GetPrimaryKeyForInputAction(const UInputAction* InputAction) const;
     void UpdateInteractionWidgetCreditInfo(AActor* TargetActor);
+    FVector GetInteractionWidgetWorldLocation(AActor* TargetActor) const;
 
     // Movement penalty helpers when carrying parcels
     void ApplyParcelMovementPenalty(ACharacter* OwnerCharacter, class AParcelActor* Parcel);
@@ -220,5 +241,3 @@ private:
 
     bool bHasPlacementPreview = false;
 };
-
-

@@ -8,6 +8,34 @@
 #include "TimerManager.h"
 #include "AI/DroneActor.h"
 
+namespace
+{
+	static float GetSuspicionWeightForBehavior(const ESuspiciousBehavior Behavior)
+	{
+		switch (Behavior)
+		{
+		case ESuspiciousBehavior::DisassemblingParcel:
+			return 1.25f;
+		case ESuspiciousBehavior::EnteringRestrictedZone:
+			return 2.0f;
+		case ESuspiciousBehavior::PickingPackagedParcel:
+			return 1.0f;
+		case ESuspiciousBehavior::DroppingParcel:
+			return 1.5f;
+		case ESuspiciousBehavior::HoldingSuspiciousItem:
+			return 1.75f;
+		case ESuspiciousBehavior::HoldingWeapon:
+			return 2.5f;
+		case ESuspiciousBehavior::InteractingRestrictedSystem:
+			return 2.25f;
+		case ESuspiciousBehavior::OtherViolation:
+			return 1.0f;
+		default:
+			return 0.0f;
+		}
+	}
+}
+
 void USuspicionManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -73,10 +101,19 @@ void USuspicionManagerSubsystem::BroadcastSuspicionEvent(ABlasterCharacter* Play
 	// 마지막 이벤트 시간 업데이트
 	LastEventTimeByPlayer.Add(Player, CurrentTime);
 
-	FSuspicionEventData EventData(Player, Behavior, CurrentTime);
+	const float EventWeight = GetSuspicionWeightForBehavior(Behavior);
+	const float ExpireTime = CurrentTime + FMath::Max(0.1f, DefaultEventLifetime);
+	FSuspicionEventData EventData(
+		Player,
+		Behavior,
+		CurrentTime,
+		Player->GetFName(),
+		Player->GetActorLocation(),
+		EventWeight,
+		ExpireTime);
 
-	UE_LOG(LogTemp, Log, TEXT("[SuspicionManagerSubsystem] Broadcasting suspicion event - Player: %s, Behavior: %s"), 
-		*Player->GetName(), *UEnum::GetValueAsString(Behavior));
+	UE_LOG(LogTemp, Log, TEXT("[SuspicionManagerSubsystem] Broadcasting suspicion event - Player: %s, Behavior: %s, Weight: %.2f"),
+		*Player->GetName(), *UEnum::GetValueAsString(Behavior), EventWeight);
 
 	// 델리게이트 브로드캐스트
 	OnSuspicionEvent.Broadcast(EventData);	
@@ -220,4 +257,3 @@ void USuspicionManagerSubsystem::UpdateSuspiciousStates()
 		LastEventTimeByPlayer.Remove(InvalidPlayer);
 	}
 }
-

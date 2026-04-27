@@ -1,7 +1,10 @@
 // NPCCombatComponent.cpp
 
 #include "NPCCombatComponent.h"
+#include "AIController.h"
+#include "AI/PPAIControllerBase.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
@@ -38,8 +41,11 @@ void UNPCCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		// Validate target still visible
 		if (!IsActorInSight(CurrentTarget.Get()))
 		{
-			AActor* OldTarget = CurrentTarget.Get();
 			ClearTarget();
+		}
+		else
+		{
+			UpdateDirectCombatMovement();
 		}
 	}
 }
@@ -53,8 +59,20 @@ void UNPCCombatComponent::SetCombatActive(bool bActive)
 	bCombatActive = bActive;
 	SetComponentTickEnabled(bActive && !bIsDead);
 
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+	{
+		if (UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement())
+		{
+			Movement->MaxWalkSpeed = bActive ? ChaseSpeed : PatrolSpeed;
+		}
+	}
+
 	if (!bActive)
 	{
+		if (AAIController* AIController = Cast<AAIController>(Cast<APawn>(GetOwner()) ? Cast<APawn>(GetOwner())->GetController() : nullptr))
+		{
+			AIController->StopMovement();
+		}
 		ClearTarget();
 	}
 }
@@ -168,6 +186,13 @@ void UNPCCombatComponent::SetTarget(AActor* NewTarget)
 
 	if (NewTarget)
 	{
+		if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+		{
+			if (UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement())
+			{
+				Movement->MaxWalkSpeed = ChaseSpeed;
+			}
+		}
 		OnTargetAcquired.Broadcast(NewTarget);
 	}
 }
@@ -177,6 +202,20 @@ void UNPCCombatComponent::ClearTarget()
 	if (CurrentTarget.IsValid())
 	{
 		CurrentTarget.Reset();
+
+		if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
+		{
+			if (UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement())
+			{
+				Movement->MaxWalkSpeed = PatrolSpeed;
+			}
+		}
+
+		if (AAIController* AIController = Cast<AAIController>(Cast<APawn>(GetOwner()) ? Cast<APawn>(GetOwner())->GetController() : nullptr))
+		{
+			AIController->StopMovement();
+		}
+
 		OnTargetLost.Broadcast();
 	}
 }
@@ -224,4 +263,36 @@ void UNPCCombatComponent::ScanForTargets()
 	{
 		SetTarget(ClosestTarget);
 	}
+}
+
+void UNPCCombatComponent::UpdateDirectCombatMovement()
+{
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !CurrentTarget.IsValid())
+	{
+		return;
+	}
+
+	AAIController* AIController = Cast<AAIController>(OwnerPawn->GetController());
+	if (!AIController)
+	{
+		return;
+	}
+
+	if (const APPAIControllerBase* PPController = Cast<APPAIControllerBase>(AIController))
+	{
+		if (PPController->IsBehaviorTreeRunning())
+		{
+			return;
+		}
+	}
+
+	if (IsActorInAttackRange(CurrentTarget.Get()))
+	{
+		AIController->StopMovement();
+		TryAttack();
+		return;
+	}
+
+	AIController->MoveToActor(CurrentTarget.Get(), FMath::Max(AttackRange * 0.8f, 50.0f), true, true, true, nullptr, true);
 }

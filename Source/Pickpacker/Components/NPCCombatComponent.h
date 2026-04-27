@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
+#include "Components/NPCModuleComponent.h"
 #include "NPCCombatComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnNPCHealthChanged, float, NewHealth, float, MaxHealth);
@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCTargetLost);
  * Only active when the owning NPC is in Hostile disposition.
  */
 UCLASS(ClassGroup = (NPC), meta = (BlueprintSpawnableComponent))
-class PICKPACKER_API UNPCCombatComponent : public UActorComponent
+class PICKPACKER_API UNPCCombatComponent : public UNPCModuleComponent
 {
 	GENERATED_BODY()
 
@@ -127,4 +127,7 @@ private:
 
 	/** Scan for player targets when combat is active */
 	void ScanForTargets();
+
+	/** Fallback chase/attack loop when no behavior tree is driving the owner */
+	void UpdateDirectCombatMovement();
 };
