@@ -1,12 +1,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Animation/AnimInstance.h"
 #include "Engine/DataTable.h"
+#include "Engine/SkeletalMesh.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "PickpackerTypes/CoreLoopTypes.h"
 #include "NPCDataTableRows.generated.h"
 
+class UMaterialInterface;
 class UTexture2D;
 
 USTRUCT(BlueprintType)
@@ -38,6 +41,9 @@ struct PICKPACKER_API FNPCConfigTableRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Modules")
 	bool bEnableLootTrade = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Combat", meta = (EditCondition = "bEnableCombat", EditConditionHides))
+	FNPCCombatSettings CombatSettings;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Narrative")
 	FGameplayTag DisappearFlag;
 
@@ -46,6 +52,9 @@ struct PICKPACKER_API FNPCConfigTableRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Visuals")
 	TSoftObjectPtr<USkeletalMesh> MeshOverride;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Visuals")
+	TArray<TSoftObjectPtr<UMaterialInterface>> MaterialOverrides;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Visuals")
 	TSoftClassPtr<UAnimInstance> AnimClassOverride;

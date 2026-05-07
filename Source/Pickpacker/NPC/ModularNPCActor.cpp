@@ -10,9 +10,13 @@
 #include "BehaviorTree/BlackboardData.h"
 #include "Components/NPCDialogueComponent.h"
 #include "Components/NPCCombatComponent.h"
+#include "Components/NPCCombatActionComponent.h"
+#include "Components/NPCDetectionComponent.h"
 #include "Components/NPCModuleComponent.h"
 #include "Components/NPCLootTradeComponent.h"
 #include "Components/EscapeProgressComponent.h"
+#include "AI/PPPatrolRouteComponent.h"
+#include "AI/UPPSightPerceptionComponent.h"
 #include "Components/WidgetComponent.h"
 #include "DataAssets/DA_NPCData.h"
 #include "GameState/PickpackerGameState.h"
@@ -21,6 +25,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "PlayerController/BlasterPlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -35,6 +40,10 @@ AModularNPCActor::AModularNPCActor()
 	// Create modular components
 	DialogueComponent = CreateDefaultSubobject<UNPCDialogueComponent>(TEXT("DialogueComponent"));
 	CombatComponent = CreateDefaultSubobject<UNPCCombatComponent>(TEXT("CombatComponent"));
+	CombatActionComponent = CreateDefaultSubobject<UNPCCombatActionComponent>(TEXT("CombatActionComponent"));
+	SightPerceptionComponent = CreateDefaultSubobject<UPPSightPerceptionComponent>(TEXT("SightPerceptionComponent"));
+	DetectionComponent = CreateDefaultSubobject<UNPCDetectionComponent>(TEXT("DetectionComponent"));
+	PatrolRouteComponent = CreateDefaultSubobject<UPPPatrolRouteComponent>(TEXT("PatrolRouteComponent"));
 	LootTradeComponent = CreateDefaultSubobject<UNPCLootTradeComponent>(TEXT("LootTradeComponent"));
 
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
@@ -550,6 +559,15 @@ void AModularNPCActor::InitializeFromData()
 			GetMesh()->SetSkeletalMesh(MeshOverride);
 		}
 
+		const TArray<TSoftObjectPtr<UMaterialInterface>> MaterialOverrides = NPCData->GetResolvedMaterialOverrides();
+		for (int32 MaterialIndex = 0; MaterialIndex < MaterialOverrides.Num(); ++MaterialIndex)
+		{
+			if (UMaterialInterface* MaterialOverride = MaterialOverrides[MaterialIndex].LoadSynchronous())
+			{
+				GetMesh()->SetMaterial(MaterialIndex, MaterialOverride);
+			}
+		}
+
 		if (UClass* AnimClass = NPCData->GetResolvedAnimClassOverride().LoadSynchronous())
 		{
 			if (AnimClass->IsChildOf(UAnimInstance::StaticClass()))
@@ -570,6 +588,11 @@ void AModularNPCActor::InitializeFromData()
 	if (LootTradeComponent && CachedProfile.bEnableLootTrade)
 	{
 		LootTradeComponent->TradeInventory = CachedProfile.TradeInventory;
+	}
+
+	if (CombatComponent)
+	{
+		CombatComponent->ApplyCombatSettings(CachedProfile.CombatSettings);
 	}
 }
 
@@ -623,9 +646,10 @@ void AModularNPCActor::UpdateModuleStates()
 {
 	RefreshModuleComponents();
 
-	// Combat: active only when hostile
-	const bool bShouldCombat = (Disposition == ENPCDisposition::Hostile) &&
-		(bProfileCached ? CachedProfile.bEnableCombat : true);
+	// Combat availability is separate from social disposition.
+	// EngagementPolicy decides whether this NPC can initiate or only retaliate.
+	const bool bCombatEnabled = bProfileCached ? CachedProfile.bEnableCombat : (Disposition == ENPCDisposition::Hostile);
+	const bool bShouldCombat = bCombatEnabled && Disposition != ENPCDisposition::Missing;
 
 	if (CombatComponent)
 	{
@@ -772,7 +796,7 @@ void AModularNPCActor::StartCombatAI()
 
 	SyncCombatBlackboard();
 
-	if (CombatComponent && CombatComponent->CurrentTarget.IsValid())
+	if (CombatComponent && CombatComponent->CurrentTarget)
 	{
 		AIController->SetFocus(CombatComponent->CurrentTarget.Get());
 	}
@@ -885,20 +909,42 @@ void AModularNPCActor::SyncCombatBlackboard()
 	}
 
 	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CombatActive, CombatComponent && CombatComponent->bCombatActive);
+	const bool bCanInitiateEngagement = CombatComponent && CombatComponent->CanInitiateEngagement();
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanInitiateEngagement, bCanInitiateEngagement);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanInitiateCombat, bCanInitiateEngagement);
 	BlackboardComp->SetValueAsVector(PPBlackboardKeys::HomeLocation, HomeLocation);
 
 	AActor* TargetActor = CombatComponent ? CombatComponent->CurrentTarget.Get() : nullptr;
+	AActor* DetectedActor = DetectionComponent ? DetectionComponent->GetDetectedTarget() : nullptr;
+
+	if (DetectionComponent)
+	{
+		BlackboardComp->SetValueAsEnum(PPBlackboardKeys::DetectionState, static_cast<uint8>(DetectionComponent->GetDetectionState()));
+		BlackboardComp->SetValueAsFloat(PPBlackboardKeys::DetectionProgress, DetectionComponent->GetDetectionProgress01());
+		BlackboardComp->SetValueAsBool(PPBlackboardKeys::DetectionSuspicious, DetectionComponent->IsSuspicious());
+		BlackboardComp->SetValueAsBool(PPBlackboardKeys::DetectionConfirmed, DetectionComponent->IsConfirmed());
+
+		if (DetectedActor)
+		{
+			BlackboardComp->SetValueAsObject(PPBlackboardKeys::DetectedPlayer, DetectedActor);
+			BlackboardComp->SetValueAsVector(PPBlackboardKeys::LastKnownTargetLocation, DetectionComponent->GetLastKnownTargetLocation());
+		}
+		else
+		{
+			BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
+			BlackboardComp->ClearValue(PPBlackboardKeys::LastKnownTargetLocation);
+		}
+	}
+
 	if (TargetActor)
 	{
 		BlackboardComp->SetValueAsObject(PPBlackboardKeys::TargetActor, TargetActor);
-		BlackboardComp->SetValueAsObject(PPBlackboardKeys::DetectedPlayer, TargetActor);
 		BlackboardComp->SetValueAsVector(PPBlackboardKeys::TargetLocation, TargetActor->GetActorLocation());
 		BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, CombatComponent->IsActorInAttackRange(TargetActor));
 	}
 	else
 	{
 		BlackboardComp->ClearValue(PPBlackboardKeys::TargetActor);
-		BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
 		BlackboardComp->ClearValue(PPBlackboardKeys::TargetLocation);
 		BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, false);
 	}
@@ -919,10 +965,16 @@ void AModularNPCActor::ClearCombatBlackboard()
 	}
 
 	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CombatActive, false);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanInitiateEngagement, false);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanInitiateCombat, false);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::DetectionSuspicious, false);
+	BlackboardComp->SetValueAsBool(PPBlackboardKeys::DetectionConfirmed, false);
+	BlackboardComp->SetValueAsFloat(PPBlackboardKeys::DetectionProgress, 0.0f);
 	BlackboardComp->SetValueAsBool(PPBlackboardKeys::CanAttackTarget, false);
 	BlackboardComp->ClearValue(PPBlackboardKeys::TargetActor);
 	BlackboardComp->ClearValue(PPBlackboardKeys::DetectedPlayer);
 	BlackboardComp->ClearValue(PPBlackboardKeys::TargetLocation);
+	BlackboardComp->ClearValue(PPBlackboardKeys::LastKnownTargetLocation);
 }
 
 UBehaviorTree* AModularNPCActor::ResolveCombatBehaviorTree() const

@@ -8,6 +8,7 @@
 class AModularNPCActor;
 class UDA_NPCData;
 class UNPCAnimationSet;
+class UAnimMontage;
 class UAnimSequenceBase;
 class UBlendSpace;
 
@@ -46,6 +47,9 @@ public:
 	UAnimSequenceBase* GetPreferredIdleAsset() const;
 
 	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
+	UAnimSequenceBase* GetSuspiciousIdleAsset() const;
+
+	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
 	UAnimSequenceBase* GetConversationAsset() const;
 
 	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
@@ -56,6 +60,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
 	UAnimSequenceBase* GetMissingAsset() const;
+
+	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
+	UAnimMontage* GetAttackMontageAsset() const;
+
+	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
+	UAnimMontage* GetHitReactMontageAsset() const;
+
+	UFUNCTION(BlueprintPure, Category = "Animation|Resolved", meta = (BlueprintThreadSafe))
+	UAnimMontage* GetInteractionMontageAsset() const;
 
 private:
 	UPROPERTY(BlueprintReadOnly, Category = "Character", meta = (AllowPrivateAccess = "true"))
@@ -80,6 +93,9 @@ private:
 	TObjectPtr<UAnimSequenceBase> HostileIdle = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UAnimSequenceBase> SuspiciousIdle = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimSequenceBase> ConversationLoop = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
@@ -90,6 +106,15 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimSequenceBase> FallLoop = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UAnimMontage> AttackMontage = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UAnimMontage> HitReactMontage = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Animation|Resolved", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UAnimMontage> InteractionMontage = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "NPC", meta = (AllowPrivateAccess = "true"))
 	ENPCDisposition CurrentDisposition = ENPCDisposition::Neutral;
@@ -111,6 +136,12 @@ private:
 
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Combat", meta = (AllowPrivateAccess = "true"))
 	bool bCombatActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "NPC|Detection", meta = (AllowPrivateAccess = "true"))
+	bool bDetectionSuspicious = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "NPC|Detection", meta = (AllowPrivateAccess = "true"))
+	bool bDetectionConfirmed = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Combat", meta = (AllowPrivateAccess = "true"))
 	bool bIsDead = false;

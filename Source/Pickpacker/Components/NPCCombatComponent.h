@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/NPCModuleComponent.h"
+#include "PickpackerTypes/CoreLoopTypes.h"
 #include "NPCCombatComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnNPCHealthChanged, float, NewHealth, float, MaxHealth);
@@ -12,9 +13,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCTargetAcquired, AActor*, Targe
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNPCTargetLost);
 
 /**
- * Modular combat & AI component for NPC actors.
- * Provides health, damage, sight detection, attack logic, and pathfinding hooks.
- * Only active when the owning NPC is in Hostile disposition.
+ * Modular combat state and attack capability for NPC actors.
+ * Behavior Trees decide when targets are promoted, chased, and attacked.
  */
 UCLASS(ClassGroup = (NPC), meta = (BlueprintSpawnableComponent))
 class PICKPACKER_API UNPCCombatComponent : public UNPCModuleComponent
@@ -24,12 +24,14 @@ class PICKPACKER_API UNPCCombatComponent : public UNPCModuleComponent
 public:
 	UNPCCombatComponent();
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	// --- Configuration ---------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Health")
 	float MaxHealth = 100.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Health")
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Combat|Health")
 	float CurrentHealth = 100.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Detection")
@@ -47,6 +49,40 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Attack")
 	float AttackCooldown = 1.5f;
 
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Combat|Policy")
+	ENPCEngagementPolicy EngagementPolicy = ENPCEngagementPolicy::Defensive;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Policy")
+	bool bRetaliateWhenDamaged = true;
+
+	/** Defensive NPCs can temporarily become aggressive after being damaged, then restore when the target is cleared. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Policy")
+	bool bBecomeAggressiveWhenDamaged = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Aggro")
+	bool bAutoClearTarget = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Aggro", meta = (ClampMin = "0.0", EditCondition = "bAutoClearTarget"))
+	float LoseSightAggroGraceTime = 3.0f;
+
+	/** Clear target when the NPC has chased this far from its initial/home location. Set <= 0 to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Aggro", meta = (ClampMin = "0.0", EditCondition = "bAutoClearTarget"))
+	float MaxChaseDistanceFromHome = 2500.0f;
+
+	/** Clear target when the target is this far from the NPC. Set <= 0 to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Aggro", meta = (ClampMin = "0.0", EditCondition = "bAutoClearTarget"))
+	float MaxTargetDistance = 3000.0f;
+
+	/** Legacy escape hatch for NPCs without a Behavior Tree. Keep false for modular BT-driven NPCs. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Fallback", meta = (AdvancedDisplay))
+	bool bEnableDirectCombatFallback = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Attack")
+	bool bUseActionRuleForDefaultAttack = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Attack", meta = (EditCondition = "bUseActionRuleForDefaultAttack"))
+	FName DefaultAttackActionId = TEXT("Combat.Attack");
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Movement")
 	float ChaseSpeed = 500.0f;
 
@@ -55,20 +91,41 @@ public:
 
 	// --- Runtime State ---------------------------------------------------
 
-	UPROPERTY(BlueprintReadOnly, Category = "Combat")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Combat")
 	bool bCombatActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Combat")
-	TWeakObjectPtr<AActor> CurrentTarget;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<AActor> CurrentTarget = nullptr;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Combat")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Combat")
 	bool bIsDead = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Combat|Policy")
+	bool bTemporaryAggressionActive = false;
 
 	// --- API -------------------------------------------------------------
 
 	/** Activate or deactivate combat mode */
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetCombatActive(bool bActive);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetEngagementPolicy(ENPCEngagementPolicy NewPolicy);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void ApplyCombatSettings(const FNPCCombatSettings& Settings);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	bool CanInitiateEngagement() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
+	bool CanRetaliate() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void BeginTemporaryAggression(AActor* NewTarget);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void RestoreTemporaryEngagementPolicy();
 
 	/** Apply damage to this NPC */
 	UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -124,10 +181,17 @@ protected:
 
 private:
 	float LastAttackTime = 0.0f;
+	ENPCEngagementPolicy PreviousEngagementPolicy = ENPCEngagementPolicy::Defensive;
+	FVector AggroHomeLocation = FVector::ZeroVector;
+	float LastTargetVisibleTime = 0.0f;
 
 	/** Scan for player targets when combat is active */
 	void ScanForTargets();
 
+	void UpdateTargetRetention();
+
 	/** Fallback chase/attack loop when no behavior tree is driving the owner */
 	void UpdateDirectCombatMovement();
+
+	bool IsBehaviorTreeRunning() const;
 };

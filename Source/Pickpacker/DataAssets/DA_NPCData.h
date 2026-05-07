@@ -34,6 +34,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
 	TSoftObjectPtr<USkeletalMesh> MeshOverride;
 
+	/** Optional material overrides applied by material slot index. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
+	TArray<TSoftObjectPtr<class UMaterialInterface>> MaterialOverrides;
+
 	/** Anim blueprint override */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC|Visuals")
 	TSoftClassPtr<UAnimInstance> AnimClassOverride;
@@ -94,6 +98,7 @@ public:
 	void BuildResolvedProfile(FNPCProfile& OutProfile) const;
 	void BuildResolvedDialogueNodes(const FName& EffectiveNPCId, TArray<FDialogueNode>& OutDialogueNodes) const;
 	TSoftObjectPtr<USkeletalMesh> GetResolvedMeshOverride() const;
+	TArray<TSoftObjectPtr<class UMaterialInterface>> GetResolvedMaterialOverrides() const;
 	TSoftClassPtr<UAnimInstance> GetResolvedAnimClassOverride() const;
 	TSoftObjectPtr<class UNPCAnimationSet> GetResolvedAnimationSet() const;
 	TSoftObjectPtr<UBehaviorTree> GetResolvedCombatBehaviorTree() const;

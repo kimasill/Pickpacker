@@ -75,6 +75,65 @@ enum class ENPCRole : uint8
 };
 
 // ============================================================
+// NPC Combat Engagement Policy
+// ============================================================
+
+UENUM(BlueprintType)
+enum class ENPCEngagementPolicy : uint8
+{
+	Passive		UMETA(DisplayName = "Passive"),
+	Defensive	UMETA(DisplayName = "Defensive"),
+	Aggressive	UMETA(DisplayName = "Aggressive")
+};
+
+USTRUCT(BlueprintType)
+struct PICKPACKER_API FNPCCombatSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "1.0"))
+	float MaxHealth = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float AttackRange = 200.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float AttackDamage = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.0"))
+	float AttackCooldown = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Policy")
+	ENPCEngagementPolicy EngagementPolicy = ENPCEngagementPolicy::Defensive;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Policy")
+	bool bRetaliateWhenDamaged = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Policy")
+	bool bBecomeAggressiveWhenDamaged = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aggro")
+	bool bAutoClearTarget = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aggro")
+	float LoseSightAggroGraceTime = 3.0f;
+
+	/** Clear target when the NPC has chased this far from its initial/home location. Set <= 0 to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aggro")
+	float MaxChaseDistanceFromHome = 2500.0f;
+
+	/** Clear target when the target is this far from the NPC. Set <= 0 to disable. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aggro")
+	float MaxTargetDistance = 3000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (ClampMin = "0.0"))
+	float ChaseSpeed = 500.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (ClampMin = "0.0"))
+	float PatrolSpeed = 200.0f;
+};
+
+// ============================================================
 // Underground Zone Difficulty
 // ============================================================
 
@@ -344,6 +403,10 @@ struct PICKPACKER_API FNPCProfile
 	/** Enable loot/trade module */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Modules")
 	bool bEnableLootTrade = false;
+
+	/** Combat policy values are copied into UNPCCombatComponent when the NPC initializes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Combat", meta = (EditCondition = "bEnableCombat", EditConditionHides))
+	FNPCCombatSettings CombatSettings;
 
 	/** Dialogue tree */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Dialogue")

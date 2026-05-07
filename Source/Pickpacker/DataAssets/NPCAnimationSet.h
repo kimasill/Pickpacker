@@ -35,6 +35,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Idle")
 	TSoftObjectPtr<UAnimSequenceBase> HostileIdle;
 
+	/** Optional loop used while detection is suspicious but not confirmed. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Idle")
+	TSoftObjectPtr<UAnimSequenceBase> SuspiciousIdle;
+
 	/** Loop or additive used while the NPC is talking. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dialogue")
 	TSoftObjectPtr<UAnimSequenceBase> ConversationLoop;

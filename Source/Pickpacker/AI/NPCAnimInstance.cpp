@@ -1,6 +1,8 @@
 #include "NPCAnimInstance.h"
 
+#include "Animation/AnimMontage.h"
 #include "Components/NPCCombatComponent.h"
+#include "Components/NPCDetectionComponent.h"
 #include "Components/NPCDialogueComponent.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Animation/BlendSpace.h"
@@ -20,6 +22,11 @@ bool UNPCAnimInstance::ShouldPlayGroundedLocomotion() const
 
 UAnimSequenceBase* UNPCAnimInstance::GetPreferredIdleAsset() const
 {
+	if (bDetectionSuspicious && !bDetectionConfirmed && SuspiciousIdle)
+	{
+		return SuspiciousIdle;
+	}
+
 	if (bIsHostile && HostileIdle)
 	{
 		return HostileIdle;
@@ -36,6 +43,11 @@ UAnimSequenceBase* UNPCAnimInstance::GetPreferredIdleAsset() const
 	}
 
 	return DefaultIdle;
+}
+
+UAnimSequenceBase* UNPCAnimInstance::GetSuspiciousIdleAsset() const
+{
+	return SuspiciousIdle.Get();
 }
 
 UAnimSequenceBase* UNPCAnimInstance::GetConversationAsset() const
@@ -58,6 +70,21 @@ UAnimSequenceBase* UNPCAnimInstance::GetMissingAsset() const
 	return bIsMissing ? MissingPose.Get() : nullptr;
 }
 
+UAnimMontage* UNPCAnimInstance::GetAttackMontageAsset() const
+{
+	return AttackMontage.Get();
+}
+
+UAnimMontage* UNPCAnimInstance::GetHitReactMontageAsset() const
+{
+	return HitReactMontage.Get();
+}
+
+UAnimMontage* UNPCAnimInstance::GetInteractionMontageAsset() const
+{
+	return InteractionMontage.Get();
+}
+
 void UNPCAnimInstance::CacheCharacterOwner()
 {
 	Super::CacheCharacterOwner();
@@ -77,10 +104,14 @@ void UNPCAnimInstance::RefreshAnimationSet()
 		FriendlyIdle = AnimationSet->FriendlyIdle.LoadSynchronous();
 		NeutralIdle = AnimationSet->NeutralIdle.LoadSynchronous();
 		HostileIdle = AnimationSet->HostileIdle.LoadSynchronous();
+		SuspiciousIdle = AnimationSet->SuspiciousIdle.LoadSynchronous();
 		ConversationLoop = AnimationSet->ConversationLoop.LoadSynchronous();
 		MissingPose = AnimationSet->MissingPose.LoadSynchronous();
 		DeathPose = AnimationSet->DeathPose.LoadSynchronous();
 		FallLoop = AnimationSet->FallLoop.LoadSynchronous();
+		AttackMontage = AnimationSet->AttackMontage.LoadSynchronous();
+		HitReactMontage = AnimationSet->HitReactMontage.LoadSynchronous();
+		InteractionMontage = AnimationSet->InteractionMontage.LoadSynchronous();
 		return;
 	}
 
@@ -89,10 +120,14 @@ void UNPCAnimInstance::RefreshAnimationSet()
 	FriendlyIdle = nullptr;
 	NeutralIdle = nullptr;
 	HostileIdle = nullptr;
+	SuspiciousIdle = nullptr;
 	ConversationLoop = nullptr;
 	MissingPose = nullptr;
 	DeathPose = nullptr;
 	FallLoop = nullptr;
+	AttackMontage = nullptr;
+	HitReactMontage = nullptr;
+	InteractionMontage = nullptr;
 }
 
 void UNPCAnimInstance::UpdateCharacterSpecificData(float /*DeltaTime*/)
@@ -130,6 +165,17 @@ void UNPCAnimInstance::UpdateCharacterSpecificData(float /*DeltaTime*/)
 	{
 		bCombatActive = false;
 		bIsDead = false;
+	}
+
+	if (const UNPCDetectionComponent* DetectionComponent = NPCOwner->DetectionComponent)
+	{
+		bDetectionSuspicious = DetectionComponent->IsSuspicious();
+		bDetectionConfirmed = DetectionComponent->IsConfirmed();
+	}
+	else
+	{
+		bDetectionSuspicious = false;
+		bDetectionConfirmed = false;
 	}
 
 	if (const UNPCDialogueComponent* DialogueComponent = NPCOwner->DialogueComponent)

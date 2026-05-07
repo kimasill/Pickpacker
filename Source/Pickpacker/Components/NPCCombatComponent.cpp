@@ -3,11 +3,13 @@
 #include "NPCCombatComponent.h"
 #include "AIController.h"
 #include "AI/PPAIControllerBase.h"
+#include "Components/NPCCombatActionComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
 
 UNPCCombatComponent::UNPCCombatComponent()
 {
@@ -20,6 +22,19 @@ void UNPCCombatComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	CurrentHealth = MaxHealth;
+	AggroHomeLocation = GetOwner() ? GetOwner()->GetActorLocation() : FVector::ZeroVector;
+}
+
+void UNPCCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UNPCCombatComponent, CurrentHealth);
+	DOREPLIFETIME(UNPCCombatComponent, EngagementPolicy);
+	DOREPLIFETIME(UNPCCombatComponent, bCombatActive);
+	DOREPLIFETIME(UNPCCombatComponent, CurrentTarget);
+	DOREPLIFETIME(UNPCCombatComponent, bIsDead);
+	DOREPLIFETIME(UNPCCombatComponent, bTemporaryAggressionActive);
 }
 
 void UNPCCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -31,10 +46,22 @@ void UNPCCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		return;
 	}
 
-	// Scan for targets if we don't have one
-	if (!CurrentTarget.IsValid())
+	if (CurrentTarget && bAutoClearTarget)
 	{
-		ScanForTargets();
+		UpdateTargetRetention();
+	}
+
+	if (IsBehaviorTreeRunning() || !bEnableDirectCombatFallback)
+	{
+		return;
+	}
+
+	if (!CurrentTarget)
+	{
+		if (CanInitiateEngagement())
+		{
+			ScanForTargets();
+		}
 	}
 	else
 	{
@@ -77,6 +104,84 @@ void UNPCCombatComponent::SetCombatActive(bool bActive)
 	}
 }
 
+void UNPCCombatComponent::SetEngagementPolicy(ENPCEngagementPolicy NewPolicy)
+{
+	EngagementPolicy = NewPolicy;
+
+	if (EngagementPolicy == ENPCEngagementPolicy::Passive && !CurrentTarget)
+	{
+		ClearTarget();
+	}
+}
+
+void UNPCCombatComponent::ApplyCombatSettings(const FNPCCombatSettings& Settings)
+{
+	const float PreviousMaxHealth = MaxHealth;
+	MaxHealth = FMath::Max(1.0f, Settings.MaxHealth);
+	if (!bIsDead && FMath::IsNearlyEqual(CurrentHealth, PreviousMaxHealth))
+	{
+		CurrentHealth = MaxHealth;
+	}
+	else
+	{
+		CurrentHealth = FMath::Clamp(CurrentHealth, 0.0f, MaxHealth);
+	}
+
+	AttackRange = Settings.AttackRange;
+	AttackDamage = Settings.AttackDamage;
+	AttackCooldown = Settings.AttackCooldown;
+	SetEngagementPolicy(Settings.EngagementPolicy);
+	bRetaliateWhenDamaged = Settings.bRetaliateWhenDamaged;
+	bBecomeAggressiveWhenDamaged = Settings.bBecomeAggressiveWhenDamaged;
+	bAutoClearTarget = Settings.bAutoClearTarget;
+	LoseSightAggroGraceTime = Settings.LoseSightAggroGraceTime;
+	MaxChaseDistanceFromHome = Settings.MaxChaseDistanceFromHome;
+	MaxTargetDistance = Settings.MaxTargetDistance;
+	ChaseSpeed = Settings.ChaseSpeed;
+	PatrolSpeed = Settings.PatrolSpeed;
+}
+
+bool UNPCCombatComponent::CanInitiateEngagement() const
+{
+	return bCombatActive && !bIsDead && EngagementPolicy == ENPCEngagementPolicy::Aggressive;
+}
+
+bool UNPCCombatComponent::CanRetaliate() const
+{
+	return !bIsDead && bRetaliateWhenDamaged && EngagementPolicy != ENPCEngagementPolicy::Passive;
+}
+
+void UNPCCombatComponent::BeginTemporaryAggression(AActor* NewTarget)
+{
+	if (bIsDead || !bBecomeAggressiveWhenDamaged || EngagementPolicy == ENPCEngagementPolicy::Passive)
+	{
+		return;
+	}
+
+	if (!bTemporaryAggressionActive && EngagementPolicy != ENPCEngagementPolicy::Aggressive)
+	{
+		PreviousEngagementPolicy = EngagementPolicy;
+		bTemporaryAggressionActive = true;
+		SetEngagementPolicy(ENPCEngagementPolicy::Aggressive);
+	}
+
+	SetCombatActive(true);
+	SetTarget(NewTarget);
+}
+
+void UNPCCombatComponent::RestoreTemporaryEngagementPolicy()
+{
+	if (!bTemporaryAggressionActive)
+	{
+		return;
+	}
+
+	const ENPCEngagementPolicy PolicyToRestore = PreviousEngagementPolicy;
+	bTemporaryAggressionActive = false;
+	PreviousEngagementPolicy = PolicyToRestore;
+	SetEngagementPolicy(PolicyToRestore);
+}
+
 void UNPCCombatComponent::ApplyDamage(float Damage, AActor* DamageCauser)
 {
 	if (bIsDead || Damage <= 0.0f)
@@ -95,10 +200,12 @@ void UNPCCombatComponent::ApplyDamage(float Damage, AActor* DamageCauser)
 		SetCombatActive(false);
 		OnDied.Broadcast();
 	}
-	else if (DamageCauser && !CurrentTarget.IsValid())
+	else if (DamageCauser && !CurrentTarget)
 	{
-		// Aggro toward damage causer
-		SetTarget(DamageCauser);
+		if (CanRetaliate())
+		{
+			BeginTemporaryAggression(DamageCauser);
+		}
 	}
 }
 
@@ -139,7 +246,7 @@ bool UNPCCombatComponent::IsActorInAttackRange(AActor* Target) const
 
 bool UNPCCombatComponent::TryAttack()
 {
-	if (!bCombatActive || bIsDead || !CurrentTarget.IsValid())
+	if (!bCombatActive || bIsDead || !CurrentTarget)
 	{
 		return false;
 	}
@@ -147,6 +254,17 @@ bool UNPCCombatComponent::TryAttack()
 	if (!IsActorInAttackRange(CurrentTarget.Get()))
 	{
 		return false;
+	}
+
+	if (bUseActionRuleForDefaultAttack)
+	{
+		if (UNPCCombatActionComponent* ActionComponent = GetOwner() ? GetOwner()->FindComponentByClass<UNPCCombatActionComponent>() : nullptr)
+		{
+			if (ActionComponent->FindActionRule(DefaultAttackActionId))
+			{
+				return ActionComponent->ExecuteAction(DefaultAttackActionId, CurrentTarget.Get());
+			}
+		}
 	}
 
 	UWorld* World = GetWorld();
@@ -186,6 +304,8 @@ void UNPCCombatComponent::SetTarget(AActor* NewTarget)
 
 	if (NewTarget)
 	{
+		LastTargetVisibleTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+
 		if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
 		{
 			if (UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement())
@@ -199,9 +319,9 @@ void UNPCCombatComponent::SetTarget(AActor* NewTarget)
 
 void UNPCCombatComponent::ClearTarget()
 {
-	if (CurrentTarget.IsValid())
+	if (CurrentTarget)
 	{
-		CurrentTarget.Reset();
+		CurrentTarget = nullptr;
 
 		if (ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner()))
 		{
@@ -217,6 +337,7 @@ void UNPCCombatComponent::ClearTarget()
 		}
 
 		OnTargetLost.Broadcast();
+		RestoreTemporaryEngagementPolicy();
 	}
 }
 
@@ -265,10 +386,47 @@ void UNPCCombatComponent::ScanForTargets()
 	}
 }
 
+void UNPCCombatComponent::UpdateTargetRetention()
+{
+	AActor* Target = CurrentTarget.Get();
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	if (!Target || !Owner || !World)
+	{
+		ClearTarget();
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (IsActorInSight(Target))
+	{
+		LastTargetVisibleTime = Now;
+	}
+	else if (LoseSightAggroGraceTime >= 0.0f && Now - LastTargetVisibleTime > LoseSightAggroGraceTime)
+	{
+		ClearTarget();
+		return;
+	}
+
+	if (MaxChaseDistanceFromHome > 0.0f &&
+		FVector::Dist2D(Owner->GetActorLocation(), AggroHomeLocation) > MaxChaseDistanceFromHome)
+	{
+		ClearTarget();
+		return;
+	}
+
+	if (MaxTargetDistance > 0.0f &&
+		FVector::Dist2D(Owner->GetActorLocation(), Target->GetActorLocation()) > MaxTargetDistance)
+	{
+		ClearTarget();
+		return;
+	}
+}
+
 void UNPCCombatComponent::UpdateDirectCombatMovement()
 {
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	if (!OwnerPawn || !CurrentTarget.IsValid())
+	if (!OwnerPawn || !CurrentTarget)
 	{
 		return;
 	}
@@ -295,4 +453,12 @@ void UNPCCombatComponent::UpdateDirectCombatMovement()
 	}
 
 	AIController->MoveToActor(CurrentTarget.Get(), FMath::Max(AttackRange * 0.8f, 50.0f), true, true, true, nullptr, true);
+}
+
+bool UNPCCombatComponent::IsBehaviorTreeRunning() const
+{
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const AAIController* AIController = OwnerPawn ? Cast<AAIController>(OwnerPawn->GetController()) : nullptr;
+	const APPAIControllerBase* PPController = AIController ? Cast<APPAIControllerBase>(AIController) : nullptr;
+	return PPController && PPController->IsBehaviorTreeRunning();
 }

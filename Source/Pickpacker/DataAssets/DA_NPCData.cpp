@@ -3,6 +3,7 @@
 #include "DA_NPCData.h"
 
 #include "DataAssets/NPCAnimationSet.h"
+#include "Materials/MaterialInterface.h"
 #include "Engine/Texture2D.h"
 #include "HAL/PlatformFileManager.h"
 #include "Misc/FileHelper.h"
@@ -187,6 +188,35 @@ namespace
 		return Normalized.IsEmpty() ? DefaultValue : FCString::Atoi(*Normalized);
 	}
 
+	float ParseFloatValue(const FString& Value, float DefaultValue = 0.0f)
+	{
+		const FString Normalized = NormalizeCsvValue(Value);
+		return Normalized.IsEmpty() ? DefaultValue : FCString::Atof(*Normalized);
+	}
+
+	TArray<TSoftObjectPtr<UMaterialInterface>> ParseMaterialOverrideList(const FString& Value)
+	{
+		TArray<TSoftObjectPtr<UMaterialInterface>> Result;
+		const FString Normalized = NormalizeCsvValue(Value);
+		if (Normalized.IsEmpty())
+		{
+			return Result;
+		}
+
+		TArray<FString> Entries;
+		Normalized.ParseIntoArray(Entries, TEXT(";"), true);
+		for (FString& Entry : Entries)
+		{
+			Entry = NormalizeCsvValue(Entry);
+			if (!Entry.IsEmpty())
+			{
+				Result.Add(TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(Entry)));
+			}
+		}
+
+		return Result;
+	}
+
 	template <typename TEnum>
 	bool ParseEnumValue(const FString& Value, TEnum& OutValue)
 	{
@@ -256,9 +286,27 @@ namespace
 			OutRow.bEnableDialogue = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bEnableDialogue")), OutRow.bEnableDialogue);
 			OutRow.bEnableCombat = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bEnableCombat")), OutRow.bEnableCombat);
 			OutRow.bEnableLootTrade = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bEnableLootTrade")), OutRow.bEnableLootTrade);
+			OutRow.CombatSettings.MaxHealth = ParseFloatValue(GetCsvCell(CsvRow, TEXT("MaxHealth")), OutRow.CombatSettings.MaxHealth);
+			OutRow.CombatSettings.AttackRange = ParseFloatValue(GetCsvCell(CsvRow, TEXT("AttackRange")), OutRow.CombatSettings.AttackRange);
+			OutRow.CombatSettings.AttackDamage = ParseFloatValue(GetCsvCell(CsvRow, TEXT("AttackDamage")), OutRow.CombatSettings.AttackDamage);
+			OutRow.CombatSettings.AttackCooldown = ParseFloatValue(GetCsvCell(CsvRow, TEXT("AttackCooldown")), OutRow.CombatSettings.AttackCooldown);
+			ParseEnumValue(GetCsvCell(CsvRow, TEXT("EngagementPolicy")), OutRow.CombatSettings.EngagementPolicy);
+			OutRow.CombatSettings.bRetaliateWhenDamaged = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bRetaliateWhenDamaged")), OutRow.CombatSettings.bRetaliateWhenDamaged);
+			OutRow.CombatSettings.bBecomeAggressiveWhenDamaged = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bBecomeAggressiveWhenDamaged")), OutRow.CombatSettings.bBecomeAggressiveWhenDamaged);
+			OutRow.CombatSettings.bAutoClearTarget = ParseBoolValue(GetCsvCell(CsvRow, TEXT("bAutoClearTarget")), OutRow.CombatSettings.bAutoClearTarget);
+			OutRow.CombatSettings.LoseSightAggroGraceTime = ParseFloatValue(GetCsvCell(CsvRow, TEXT("LoseSightAggroGraceTime")), OutRow.CombatSettings.LoseSightAggroGraceTime);
+			OutRow.CombatSettings.MaxChaseDistanceFromHome = ParseFloatValue(GetCsvCell(CsvRow, TEXT("MaxChaseDistanceFromHome")), OutRow.CombatSettings.MaxChaseDistanceFromHome);
+			OutRow.CombatSettings.MaxTargetDistance = ParseFloatValue(GetCsvCell(CsvRow, TEXT("MaxTargetDistance")), OutRow.CombatSettings.MaxTargetDistance);
+			OutRow.CombatSettings.ChaseSpeed = ParseFloatValue(GetCsvCell(CsvRow, TEXT("ChaseSpeed")), OutRow.CombatSettings.ChaseSpeed);
+			OutRow.CombatSettings.PatrolSpeed = ParseFloatValue(GetCsvCell(CsvRow, TEXT("PatrolSpeed")), OutRow.CombatSettings.PatrolSpeed);
 			OutRow.DisappearFlag = ParseGameplayTagValue(GetCsvCell(CsvRow, TEXT("DisappearFlag")));
 			OutRow.HostileFlag = ParseGameplayTagValue(GetCsvCell(CsvRow, TEXT("HostileFlag")));
 			OutRow.MeshOverride = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(GetCsvCell(CsvRow, TEXT("MeshOverride"))));
+			OutRow.MaterialOverrides = ParseMaterialOverrideList(GetCsvCell(CsvRow, TEXT("MaterialOverrides")));
+			if (OutRow.MaterialOverrides.Num() == 0)
+			{
+				OutRow.MaterialOverrides = ParseMaterialOverrideList(GetCsvCell(CsvRow, TEXT("MaterialOverride")));
+			}
 			OutRow.AnimClassOverride = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(GetCsvCell(CsvRow, TEXT("AnimClassOverride"))));
 			OutRow.CombatBehaviorTree = TSoftObjectPtr<UBehaviorTree>(FSoftObjectPath(GetCsvCell(CsvRow, TEXT("CombatBehaviorTree"))));
 			OutRow.CombatBlackboard = TSoftObjectPtr<UBlackboardData>(FSoftObjectPath(GetCsvCell(CsvRow, TEXT("CombatBlackboard"))));
@@ -476,6 +524,7 @@ void UDA_NPCData::BuildResolvedProfile(FNPCProfile& OutProfile) const
 	OutProfile.bEnableDialogue = ConfigRow.bEnableDialogue;
 	OutProfile.bEnableCombat = ConfigRow.bEnableCombat;
 	OutProfile.bEnableLootTrade = ConfigRow.bEnableLootTrade;
+	OutProfile.CombatSettings = ConfigRow.CombatSettings;
 	OutProfile.DisappearFlag = ConfigRow.DisappearFlag;
 	OutProfile.HostileFlag = ConfigRow.HostileFlag;
 }
@@ -658,6 +707,17 @@ TSoftObjectPtr<USkeletalMesh> UDA_NPCData::GetResolvedMeshOverride() const
 	}
 
 	return MeshOverride;
+}
+
+TArray<TSoftObjectPtr<UMaterialInterface>> UDA_NPCData::GetResolvedMaterialOverrides() const
+{
+	FNPCConfigTableRow ConfigRow;
+	if (TryGetConfigRow(ConfigRow) && ConfigRow.MaterialOverrides.Num() > 0)
+	{
+		return ConfigRow.MaterialOverrides;
+	}
+
+	return MaterialOverrides;
 }
 
 TSoftClassPtr<UAnimInstance> UDA_NPCData::GetResolvedAnimClassOverride() const
